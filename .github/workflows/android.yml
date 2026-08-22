@@ -10,6 +10,10 @@ on:
 jobs:
   apk:
     runs-on: ubuntu-latest
+    # The Supabase values are stored as *environment* secrets, and a job only receives those if it
+    # names the environment. Without this line `secrets.VITE_*` is empty and the APK builds with
+    # no configuration — it installs and then can't reach the backend.
+    environment: Production
     steps:
       - uses: actions/checkout@v4
 
@@ -20,8 +24,19 @@ jobs:
 
       - run: npm ci
 
+      # Fail here rather than shipping an APK that can't connect: these are inlined at build
+      # time, so an empty value is invisible until the app runs on a phone.
+      - name: Check Supabase config is present
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: |
+          test -n "$VITE_SUPABASE_URL" || { echo "::error::VITE_SUPABASE_URL is empty. Add it as an Actions secret (repository, or in the environment this job names)."; exit 1; }
+          test -n "$VITE_SUPABASE_ANON_KEY" || { echo "::error::VITE_SUPABASE_ANON_KEY is empty. Add it as an Actions secret (repository, or in the environment this job names)."; exit 1; }
+          echo "Supabase config present (URL is ${#VITE_SUPABASE_URL} chars, key is ${#VITE_SUPABASE_ANON_KEY} chars)."
+
       # VITE_* values are read at build time, so they have to be present here — same two the
-      # Vercel build uses. Add them under Settings > Secrets and variables > Actions.
+      # Vercel build uses.
       - name: Build web assets
         run: npm run build:native
         env:
