@@ -1,4 +1,4 @@
-import { BrowserRouter, HashRouter, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, HashRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import { ThemeProvider } from './context/ThemeContext'
 import { AppLayout } from './pages/AppLayout'
@@ -14,6 +14,7 @@ import { TaskViewPage } from './pages/TaskViewPage'
 import { ImportantPage } from './pages/ImportantPage'
 import { AllTasksPage } from './pages/AllTasksPage'
 import { ProfilePage } from './pages/ProfilePage'
+import { IS_NATIVE } from './lib/platform'
 
 /**
  * Hash routing in the Capacitor app, path routing on the web.
@@ -31,12 +32,21 @@ function App() {
       <Router>
         <AuthProvider>
           <Routes>
-            {/* Readable signed in or out — a policy you can only see by signing out is no use. */}
-            <Route path="/privacy" element={<PrivacyPage />} />
-            <Route path="/terms" element={<TermsPage />} />
+            {/* Web only. The APK is the app itself, not a place to read a pitch or a policy:
+              *  signed out it offers exactly sign in and create account. These three stay on the
+              *  website, where a store listing or an email can link to them. */}
+            {IS_NATIVE ? null : (
+              <>
+                {/* Readable signed in or out — a policy you can only see by signing out is no use. */}
+                <Route path="/privacy" element={<PrivacyPage />} />
+                <Route path="/terms" element={<TermsPage />} />
+                <Route element={<GuestOnly />}>
+                  <Route path="/welcome" element={<LandingPage />} />
+                </Route>
+              </>
+            )}
 
             <Route element={<GuestOnly />}>
-              <Route path="/welcome" element={<LandingPage />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/signup" element={<SignupPage />} />
             </Route>
@@ -53,6 +63,10 @@ function App() {
                 </Route>
               </Route>
             </Route>
+
+            {/* A stale link, a typo, or a /welcome bookmark opened inside the app: land on the
+              *  home route, which then sends a signed-out visitor to sign in. */}
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </AuthProvider>
       </Router>

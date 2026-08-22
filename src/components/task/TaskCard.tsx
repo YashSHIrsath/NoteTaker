@@ -28,6 +28,8 @@ import { TaskTagsPill } from './TaskTagsPill'
 import { TaskStatusBadge } from './TaskStatusBadge'
 
 const DRAG_TYPE = 'text/plain'
+/** Chips that fit a card's width; the rest become a "+N" counter rather than being clipped. */
+const ATTACHMENT_CHIP_LIMIT = 2
 /** Hold before a touch on the card body becomes a drag rather than a tap or a scroll. */
 const TOUCH_HOLD_MS = 320
 
@@ -81,6 +83,8 @@ export function TaskCard({
     .filter((attachment) => referencedIds.has(attachment.id))
     .sort((a, b) => attachmentSortRank(a) - attachmentSortRank(b))
   const hasImageAttachment = attachments.some((attachment) => attachment.isImage)
+  const shownAttachments = attachments.slice(0, ATTACHMENT_CHIP_LIMIT)
+  const hiddenAttachmentCount = attachments.length - shownAttachments.length
 
   // Attachment boxes stay clickable even though the rest of the preview is inert (see the
   // pointer-events CSS), so a click there opens its own preview instead of the whole task.
@@ -323,9 +327,10 @@ export function TaskCard({
         {attachments.length > 0 ? (
           <div
             className={cn(
-              // One row that scrolls sideways rather than wrapping: wrapping ate the note preview
-              // and made every card a different height.
-              'flex gap-1.5 overflow-x-auto overscroll-x-contain border-t px-3 py-1.5 sm:py-2',
+              // One row, never wrapping and never scrolling: wrapping made every card a
+              // different height, and a scroller left a chip visibly sliced off at the card edge.
+              // What doesn't fit is counted instead (see ATTACHMENT_CHIP_LIMIT).
+              'flex items-center gap-1.5 border-t px-3 py-1.5 sm:py-2',
               pinned ? 'border-[var(--color-accent)]/25' : !showColor && 'border-[var(--color-border)]',
             )}
             style={
@@ -334,7 +339,7 @@ export function TaskCard({
                 : undefined
             }
           >
-            {attachments.map((attachment) => (
+            {shownAttachments.map((attachment) => (
               <button
                 key={attachment.id}
                 type="button"
@@ -342,12 +347,17 @@ export function TaskCard({
                   event.stopPropagation()
                   setPreviewAttachment(attachment)
                 }}
-                className="anim-press flex max-w-[160px] shrink-0 items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-2.5 py-1 text-left text-[12px] font-medium text-[var(--color-text)] hover:bg-[var(--color-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/20"
+                className="anim-press flex min-w-0 flex-1 items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-2.5 py-1 text-left text-[12px] font-medium text-[var(--color-text)] hover:bg-[var(--color-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/20"
               >
                 <AttachmentTypeIcon attachment={attachment} />
                 <span className="min-w-0 truncate">{attachment.name}</span>
               </button>
             ))}
+            {hiddenAttachmentCount > 0 ? (
+              <span className="shrink-0 rounded-full bg-[var(--color-hover)] px-2 py-1 text-[11.5px] font-semibold text-[var(--color-text-muted)]">
+                +{hiddenAttachmentCount}
+              </span>
+            ) : null}
           </div>
         ) : null}
 
@@ -363,7 +373,7 @@ export function TaskCard({
           }
         >
           {task?.dueAt ? (
-            <div className="flex min-w-0 items-center gap-1">
+            <div className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden">
               <span
                 className={cn(
                   'inline-flex min-w-0 items-center gap-1 truncate rounded-full px-2 py-0.5 text-[11px] font-medium',
@@ -375,12 +385,17 @@ export function TaskCard({
                 <CalendarClock className="h-3 w-3 shrink-0" aria-hidden />
                 <span className="truncate">{formatDueDate(task.dueAt)}</span>
               </span>
+              {/* Symbol only, not "Complete": the card has a fixed width now, and the label
+                *  plus a due date plus three action buttons could not all fit — the label ran out
+                *  over the buttons. The tooltip and aria-label still name the status. */}
               {task.status ? (
-                <TaskStatusBadge
-                  status={task.status}
-                  compact
-                  onCycle={() => updateTaskStatus(taskId, nextTaskStatus(task.status!))}
-                />
+                <span className="shrink-0">
+                  <TaskStatusBadge
+                    status={task.status}
+                    iconOnly
+                    onCycle={() => updateTaskStatus(taskId, nextTaskStatus(task.status!))}
+                  />
+                </span>
               ) : null}
             </div>
           ) : (

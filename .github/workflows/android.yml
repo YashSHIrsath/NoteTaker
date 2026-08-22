@@ -72,6 +72,11 @@ jobs:
           npx cap add android
           npx cap sync android
 
+      # cap add ships the Capacitor template's own launcher icon, so this has to run after it and
+      # before the build. The app label comes from appName in capacitor.config.ts.
+      - name: Brand the launcher icon
+        run: npm run android:icons
+
       - name: Assemble debug APK
         working-directory: android
         run: ./gradlew assembleDebug --no-daemon

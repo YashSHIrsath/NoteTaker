@@ -9,6 +9,7 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "db:push": "supabase db push",
+    "android:icons": "node scripts/android-icons.mjs",
     "build:native": "tsc -b && vite build --mode native"
   },
   "dependencies": {
