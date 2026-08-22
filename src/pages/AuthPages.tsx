@@ -5,7 +5,7 @@ import { toAuthErrorMessage } from '../lib/authErrors'
 import { useAuth } from '../hooks/useAuth'
 
 const inputClassName =
-  'mt-1.5 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] outline-none focus:ring-2 focus:ring-[var(--color-accent)]/20'
+  'mt-1.5 w-full rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2 text-sm text-[var(--color-text)] outline-none focus:ring-2 focus:ring-[var(--color-accent)]/20'
 
 export function LoginPage() {
   const { signIn, configured } = useAuth()
@@ -59,7 +59,7 @@ export function LoginPage() {
               required
             />
           </label>
-          {error ? <p className="text-sm text-red-700">{error}</p> : null}
+          {error ? <p className="text-sm text-[var(--color-danger)]">{error}</p> : null}
           <Button type="submit" variant="primary" className="w-full" disabled={submitting || !email.trim() || !password}>
             {submitting ? 'Signing in…' : 'Login'}
           </Button>
@@ -156,7 +156,7 @@ export function SignupPage() {
               required
             />
           </label>
-          {error ? <p className="text-sm text-red-700">{error}</p> : null}
+          {error ? <p className="text-sm text-[var(--color-danger)]">{error}</p> : null}
           <Button
             type="submit"
             variant="primary"

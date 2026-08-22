@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getSupabaseClient } from '../../lib/supabase'
 import type { AppSnapshot } from '../../services/storage/types'
-import { RepositoryError, toRepositoryError } from '../errors'
+import { missingColumnName, RepositoryError, toRepositoryError } from '../errors'
 import type { NotesDataRepository } from '../types'
 import {
   folderToRow,
@@ -62,7 +62,12 @@ export class SupabaseNotesDataRepository implements NotesDataRepository {
           .order('sort_order', { ascending: true }),
         this.client
           .from('tasks')
-          .select('id,folder_id,title,content,is_important,sort_order')
+          .select(
+            // Explicit column list: every field on TaskRow has to be named here, or it silently
+            // loads as undefined and the mapper falls back to a default — which is how a saved
+            // card color came back as "Auto" on reload.
+            'id,folder_id,title,content,is_important,is_pinned,sort_order,due_at,remind_before_minutes,status,tags,color',
+          )
           .order('sort_order', { ascending: true }),
         this.client.from('subtasks').select('id,task_id,parent_subtask_id,title,completed'),
       ])
@@ -128,10 +133,29 @@ export class SupabaseNotesDataRepository implements NotesDataRepository {
       }
 
       if (snapshot.tasks.length > 0) {
-        const { error: taskError } = await this.client
-          .from('tasks')
-          .upsert(snapshot.tasks.map(taskToRow), { onConflict: 'id' })
-        throwIfError(taskError, 'Could not save tasks.')
+        const rows = snapshot.tasks.map(taskToRow)
+        const { error: taskError } = await this.client.from('tasks').upsert(rows, { onConflict: 'id' })
+        // A column this database doesn't have yet (a migration not pushed) would otherwise fail
+        // every save, taking titles, content and everything else down with it. Retry without the
+        // column so the rest of the note still saves; the dropped field is named in the console
+        // rather than swallowed, since it silently won't survive a reload until the migration runs.
+        const missing = missingColumnName(taskError)
+        if (missing) {
+          console.warn(
+            `Supabase is missing the "${missing}" column on tasks — saving without it. Apply the pending migration (npm run db:push) to keep that field.`,
+          )
+          const trimmed = rows.map((row) => {
+            const copy = { ...row } as Record<string, unknown>
+            delete copy[missing]
+            return copy
+          })
+          const { error: retryError } = await this.client
+            .from('tasks')
+            .upsert(trimmed, { onConflict: 'id' })
+          throwIfError(retryError, 'Could not save tasks.')
+        } else {
+          throwIfError(taskError, 'Could not save tasks.')
+        }
       }
 
       const subtaskLayers = this.orderedLayers(

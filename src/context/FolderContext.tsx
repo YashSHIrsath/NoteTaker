@@ -16,7 +16,7 @@ import {
   nextFolderSortOrder,
   reorderSiblingFolders as applySiblingReorder,
 } from '../lib/folders'
-import type { Attachment, Folder, FolderNode, Subtask, Task } from '../types'
+import type { Attachment, Folder, FolderNode, Subtask, Task, TaskColor, TaskStatus } from '../types'
 import { getTaskById, getTasksByFolder, nextTaskSortOrder, reorderSiblingTasks as applyTaskReorder } from '../lib/tasks'
 import { getSubtasksByTask } from '../lib/subtasks'
 import { getAttachmentsByTask } from '../lib/attachments'
@@ -67,10 +67,16 @@ interface FolderContextValue {
     targetId: string,
     position: 'before' | 'after',
   ) => void
+  moveTaskToFolder: (taskId: string, targetFolderId: string) => void
   updateTaskContent: (taskId: string, content: string) => void
   updateTaskTitle: (taskId: string, title: string) => void
   deleteTask: (taskId: string) => Promise<{ folderId: string; deletedTaskIds: string[] }>
   toggleTaskImportant: (taskId: string) => void
+  toggleTaskPinned: (taskId: string) => void
+  updateTaskReminder: (taskId: string, dueAt: string | null, remindBeforeMinutes: number | null) => void
+  updateTaskStatus: (taskId: string, status: TaskStatus) => void
+  updateTaskTags: (taskId: string, tags: string[]) => void
+  updateTaskColor: (taskId: string, color: TaskColor | null) => void
   getSubtasksForTask: (taskId: string) => Subtask[]
   createSubtask: (
     title: string,
@@ -89,9 +95,10 @@ interface FolderContextValue {
   expandSubtask: (subtaskId: string) => void
   isSubtaskExpanded: (subtaskId: string) => boolean
   getAttachmentsForTask: (taskId: string) => Attachment[]
-  addImageAttachment: (taskId: string, file: File) => void
-  addPdfAttachment: (taskId: string, file: File) => void
-  addDocumentAttachment: (taskId: string, file: File) => void
+  getAttachmentPreviewUrl: (attachmentId: string) => Promise<string | null>
+  addImageAttachment: (taskId: string, file: File) => Promise<Attachment | null>
+  addPdfAttachment: (taskId: string, file: File) => Promise<Attachment | null>
+  addDocumentAttachment: (taskId: string, file: File) => Promise<Attachment | null>
   deleteAttachment: (attachmentId: string) => Promise<void>
   getAttachmentFile: (attachmentId: string) => MaybePromise<File | null>
   toggleAttachmentExpanded: (attachmentId: string) => void
@@ -547,6 +554,12 @@ export function FolderProvider({ children }: { children: ReactNode }) {
         folderId,
         content: '',
         isImportant: false,
+        isPinned: false,
+        dueAt: null,
+        remindBeforeMinutes: null,
+        status: null,
+        tags: [],
+        color: null,
         sortOrder: nextTaskSortOrder(tasksRef.current, folderId),
       }
       try {
@@ -573,6 +586,22 @@ export function FolderProvider({ children }: { children: ReactNode }) {
       applyNotes({
         folders: foldersRef.current,
         tasks: applyTaskReorder(tasksRef.current, draggedId, targetId, position),
+        subtasks: subtasksRef.current,
+      })
+      void persistNotes().catch(() => undefined)
+    },
+    [applyNotes, persistNotes],
+  )
+
+  const moveTaskToFolder = useCallback(
+    (taskId: string, targetFolderId: string) => {
+      applyNotes({
+        folders: foldersRef.current,
+        tasks: tasksRef.current.map((task) =>
+          task.id === taskId
+            ? { ...task, folderId: targetFolderId, sortOrder: nextTaskSortOrder(tasksRef.current, targetFolderId) }
+            : task,
+        ),
         subtasks: subtasksRef.current,
       })
       void persistNotes().catch(() => undefined)
@@ -659,6 +688,77 @@ export function FolderProvider({ children }: { children: ReactNode }) {
         tasks: tasksRef.current.map((task) =>
           task.id === taskId ? { ...task, isImportant: !task.isImportant } : task,
         ),
+        subtasks: subtasksRef.current,
+      })
+      void persistNotes().catch(() => undefined)
+    },
+    [applyNotes, persistNotes],
+  )
+
+  const toggleTaskPinned = useCallback(
+    (taskId: string) => {
+      applyNotes({
+        folders: foldersRef.current,
+        tasks: tasksRef.current.map((task) =>
+          task.id === taskId ? { ...task, isPinned: !task.isPinned } : task,
+        ),
+        subtasks: subtasksRef.current,
+      })
+      void persistNotes().catch(() => undefined)
+    },
+    [applyNotes, persistNotes],
+  )
+
+  const updateTaskReminder = useCallback(
+    (taskId: string, dueAt: string | null, remindBeforeMinutes: number | null) => {
+      applyNotes({
+        folders: foldersRef.current,
+        tasks: tasksRef.current.map((task) => {
+          if (task.id !== taskId) {
+            return task
+          }
+          // Status only makes sense while a due date exists: clearing the due date clears
+          // status too, and setting one for the first time starts it at "pending" instead of
+          // leaving status null (which the UI treats as "not tracked").
+          const status = dueAt === null ? null : task.status ?? 'pending'
+          return { ...task, dueAt, remindBeforeMinutes, status }
+        }),
+        subtasks: subtasksRef.current,
+      })
+      void persistNotes().catch(() => undefined)
+    },
+    [applyNotes, persistNotes],
+  )
+
+  const updateTaskStatus = useCallback(
+    (taskId: string, status: TaskStatus) => {
+      applyNotes({
+        folders: foldersRef.current,
+        tasks: tasksRef.current.map((task) => (task.id === taskId ? { ...task, status } : task)),
+        subtasks: subtasksRef.current,
+      })
+      void persistNotes().catch(() => undefined)
+    },
+    [applyNotes, persistNotes],
+  )
+
+  const updateTaskTags = useCallback(
+    (taskId: string, tags: string[]) => {
+      applyNotes({
+        folders: foldersRef.current,
+        tasks: tasksRef.current.map((task) => (task.id === taskId ? { ...task, tags } : task)),
+        subtasks: subtasksRef.current,
+      })
+      void persistNotes().catch(() => undefined)
+    },
+    [applyNotes, persistNotes],
+  )
+
+  const updateTaskColor = useCallback(
+    (taskId: string, color: TaskColor | null) => {
+      applyNotes({
+        folders: foldersRef.current,
+        tasks: tasksRef.current.map((task) => (task.id === taskId ? { ...task, color } : task)),
         subtasks: subtasksRef.current,
       })
       void persistNotes().catch(() => undefined)
@@ -822,14 +922,22 @@ export function FolderProvider({ children }: { children: ReactNode }) {
     [attachments],
   )
 
+  // Goes straight to the repository (a fresh signed URL, or a re-check of the in-memory
+  // store) instead of reading React state, so it's correct even the instant after an upload,
+  // before that state has had a chance to re-render.
+  const getAttachmentPreviewUrl = useCallback(
+    (attachmentId: string): Promise<string | null> => Promise.resolve(attachmentRepository.getPreviewUrl(attachmentId)),
+    [attachmentRepository],
+  )
+
   const addPersistedAttachment = useCallback(
-    (taskId: string, file: File) => {
+    (taskId: string, file: File): Promise<Attachment | null> => {
       if (!beginExclusiveAction(actionLocksRef.current, `upload-attachment:${taskId}`)) {
-        return
+        return Promise.resolve(null)
       }
       const requestUserId = userIdRef.current
       setIsUploadingAttachment(true)
-      void Promise.resolve(attachmentRepository.createAttachment(taskId, file))
+      return Promise.resolve(attachmentRepository.createAttachment(taskId, file))
         .then((attachment) => {
           if (
             !shouldApplySessionResult({
@@ -838,10 +946,11 @@ export function FolderProvider({ children }: { children: ReactNode }) {
               currentUserId: userIdRef.current,
             })
           ) {
-            return
+            return null
           }
           setAttachments((current) => [...current, attachment])
           setPersistError(null)
+          return attachment
         })
         .catch((error: unknown) => {
           if (
@@ -851,9 +960,11 @@ export function FolderProvider({ children }: { children: ReactNode }) {
               currentUserId: userIdRef.current,
             })
           ) {
-            return
+            return null
           }
-          setPersistError(error instanceof RepositoryError ? error.message : 'Could not attach the file.')
+          const message = error instanceof RepositoryError ? error.message : 'Could not attach the file.'
+          setPersistError(message)
+          throw error instanceof RepositoryError ? error : new RepositoryError(message, { cause: error })
         })
         .finally(() => {
           endExclusiveAction(actionLocksRef.current, `upload-attachment:${taskId}`)
@@ -866,9 +977,9 @@ export function FolderProvider({ children }: { children: ReactNode }) {
   const addImageAttachment = useCallback(
     (taskId: string, file: File) => {
       if (!isAcceptedImageFile(file)) {
-        return
+        return Promise.resolve(null)
       }
-      addPersistedAttachment(taskId, file)
+      return addPersistedAttachment(taskId, file)
     },
     [addPersistedAttachment],
   )
@@ -876,9 +987,9 @@ export function FolderProvider({ children }: { children: ReactNode }) {
   const addPdfAttachment = useCallback(
     (taskId: string, file: File) => {
       if (!isAcceptedPdfFile(file)) {
-        return
+        return Promise.resolve(null)
       }
-      addPersistedAttachment(taskId, file)
+      return addPersistedAttachment(taskId, file)
     },
     [addPersistedAttachment],
   )
@@ -886,9 +997,9 @@ export function FolderProvider({ children }: { children: ReactNode }) {
   const addDocumentAttachment = useCallback(
     (taskId: string, file: File) => {
       if (!detectDocumentType(file)) {
-        return
+        return Promise.resolve(null)
       }
-      addPersistedAttachment(taskId, file)
+      return addPersistedAttachment(taskId, file)
     },
     [addPersistedAttachment],
   )
@@ -965,10 +1076,16 @@ export function FolderProvider({ children }: { children: ReactNode }) {
       getTasksInFolder,
       createTask,
       reorderSiblingTasks,
+      moveTaskToFolder,
       updateTaskContent,
       updateTaskTitle,
       deleteTask,
       toggleTaskImportant,
+      toggleTaskPinned,
+      updateTaskReminder,
+      updateTaskStatus,
+      updateTaskTags,
+      updateTaskColor,
       getSubtasksForTask,
       createSubtask,
       updateSubtaskTitle,
@@ -983,6 +1100,7 @@ export function FolderProvider({ children }: { children: ReactNode }) {
       expandSubtask,
       isSubtaskExpanded,
       getAttachmentsForTask,
+      getAttachmentPreviewUrl,
       addImageAttachment,
       addPdfAttachment,
       addDocumentAttachment,
@@ -1015,10 +1133,16 @@ export function FolderProvider({ children }: { children: ReactNode }) {
       getTasksInFolder,
       createTask,
       reorderSiblingTasks,
+      moveTaskToFolder,
       updateTaskContent,
       updateTaskTitle,
       deleteTask,
       toggleTaskImportant,
+      toggleTaskPinned,
+      updateTaskReminder,
+      updateTaskStatus,
+      updateTaskTags,
+      updateTaskColor,
       getSubtasksForTask,
       createSubtask,
       updateSubtaskTitle,
@@ -1033,6 +1157,7 @@ export function FolderProvider({ children }: { children: ReactNode }) {
       expandSubtask,
       isSubtaskExpanded,
       getAttachmentsForTask,
+      getAttachmentPreviewUrl,
       addImageAttachment,
       addPdfAttachment,
       addDocumentAttachment,

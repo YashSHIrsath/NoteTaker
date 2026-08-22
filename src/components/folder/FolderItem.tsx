@@ -4,12 +4,14 @@ import { StarButton } from '../common/StarButton'
 import { FolderActions } from './FolderActions'
 import { useFolders } from '../../hooks/useFolders'
 import { SortableFolderRow } from './SortableFolderRow'
+import { categoryVar, type FolderCategory } from '../../lib/folderColor'
 
 export interface FolderItemProps {
   folderId: string
   parentId: string | null
   name: string
   important: boolean
+  category?: FolderCategory
   onClick: () => void
   sortable?: boolean
 }
@@ -19,6 +21,7 @@ export function FolderItem({
   parentId,
   name,
   important,
+  category = 'indigo',
   onClick,
   sortable = true,
 }: FolderItemProps) {
@@ -30,13 +33,19 @@ export function FolderItem({
         type="button"
         onClick={onClick}
         className={cn(
-          'flex min-w-0 flex-1 items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm',
+          'anim-press flex min-w-0 flex-1 items-center gap-2.5 rounded-full px-2.5 py-2 text-left text-sm',
           'text-[var(--color-text)] transition-colors',
           'hover:bg-[var(--color-hover)]',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/20',
         )}
       >
-        <Folder className="h-4 w-4 shrink-0 text-[var(--color-text-muted)]" aria-hidden />
+        <span
+          className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full"
+          style={{ background: categoryVar(category, 'soft') }}
+          aria-hidden
+        >
+          <Folder className="h-3.5 w-3.5" style={{ color: categoryVar(category) }} aria-hidden />
+        </span>
         <span className="truncate">{name}</span>
       </button>
       <StarButton
@@ -48,7 +57,7 @@ export function FolderItem({
   )
 
   if (!sortable) {
-    return <div className="flex w-full items-center gap-0.5">{content}</div>
+    return <div className="anim-item-in flex w-full items-center gap-0.5">{content}</div>
   }
 
   return (

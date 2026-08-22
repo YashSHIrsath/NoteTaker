@@ -2,7 +2,6 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { getSupabaseClient } from '../../lib/supabase'
 import {
   ATTACHMENTS_BUCKET,
-  ATTACHMENT_SIGNED_URL_SECONDS,
   assertAllowedAttachmentFile,
   buildAttachmentStoragePath,
   defaultMimeForType,
@@ -241,12 +240,15 @@ export class SupabaseAttachmentDataRepository implements AttachmentDataRepositor
     return ((data ?? [])[0] as AttachmentRow | undefined) ?? null
   }
 
+  // A plain signed URL is a bare GET with no auth header, and this project's storage API
+  // rejects those outright ("headers must have required property 'authorization'") — so an
+  // <img>/<iframe> pointed straight at it can never load. Downloading through the
+  // authenticated client (same path as uploads, which do work) and wrapping the bytes in a
+  // blob: URL sidesteps that requirement entirely.
   private async signPath(path: string): Promise<string> {
-    const { data, error } = await this.client.storage
-      .from(ATTACHMENTS_BUCKET)
-      .createSignedUrl(path, ATTACHMENT_SIGNED_URL_SECONDS)
+    const { data, error } = await this.client.storage.from(ATTACHMENTS_BUCKET).download(path)
     throwIfError(error, 'Could not create a preview link.')
-    return data?.signedUrl ?? ''
+    return data ? URL.createObjectURL(data) : ''
   }
 
   private async requireUser(): Promise<{ id: string }> {

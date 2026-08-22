@@ -10,7 +10,7 @@ export function SaveStatusLabel({ status }: SaveStatusLabelProps) {
   }
 
   return (
-    <span className="shrink-0 text-xs text-[var(--color-text-muted)]">
+    <span className="shrink-0 text-[11px] text-[var(--color-text-muted)]">
       {status === 'saving' ? 'Saving…' : 'Saved'}
     </span>
   )

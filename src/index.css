@@ -1,14 +1,181 @@
 @import "tailwindcss";
 
-@theme {
-  --font-sans: "Segoe UI", "Helvetica Neue", system-ui, sans-serif;
+/* `static` matters: without it Tailwind v4 only emits the theme variables it can see used in
+   class names, and every --cat-* token here is consumed exclusively from JS (categoryVar() ->
+   inline style). They were being tree-shaken out of the light theme, so in light mode
+   `var(--cat-teal-card)` resolved to nothing and a sticky-note tile rendered with no fill at
+   all — text floating on the page background. Dark mode looked fine only because its values
+   live in the plain :root[data-theme="dark"] block below, which is never tree-shaken. */
+@theme static {
+  --font-sans: "Inter", "Segoe UI", "Helvetica Neue", system-ui, sans-serif;
+  --font-display: "Space Grotesk", "Inter", "Segoe UI", sans-serif;
+
   --color-surface: #ffffff;
-  --color-surface-muted: #f7f7f5;
-  --color-border: #e8e8e5;
-  --color-text: #1a1a18;
-  --color-text-muted: #6b6b66;
-  --color-accent: #2f2f2b;
-  --color-hover: #efefec;
+  --color-surface-muted: #f8f9fb;
+  /* A dedicated "elevated card" fill — distinct from --color-surface-muted (which reads as
+     *receded*, not raised) so cards actually look lifted off the page instead of blending
+     into it or sinking below it. */
+  --color-surface-raised: #ffffff;
+  --color-border: #e6e8ec;
+  /* Cards sit on a page that's the same #ffffff as --color-surface-raised itself, so this is
+     the only thing (plus shadow, below) actually separating a card's edge from the page in
+     light mode — it has to read as a real line, not a near-invisible tint-on-white. */
+  --color-border-strong: #c3c8d2;
+
+  --color-text: #14161a;
+  --color-text-muted: #6b7180;
+
+  --color-hover: #f1f3f6;
+
+  --color-accent: #4f46e5;
+  --color-accent-hover: #4338ca;
+  --color-accent-soft: #eef1ff;
+  --color-accent-soft-hover: #e3e7ff;
+  --color-accent-ink: #372f9e;
+
+  --color-danger: #b42318;
+  --color-danger-hover: #912018;
+
+  --cat-indigo: var(--color-accent);
+  --cat-indigo-soft: var(--color-accent-soft);
+  --cat-indigo-ink: var(--color-accent-ink);
+  --cat-teal: #12857a;
+  --cat-teal-soft: #e3f5f2;
+  --cat-teal-ink: #0d5f57;
+  --cat-amber: #b4790a;
+  --cat-amber-soft: #fbf0dd;
+  --cat-amber-ink: #855808;
+  --cat-rose: #c4326b;
+  --cat-rose-soft: #fbe9f0;
+  --cat-rose-ink: #942350;
+  --cat-emerald: #2f8f5b;
+  --cat-emerald-soft: #e6f5ec;
+  --cat-emerald-ink: #1f6b41;
+
+  /* A "sticky note" card fill — deliberately vivid, unlike -soft (a subtle chip tint sized for
+     a small tag chip, not a whole card). These used to just reuse -soft on the assumption that
+     the pale pastels would "already pop" against a white page — confirmed wrong on an actual
+     phone screen, where e.g. #fbe9f0 on #ffffff read as no fill at all. Dark mode gets its own
+     richer set below for the same reason, in the other direction. */
+  --cat-indigo-card: #c7d2fe;
+  --cat-teal-card: #99f6e4;
+  --cat-amber-card: #fde68a;
+  --cat-rose-card: #fecdd3;
+  --cat-emerald-card: #a7f3d0;
+
+  /* Task card palette. The first five alias the folder categories so colors already stored on a
+     task keep resolving; the rest exist only here, because a task's color is a free choice and
+     doesn't have to belong to the folder color cycle. Each entry carries its own light and dark
+     values — that's the whole point of naming them instead of storing a hex, which can only ever
+     be one fixed fill in both themes. */
+  --task-indigo-card: var(--cat-indigo-card);
+  --task-indigo-ink: var(--cat-indigo-ink);
+  --task-indigo-solid: var(--cat-indigo);
+  --task-teal-card: var(--cat-teal-card);
+  --task-teal-ink: var(--cat-teal-ink);
+  --task-teal-solid: var(--cat-teal);
+  --task-amber-card: var(--cat-amber-card);
+  --task-amber-ink: var(--cat-amber-ink);
+  --task-amber-solid: var(--cat-amber);
+  --task-rose-card: var(--cat-rose-card);
+  --task-rose-ink: var(--cat-rose-ink);
+  --task-rose-solid: var(--cat-rose);
+  --task-emerald-card: var(--cat-emerald-card);
+  --task-emerald-ink: var(--cat-emerald-ink);
+  --task-emerald-solid: var(--cat-emerald);
+
+  --task-violet-card: #ddd6fe;
+  --task-violet-ink: #5b21b6;
+  --task-violet-solid: #7c3aed;
+  --task-blue-card: #bfdbfe;
+  --task-blue-ink: #1e40af;
+  --task-blue-solid: #2563eb;
+  --task-cyan-card: #a5f3fc;
+  --task-cyan-ink: #155e75;
+  --task-cyan-solid: #0891b2;
+  --task-lime-card: #d9f99d;
+  --task-lime-ink: #3f6212;
+  --task-lime-solid: #65a30d;
+  --task-orange-card: #fed7aa;
+  --task-orange-ink: #9a3412;
+  --task-orange-solid: #ea580c;
+  --task-pink-card: #fbcfe8;
+  --task-pink-ink: #9d174d;
+  --task-pink-solid: #db2777;
+  --task-slate-card: #dbe1ea;
+  --task-slate-ink: #334155;
+  --task-slate-solid: #475569;
+
+  --shadow-sm: 0 1px 3px 0 rgb(20 22 26 / 0.08);
+  --shadow-md: 0 4px 14px -2px rgb(20 22 26 / 0.12), 0 1px 3px rgb(20 22 26 / 0.06);
+  --shadow-lg: 0 20px 40px -12px rgb(20 22 26 / 0.2);
+}
+
+:root[data-theme="dark"] {
+  --color-surface: #1b1d23;
+  --color-surface-muted: #15161b;
+  --color-surface-raised: #242631;
+  --color-border: #2c2e36;
+  --color-border-strong: #3a3d47;
+
+  --color-text: #edeef2;
+  --color-text-muted: #9296a3;
+
+  --color-hover: #262832;
+
+  --color-accent: #8b85f0;
+  --color-accent-hover: #a29cf5;
+  --color-accent-soft: #2c2a52;
+  --color-accent-soft-hover: #363466;
+  --color-accent-ink: #c9c5fb;
+
+  --color-danger: #e5716a;
+  --color-danger-hover: #ef938d;
+
+  --cat-teal: #4dc9bb;
+  --cat-teal-soft: #16332f;
+  --cat-teal-ink: #8fe4d9;
+  --cat-amber: #e0af4c;
+  --cat-amber-soft: #362a12;
+  --cat-amber-ink: #f2cd85;
+  --cat-rose: #ec83ac;
+  --cat-rose-soft: #391c29;
+  --cat-rose-ink: #f6b5cd;
+  --cat-emerald: #5cbf87;
+  --cat-emerald-soft: #17301f;
+  --cat-emerald-ink: #97dab3;
+
+  --cat-indigo-card: #423f78;
+  --cat-teal-card: #1e4b44;
+  --cat-amber-card: #4a3a18;
+  --cat-rose-card: #4a2436;
+  --cat-emerald-card: #204a2c;
+
+  --task-violet-card: #3b2f6b;
+  --task-violet-ink: #cfc3fb;
+  --task-violet-solid: #a78bfa;
+  --task-blue-card: #1e3a5f;
+  --task-blue-ink: #a9cbf5;
+  --task-blue-solid: #60a5fa;
+  --task-cyan-card: #14424c;
+  --task-cyan-ink: #9fdfe9;
+  --task-cyan-solid: #22d3ee;
+  --task-lime-card: #2f4218;
+  --task-lime-ink: #cbe89b;
+  --task-lime-solid: #a3e635;
+  --task-orange-card: #4a2e14;
+  --task-orange-ink: #f0c096;
+  --task-orange-solid: #fb923c;
+  --task-pink-card: #4a2036;
+  --task-pink-ink: #f3b4d0;
+  --task-pink-solid: #f472b6;
+  --task-slate-card: #2b313c;
+  --task-slate-ink: #c3cbd8;
+  --task-slate-solid: #94a3b8;
+
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
+  --shadow-md: 0 4px 14px -2px rgb(0 0 0 / 0.45), 0 1px 3px rgb(0 0 0 / 0.3);
+  --shadow-lg: 0 24px 48px -12px rgb(0 0 0 / 0.55);
 }
 
 *,
@@ -26,8 +193,154 @@ body,
 body {
   margin: 0;
   font-family: var(--font-sans);
+  font-feature-settings: "cv11", "ss01";
   color: var(--color-text);
   background-color: var(--color-surface);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+/* ------------------------------------------------------------------ motion
+
+   One place for the app's animations so timings stay consistent instead of each component
+   inventing its own. Durations are short on purpose: these are feedback and continuity cues in a
+   note-taking tool, not decoration.
+
+   Every animation below is disabled under prefers-reduced-motion (bottom of this block). */
+
+:root {
+  --motion-fast: 120ms;
+  --motion-base: 180ms;
+  --motion-slow: 240ms;
+  --motion-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  /* Slight overshoot — used only for the "it happened" pops (star, pin). */
+  --motion-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* A row/card arriving: new task, new folder, or an existing card re-mounting somewhere else —
+   pinning in board view moves a card to another column, which is a mount there, so the same
+   animation covers "it moved" without a hand-rolled FLIP. */
+@keyframes anim-item-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Toggle feedback: the icon itself acknowledges the click (star/pin, on and off). */
+@keyframes anim-pop {
+  0% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.28);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes anim-overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes anim-overlay-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes anim-dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes anim-dialog-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
+}
+
+.anim-item-in {
+  animation: anim-item-in var(--motion-base) var(--motion-ease) backwards;
+}
+
+.anim-pop {
+  animation: anim-pop var(--motion-slow) var(--motion-spring);
+}
+
+.anim-overlay-in {
+  animation: anim-overlay-in var(--motion-fast) var(--motion-ease) backwards;
+}
+
+.anim-overlay-out {
+  animation: anim-overlay-out var(--motion-fast) var(--motion-ease) forwards;
+}
+
+.anim-dialog-in {
+  animation: anim-dialog-in var(--motion-base) var(--motion-ease) backwards;
+}
+
+.anim-dialog-out {
+  animation: anim-dialog-out var(--motion-fast) var(--motion-ease) forwards;
+}
+
+/* While a touch drag is live: no scrolling, no text selection, no long-press callout — the
+   gesture belongs to the drag until the finger lifts. */
+body.dnd-touch-active {
+  touch-action: none;
+  overscroll-behavior: contain;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* Press feedback for every button that opts in via the shared Button/IconButton components. */
+.anim-press {
+  transition: transform var(--motion-fast) var(--motion-ease);
+}
+
+.anim-press:active:not(:disabled) {
+  transform: scale(0.94);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-item-in,
+  .anim-pop,
+  .anim-overlay-in,
+  .anim-overlay-out,
+  .anim-dialog-in,
+  .anim-dialog-out {
+    animation: none;
+  }
+
+  .anim-press,
+  .anim-press:active:not(:disabled) {
+    transition: none;
+    transform: none;
+  }
 }

@@ -58,7 +58,7 @@ export function FolderActions({ folderId, folderName, compact = false }: FolderA
       {menuOpen ? (
         <div
           role="menu"
-          className="absolute right-0 z-30 mt-1 min-w-[8.5rem] rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] py-1 shadow-lg"
+          className="absolute right-0 z-30 mt-1 min-w-[8.5rem] rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] py-1 shadow-[var(--shadow-md)]"
         >
           <button
             type="button"
@@ -75,7 +75,7 @@ export function FolderActions({ folderId, folderName, compact = false }: FolderA
           <button
             type="button"
             role="menuitem"
-            className="block w-full px-3 py-1.5 text-left text-sm text-[#b42318] hover:bg-[var(--color-hover)]"
+            className="block w-full px-3 py-1.5 text-left text-sm text-[var(--color-danger)] hover:bg-[var(--color-hover)]"
             onClick={(event) => {
               event.stopPropagation()
               setMenuOpen(false)

@@ -101,7 +101,7 @@ export function ExcelPreview({ attachment }: ExcelPreviewProps) {
               type="button"
               onClick={() => handleSelectSheet(name)}
               className={cn(
-                'shrink-0 rounded-md px-2.5 py-1 text-sm',
+                'shrink-0 rounded-full px-2.5 py-1 text-sm',
                 name === activeSheet
                   ? 'bg-[var(--color-hover)] font-medium text-[var(--color-text)]'
                   : 'text-[var(--color-text-muted)] hover:bg-[var(--color-hover)] hover:text-[var(--color-text)]',

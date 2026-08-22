@@ -68,9 +68,15 @@ export function reorderSiblingTasks(
   }
   rest.splice(insertAt, 0, moving)
 
-  const orderById = new Map(rest.map((task, index) => [task.id, index]))
-  return tasks.map((task) => {
-    const sortOrder = orderById.get(task.id)
-    return sortOrder === undefined ? task : { ...task, sortOrder }
-  })
+  // Renumbering sortOrder isn't enough on its own: views that sort by it (a folder's own list)
+  // picked the change up, but the flat cross-folder lists (Tasks, Important) render this array in
+  // its existing order, so a drag there saved correctly and appeared to do nothing.
+  //
+  // So the array is re-sequenced too: walk it, and wherever it holds one of these siblings, emit
+  // the next sibling from the new order instead. Other folders' tasks keep their positions, so a
+  // reorder in one folder can't reshuffle the flat list as a whole.
+  const queue = rest.map((task, index) => ({ ...task, sortOrder: index }))
+  const siblingIds = new Set(siblings.map((task) => task.id))
+  let next = 0
+  return tasks.map((task) => (siblingIds.has(task.id) ? queue[next++] : task))
 }

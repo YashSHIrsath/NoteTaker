@@ -33,7 +33,7 @@ export function SearchResultItem({ result, onSelect }: SearchResultItemProps) {
       type="button"
       role="option"
       className={cn(
-        'flex w-full items-start gap-2 rounded-md px-2.5 py-2 text-left',
+        'flex w-full items-start gap-2 rounded-full px-2.5 py-2 text-left',
         'hover:bg-[var(--color-hover)]',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/20',
       )}

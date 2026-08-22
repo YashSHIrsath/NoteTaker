@@ -1,5 +1,6 @@
 import { NOTES_STORAGE_VERSION } from '../../services/storage/types'
-import type { Attachment, AttachmentType, Folder, Subtask, Task } from '../../types'
+import type { Attachment, AttachmentType, Folder, Subtask, Task, TaskStatus } from '../../types'
+import { isTaskColor } from '../../lib/taskColor'
 import type { AppSnapshot, UiState } from '../types'
 
 export interface FolderRow {
@@ -16,7 +17,13 @@ export interface TaskRow {
   title: string
   content: string
   is_important: boolean
+  is_pinned: boolean
   sort_order: number
+  due_at: string | null
+  remind_before_minutes: number | null
+  status: string | null
+  tags: string[]
+  color: string | null
 }
 
 export interface SubtaskRow {
@@ -54,7 +61,13 @@ export function taskFromRow(row: TaskRow): Task {
     folderId: row.folder_id,
     content: row.content,
     isImportant: row.is_important,
+    isPinned: row.is_pinned,
     sortOrder: row.sort_order,
+    dueAt: row.due_at,
+    remindBeforeMinutes: row.remind_before_minutes,
+    status: isTaskStatus(row.status) ? row.status : null,
+    tags: Array.isArray(row.tags) ? row.tags : [],
+    color: isTaskColor(row.color) ? row.color : null,
   }
 }
 
@@ -65,9 +78,20 @@ export function taskToRow(task: Task): TaskRow {
     title: task.title,
     content: task.content,
     is_important: task.isImportant,
+    is_pinned: task.isPinned,
     sort_order: task.sortOrder,
+    due_at: task.dueAt,
+    remind_before_minutes: task.remindBeforeMinutes,
+    status: task.status,
+    tags: task.tags,
+    color: task.color,
   }
 }
+
+function isTaskStatus(value: string | null): value is TaskStatus {
+  return value === 'pending' || value === 'ongoing' || value === 'complete'
+}
+
 
 export function subtaskFromRow(row: SubtaskRow): Subtask {
   return {

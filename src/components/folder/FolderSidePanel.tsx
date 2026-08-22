@@ -5,6 +5,8 @@ import { Button } from '../ui/Button'
 import { FolderItem } from './FolderItem'
 import { FolderTree } from '../tree/FolderTree'
 import { cn } from '../../lib/cn'
+import { getRootCategoryForFolder } from '../../lib/folderColor'
+import { useFolders } from '../../hooks/useFolders'
 
 export interface FolderSidePanelProps {
   folders: Folder[]
@@ -14,6 +16,10 @@ export interface FolderSidePanelProps {
   onSelectFolder: (folderId: string) => void
   onCreateFolder: () => void
   className?: string
+  /** 'sidebar' (default): a full-height column, docked to the right on desktop. 'sheet': a
+   *  bottom sheet sized to its own content instead of forcing full viewport height — used on
+   *  mobile, where a full-height right-docked panel leaves most of it empty. */
+  variant?: 'sidebar' | 'sheet'
 }
 
 export function FolderSidePanel({
@@ -24,19 +30,30 @@ export function FolderSidePanel({
   onSelectFolder,
   onCreateFolder,
   className,
+  variant = 'sidebar',
 }: FolderSidePanelProps) {
   const [locationOpen, setLocationOpen] = useState(false)
+  const { folders: allFolders } = useFolders()
+  const isSheet = variant === 'sheet'
 
   return (
     <aside
       className={cn(
-        'flex h-full w-[240px] shrink-0 flex-col border-l border-[var(--color-border)] bg-[var(--color-surface-muted)]',
+        'flex flex-col bg-[var(--color-surface-muted)]',
+        isSheet
+          ? 'max-h-[75vh] w-full overflow-y-auto rounded-t-2xl border-t border-[var(--color-border)]'
+          : 'h-full w-[240px] shrink-0 border-l border-[var(--color-border)]',
         className,
       )}
     >
-      <div className="flex min-h-0 flex-1 flex-col">
+      {isSheet ? (
+        <div className="flex shrink-0 items-center justify-center pt-2">
+          <span className="h-1 w-9 rounded-full bg-[var(--color-border-strong)]" aria-hidden />
+        </div>
+      ) : null}
+      <div className={cn('flex min-h-0 flex-col', isSheet ? 'shrink-0' : 'flex-1')}>
         <div className="flex items-center justify-between gap-2 px-3 py-3">
-          <h2 className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
+          <h2 className="inline-flex items-center rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
             Folders
           </h2>
           <Button variant="subtle" size="sm" onClick={onCreateFolder}>
@@ -57,6 +74,7 @@ export function FolderSidePanel({
                     parentId={folder.parentId}
                     name={folder.name}
                     important={folder.isImportant}
+                    category={getRootCategoryForFolder(allFolders, folder.id)}
                     onClick={() => onSelectFolder(folder.id)}
                   />
                 </li>
@@ -97,6 +115,7 @@ export function FolderSidePanel({
               selectedId={currentFolderId}
               expandedIds={locationPathIds}
               compact
+              interactive={false}
             />
           </div>
         ) : null}

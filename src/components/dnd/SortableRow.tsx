@@ -34,7 +34,8 @@ export function SortableRow({
   onReorder,
   children,
 }: SortableRowProps) {
-  const { dragging, dropHint, getDragging, beginDrag, updateDropHint, endDrag } = useItemDnd()
+  const { dragging, dropHint, getDragging, beginDrag, updateDropHint, endDrag, startPointerDrag } =
+    useItemDnd()
   const isDragging = dragging?.kind === kind && dragging.itemId === itemId
   const hint =
     dropHint?.kind === kind && dropHint.itemId === itemId ? dropHint.position : null
@@ -84,11 +85,15 @@ export function SortableRow({
 
   return (
     <div
+      data-dnd-item={itemId}
+      data-dnd-kind={kind}
+      data-dnd-group={groupId ?? ''}
       className={cn(
-        'border-y-2 border-transparent',
+        // A row that has just been created (or dropped into a new parent) fades up into place.
+        'anim-item-in border-y-2 border-transparent',
         hint === 'before' && 'border-t-[var(--color-accent)]',
         hint === 'after' && 'border-b-[var(--color-accent)]',
-        isDragging && 'opacity-50',
+        isDragging && 'rounded-xl bg-[var(--color-hover)] opacity-60 ring-1 ring-[var(--color-accent)]',
         className,
       )}
       onDragOver={handleDragOver}
@@ -103,8 +108,11 @@ export function SortableRow({
           title={dragLabel}
           onDragStart={handleDragStart}
           onDragEnd={() => endDrag()}
+          onPointerDown={(event) =>
+            startPointerDrag(event, { kind, itemId, groupId }, { reorder: onReorder })
+          }
           className={cn(
-            'inline-flex shrink-0 cursor-grab select-none items-center justify-center rounded-md text-[var(--color-text-muted)]',
+            'inline-flex shrink-0 cursor-grab touch-none select-none items-center justify-center rounded-full text-[var(--color-text-muted)]',
             'active:cursor-grabbing',
             compact ? 'h-6 w-5' : 'h-7 w-6',
             'hover:bg-[var(--color-hover)] hover:text-[var(--color-text)]',

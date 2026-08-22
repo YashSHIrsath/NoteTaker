@@ -1,43 +1,49 @@
 .folder-tree {
-  --tree-gutter: 1.125rem;
-  --tree-line: 1.5px;
-  --tree-radius: 8px;
-  --tree-row-center: 0.875rem;
-  --tree-line-color: #c5c5c0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.folder-tree .tree-branch {
+.folder-tree ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Nesting was pure indentation, which reads as a list, not a tree. Each nested group draws the
+   classic elbow connectors instead: a vertical trunk dropping from the parent's chevron and a
+   short arm reaching each child row.
+
+   The geometry comes in as custom properties from FolderTreeNode, because the indentation and
+   row heights it uses vary by level (card vs. nested) and by density (compact vs. not):
+     --tree-line-x  horizontal position of the trunk, relative to the child row's left edge
+     --tree-elbow-y vertical center of a child row, i.e. where its arm meets the trunk */
+.folder-tree .folder-tree-group > li {
   position: relative;
-  padding-left: var(--tree-gutter);
 }
 
-.folder-tree .tree-branch::before {
-  content: "";
+.folder-tree .folder-tree-group > li::before {
+  content: '';
   position: absolute;
-  left: 0;
+  left: var(--tree-line-x, 0px);
   top: 0;
   bottom: 0;
-  border-left: var(--tree-line) solid var(--tree-line-color);
+  width: 1px;
+  background: var(--color-border-strong);
 }
 
-.folder-tree .tree-branch::after {
-  content: "";
+/* The trunk stops at the last child's arm instead of running past it into empty space. */
+.folder-tree .folder-tree-group > li:last-child::before {
+  bottom: auto;
+  height: var(--tree-elbow-y, 14px);
+}
+
+.folder-tree .folder-tree-group > li::after {
+  content: '';
   position: absolute;
-  left: 0;
-  top: 0;
-  width: var(--tree-gutter);
-  height: var(--tree-row-center);
-  border-left: var(--tree-line) solid var(--tree-line-color);
-  border-bottom: var(--tree-line) solid var(--tree-line-color);
-  border-bottom-left-radius: var(--tree-radius);
+  left: var(--tree-line-x, 0px);
+  top: var(--tree-elbow-y, 14px);
+  width: 6px;
+  height: 1px;
+  background: var(--color-border-strong);
 }
-
-.folder-tree.folder-tree-compact {
-  --tree-gutter: 0.875rem;
-  --tree-row-center: 0.75rem;
-}
-
-.folder-tree.folder-tree-compact .tree-branch {
-  padding-left: var(--tree-gutter);
-}
-

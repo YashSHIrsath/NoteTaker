@@ -57,16 +57,16 @@ export function ConfirmDialog({
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className="relative max-h-[min(90vh,32rem)] w-full max-w-sm overflow-y-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-lg outline-none"
+        className="relative max-h-[min(90vh,32rem)] w-full max-w-sm overflow-y-auto rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-[var(--shadow-lg)] outline-none"
       >
-        <h2 id={titleId} className="text-base font-semibold text-[var(--color-text)]">
+        <h2 id={titleId} className="text-[15px] font-semibold text-[var(--color-text)]">
           {title}
         </h2>
-        <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-[var(--color-text-muted)]">
+        <p className="mt-2.5 whitespace-pre-wrap text-sm leading-relaxed text-[var(--color-text-muted)]">
           {description}
         </p>
-        <div className="mt-4 flex justify-end gap-2">
-          <Button size="sm" onClick={onCancel} disabled={loading}>
+        <div className="mt-5 flex justify-end gap-2">
+          <Button variant="subtle" size="sm" onClick={onCancel} disabled={loading}>
             Cancel
           </Button>
           <Button size="sm" variant="danger" onClick={onConfirm} disabled={loading}>

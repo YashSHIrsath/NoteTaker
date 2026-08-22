@@ -10,6 +10,16 @@ import {
 import type { Session, User } from '@supabase/supabase-js'
 import { getAuthEmailRedirectTo } from '../lib/authRedirect'
 import { getSupabaseClient } from '../lib/supabase'
+import type { ViewStyle } from '../lib/viewStyle'
+
+export interface ProfileUpdate {
+  fullName?: string
+  avatarUrl?: string
+  /** IANA zone (e.g. "Asia/Kolkata") — kept fresh so reminder emails can show local time. */
+  timezone?: string
+  /** Whether MyNotes/Important render as classic list cards or as the colorful clipboard tiles. */
+  viewStyle?: ViewStyle
+}
 
 interface AuthContextValue {
   user: User | null
@@ -19,6 +29,7 @@ interface AuthContextValue {
   signIn: (email: string, password: string) => Promise<void>
   signUp: (email: string, password: string) => Promise<{ needsEmailConfirmation: boolean }>
   signOut: () => Promise<void>
+  updateProfile: (update: ProfileUpdate) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -96,6 +107,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [client])
 
+  const updateProfile = useCallback(async (update: ProfileUpdate) => {
+    if (!client) {
+      throw new Error('Supabase is not configured.')
+    }
+    const data: Record<string, string> = {}
+    if (update.fullName !== undefined) {
+      data.full_name = update.fullName
+    }
+    if (update.avatarUrl !== undefined) {
+      data.avatar_url = update.avatarUrl
+    }
+    if (update.timezone !== undefined) {
+      data.timezone = update.timezone
+    }
+    if (update.viewStyle !== undefined) {
+      data.view_style = update.viewStyle
+    }
+    const { data: result, error } = await client.auth.updateUser({ data })
+    if (error) {
+      throw error
+    }
+    // onAuthStateChange fires a USER_UPDATED event too, but applying it here directly
+    // avoids a flash of stale data while that round-trip is still in flight.
+    setSession((current) => (current ? { ...current, user: result.user } : current))
+  }, [client])
+
   const value = useMemo<AuthContextValue>(
     () => ({
       user: session?.user ?? null,
@@ -105,8 +142,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signIn,
       signUp,
       signOut,
+      updateProfile,
     }),
-    [client, loading, session, signIn, signOut, signUp],
+    [client, loading, session, signIn, signOut, signUp, updateProfile],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

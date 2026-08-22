@@ -1,17 +1,19 @@
 import { useState } from 'react'
-import { Plus } from 'lucide-react'
+import { Folder, Plus } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '../components/ui/Button'
 import { CreateFolderDialog } from '../components/folder/CreateFolderDialog'
 import { RootFolderList } from '../components/folder/RootFolderList'
 import { useFolders } from '../hooks/useFolders'
 import { getRootFolders } from '../lib/folders'
+import { FLOATING_HEADER_CLASS, useFloatingHeader } from '../hooks/useFloatingHeader'
 
 export function MyNotesPage() {
   const navigate = useNavigate()
   const { folders, createFolder } = useFolders()
   const rootFolders = getRootFolders(folders)
   const [createOpen, setCreateOpen] = useState(false)
+  const { headerRef, contentStyle } = useFloatingHeader()
 
   const newFolderButton = (
     <Button variant="subtle" size="sm" onClick={() => setCreateOpen(true)}>
@@ -21,28 +23,46 @@ export function MyNotesPage() {
   )
 
   return (
-    <div className="h-full overflow-y-auto px-4 py-5 sm:px-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight text-[var(--color-text)]">
-          MyNotes
-        </h1>
-        {newFolderButton}
+    <div className="relative flex h-full min-h-0 flex-col">
+      <div ref={headerRef} className={FLOATING_HEADER_CLASS}>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent-soft)] text-[var(--color-accent)] sm:h-9 sm:w-9">
+              <Folder className="h-3.5 w-3.5 sm:h-4 sm:w-4" aria-hidden />
+            </span>
+            <div className="min-w-0">
+              <h1
+                className="truncate text-[17px] font-semibold tracking-tight text-[var(--color-text)] sm:text-[20px]"
+                style={{ fontFamily: 'var(--font-display)' }}
+              >
+                MyNotes
+              </h1>
+              <p className="text-[11.5px] text-[var(--color-text-muted)] sm:text-[12.5px]">
+                {rootFolders.length} {rootFolders.length === 1 ? 'folder' : 'folders'}
+              </p>
+            </div>
+          </div>
+          {newFolderButton}
+        </div>
       </div>
 
-      {rootFolders.length === 0 ? (
-        <div className="mt-16 flex flex-col items-center px-6 text-center">
-          <p className="text-lg font-medium text-[var(--color-text)]">No folders yet.</p>
-          <p className="mt-2 text-sm text-[var(--color-text-muted)]">Create your first folder.</p>
-          <div className="mt-4">{newFolderButton}</div>
-        </div>
-      ) : (
-        <div className="mt-6">
-          <RootFolderList
-            folders={rootFolders}
-            onOpenFolder={(folderId) => navigate(`/folder/${folderId}`)}
-          />
-        </div>
-      )}
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-28 sm:px-6 lg:pb-5" style={contentStyle}>
+
+        {rootFolders.length === 0 ? (
+          <div className="mt-16 flex flex-col items-center px-6 text-center">
+            <p className="text-lg font-medium text-[var(--color-text)]">No folders yet.</p>
+            <p className="mt-2 text-sm text-[var(--color-text-muted)]">Create your first folder.</p>
+            <div className="mt-4">{newFolderButton}</div>
+          </div>
+        ) : (
+          <div className="mt-4 lg:mt-6">
+            <RootFolderList
+              folders={rootFolders}
+              onOpenFolder={(folderId) => navigate(`/folder/${folderId}`)}
+            />
+          </div>
+        )}
+      </div>
 
       <CreateFolderDialog
         open={createOpen}

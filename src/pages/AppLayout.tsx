@@ -2,12 +2,16 @@ import { useState } from 'react'
 import { Outlet, useLocation, useMatch, useNavigate } from 'react-router-dom'
 import { Header } from '../components/layout/Header'
 import { Sidebar } from '../components/layout/Sidebar'
+import { BottomNav } from '../components/layout/BottomNav'
 import { useFolders } from '../hooks/useFolders'
 import type { SidebarNavId } from '../types'
-import { cn } from '../lib/cn'
+
+const SIDEBAR_COLLAPSED_KEY = 'mynotes-sidebar-collapsed'
 
 export function AppLayout() {
-  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [collapsed, setCollapsed] = useState(
+    () => window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1',
+  )
   const navigate = useNavigate()
   const location = useLocation()
   const folderMatch = useMatch('/folder/:folderId')
@@ -30,13 +34,14 @@ export function AppLayout() {
       ? 'tree'
       : location.pathname === '/mynotes'
         ? 'mynotes'
-        : location.pathname === '/important'
-          ? 'important'
-          : undefined
+        : location.pathname === '/tasks'
+          ? 'tasks'
+          : location.pathname === '/important'
+            ? 'important'
+            : undefined
 
   const goTo = (path: string) => {
     navigate(path)
-    setSidebarOpen(false)
   }
 
   const handleSelectNav = (id: SidebarNavId) => {
@@ -48,7 +53,19 @@ export function AppLayout() {
       goTo('/mynotes')
       return
     }
+    if (id === 'tasks') {
+      goTo('/tasks')
+      return
+    }
     goTo('/important')
+  }
+
+  const toggleCollapsed = () => {
+    setCollapsed((current) => {
+      const next = !current
+      window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, next ? '1' : '0')
+      return next
+    })
   }
 
   const sidebarProps = {
@@ -59,47 +76,34 @@ export function AppLayout() {
     activeFolderId,
     onSelectNav: handleSelectNav,
     onSelectFolder: (folderId: string) => goTo(`/folder/${folderId}`),
+    onOpenProfile: () => goTo('/profile'),
+    profileActive: location.pathname === '/profile',
   }
 
   return (
     <div className="flex h-full flex-col bg-[var(--color-surface)]">
-      <Header
-        sidebarOpen={sidebarOpen}
-        onToggleSidebar={() => setSidebarOpen((open) => !open)}
-      />
+      <Header />
 
       <div className="relative flex min-h-0 flex-1">
-        <Sidebar {...sidebarProps} className="hidden md:flex" />
-
-        <div
-          className={cn(
-            'absolute inset-0 z-20 md:hidden',
-            sidebarOpen ? 'pointer-events-auto' : 'pointer-events-none',
-          )}
-          aria-hidden={!sidebarOpen}
-        >
-          <button
-            type="button"
-            aria-label="Close sidebar"
-            className={cn(
-              'absolute inset-0 bg-black/20 transition-opacity',
-              sidebarOpen ? 'opacity-100' : 'opacity-0',
-            )}
-            onClick={() => setSidebarOpen(false)}
-          />
-          <Sidebar
-            {...sidebarProps}
-            className={cn(
-              'absolute inset-y-0 left-0 z-10 shadow-lg transition-transform duration-200 ease-out',
-              sidebarOpen ? 'translate-x-0' : '-translate-x-full',
-            )}
-          />
-        </div>
+        {/* Sidebar from lg up only; below that the bottom bar is the navigation. */}
+        <Sidebar
+          {...sidebarProps}
+          collapsed={collapsed}
+          onToggleCollapsed={toggleCollapsed}
+          className="hidden lg:flex"
+        />
 
         <main className="min-w-0 flex-1 overflow-y-auto">
           <Outlet />
         </main>
       </div>
+
+      <BottomNav
+        activeNav={activeNav}
+        profileActive={location.pathname === '/profile'}
+        onSelectNav={handleSelectNav}
+        onOpenProfile={() => goTo('/profile')}
+      />
     </div>
   )
 }

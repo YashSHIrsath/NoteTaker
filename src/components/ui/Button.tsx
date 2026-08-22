@@ -12,9 +12,13 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantClasses: Record<ButtonVariant, string> = {
   ghost: 'bg-transparent text-[var(--color-text)] hover:bg-[var(--color-hover)]',
-  subtle: 'bg-[var(--color-surface-muted)] text-[var(--color-text)] hover:bg-[var(--color-hover)]',
+  // --color-surface-muted sits too close to the page background in both themes to read as a
+  // button on its own — border-[var(--color-border-strong)] plus a --color-hover fill gives it
+  // a real, visible edge instead of blending into whatever it's placed on.
+  subtle:
+    'border border-[var(--color-border-strong)] bg-[var(--color-hover)] text-[var(--color-text)] hover:bg-[var(--color-border)]',
   primary: 'bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent)]/90',
-  danger: 'bg-[#b42318] text-white hover:bg-[#912018]',
+  danger: 'bg-[var(--color-danger)] text-white hover:bg-[var(--color-danger-hover)]',
 }
 
 const sizeClasses: Record<ButtonSize, string> = {
@@ -34,7 +38,7 @@ export function Button({
     <button
       type={type}
       className={cn(
-        'inline-flex items-center justify-center gap-2 rounded-md font-medium transition-colors',
+        'anim-press inline-flex items-center justify-center gap-2 rounded-full font-medium transition-colors',
         'disabled:pointer-events-none disabled:opacity-50',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/20',
         variantClasses[variant],

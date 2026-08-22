@@ -1,5 +1,6 @@
 import type { Folder, Subtask, Task } from '../../types'
 import { NOTES_STORAGE_VERSION, type AppSnapshot, type UiState } from './types'
+import { isTaskColor } from '../../lib/taskColor'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -28,7 +29,14 @@ function isTask(value: unknown): value is Task {
     typeof value.folderId === 'string' &&
     typeof value.content === 'string' &&
     typeof value.isImportant === 'boolean' &&
-    typeof value.sortOrder === 'number'
+    typeof value.isPinned === 'boolean' &&
+    typeof value.sortOrder === 'number' &&
+    (value.dueAt === null || typeof value.dueAt === 'string') &&
+    (value.remindBeforeMinutes === null || typeof value.remindBeforeMinutes === 'number') &&
+    (value.status === null || value.status === 'pending' || value.status === 'ongoing' || value.status === 'complete') &&
+    Array.isArray(value.tags) &&
+    value.tags.every((tag) => typeof tag === 'string') &&
+    (value.color === null || isTaskColor(value.color))
   )
 }
 

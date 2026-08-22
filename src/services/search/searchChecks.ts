@@ -26,6 +26,12 @@ export function runSearchChecks(): void {
       folderId: 'react-folder',
       content: 'Building a React application',
       isImportant: true,
+      isPinned: false,
+      dueAt: null,
+      remindBeforeMinutes: null,
+      status: null,
+      tags: [],
+      color: null,
       sortOrder: 0,
     },
   ]
@@ -48,12 +54,17 @@ export function runSearchChecks(): void {
     deep.some((item) => item.kind === 'task' && item.pathLabel === 'Programming → Web Development → React'),
     'task result includes folder path',
   )
+  assert(
+    deep.some((item) => item.kind === 'task' && item.href === '/folder/react-folder' && item.taskId === 'hooks'),
+    'task result opens its folder and carries the task id to reopen its popup',
+  )
 
   const contentHit = searchNotes('application', { folders, tasks, subtasks })
   assert(contentHit.some((item) => item.id === 'hooks'), 'task content is searchable')
 
   const subHit = searchNotes('useeffect', { folders, tasks, subtasks })
-  assert(subHit[0]?.kind === 'subtask' && subHit[0].href === '/task/hooks', 'subtask opens its task')
+  assert(subHit[0]?.kind === 'subtask' && subHit[0].href === '/folder/react-folder', 'subtask opens its task\'s folder')
+  assert(subHit[0]?.taskId === 'hooks', 'subtask result carries its task id to reopen the popup')
   assert(subHit[0]?.revealSubtaskId === 'effect', 'subtask result carries reveal id')
   assert(subHit[0]?.pathLabel === 'Learn React Hooks', 'subtask shows the task title')
 

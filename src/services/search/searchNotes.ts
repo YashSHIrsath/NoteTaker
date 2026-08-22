@@ -10,6 +10,8 @@ export interface SearchResult {
   title: string
   pathLabel: string
   href: string
+  /** Set for 'task'/'subtask' results so the picker can open the task's popup instead of navigating away. */
+  taskId?: string
   revealSubtaskId?: string
 }
 
@@ -71,7 +73,8 @@ export function searchNotes(query: string, data: SearchNotesInput): SearchResult
       kind: 'task',
       title: task.title.trim() || 'Untitled',
       pathLabel: folderPathLabel(data.folders, task.folderId, true),
-      href: `/task/${task.id}`,
+      href: `/folder/${task.folderId}`,
+      taskId: task.id,
     })
     if (results.length >= MAX_RESULTS) {
       return results
@@ -88,7 +91,8 @@ export function searchNotes(query: string, data: SearchNotesInput): SearchResult
       kind: 'subtask',
       title: subtask.title.trim() || 'Untitled',
       pathLabel: task?.title.trim() || 'Untitled',
-      href: `/task/${subtask.taskId}`,
+      href: task ? `/folder/${task.folderId}` : `/task/${subtask.taskId}`,
+      taskId: task ? subtask.taskId : undefined,
       revealSubtaskId: subtask.id,
     })
     if (results.length >= MAX_RESULTS) {

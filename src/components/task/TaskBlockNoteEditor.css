@@ -1,0 +1,140 @@
+/* BlockNote draws a vertical guide line down the left edge of nested list items via a
+   border on this pseudo-element (the actual rule lives in @blocknote/react's own bundled
+   CSS — `.bn-block-group .bn-block:not(:has(.bn-toggle-wrapper)) .bn-block-group
+   .bn-block-outer:not([data-prev-depth-changed])::before` — which out-specifies a same-shape
+   override, hence !important here instead of fighting selector specificity). It reads as a
+   stray line trailing the parent item, so we turn it off; the indentation itself (spacing)
+   is untouched. */
+.task-blocknote .bn-block-outer::before {
+  border-left: none !important;
+}
+
+/* BlockNote paints its own flat editor background (a slightly different shade than the
+   modal it sits in), which reads as a visible seam. Let it show through to the modal's
+   background instead, in both themes. */
+.task-blocknote .bn-editor {
+  background: transparent;
+}
+
+/* Deliberately no size/padding overrides on .bn-side-menu: BlockNote positions the handle
+   against its own 30px menu box, and resizing or padding the children moved the visible handle
+   away from that box — which looked like the handle "not lining up with its hitbox". The reason
+   it used to feel unreachable was not the target size (see TaskContentPreview's note on mounted
+   previews hijacking the side menu's editor resolution), so there is nothing to compensate for
+   here.
+
+   On a touch screen there is no hover at all, so a hover-revealed handle can never be reached.
+   Keep it visible there instead — tapping it opens the menu that carries Move up / Move down
+   (see TaskBlockSideMenu) — but held back from full strength so a row of buttons isn't competing
+   with the text while reading. Geometry is left exactly as BlockNote lays it out: sizing or
+   stacking these is what put them on top of the content. */
+@media (hover: none) {
+  .task-blocknote .bn-side-menu {
+    opacity: 0.7;
+  }
+}
+
+/* Previews render BlockNote's serialized document (no editor instance), so they don't inherit
+   .bn-editor's 54px side padding — which is what used to squeeze every line of a couple-hundred-
+   px-wide card into a narrow, seemingly-centered column. Pinned to 0 explicitly so that stays
+   true regardless of what wraps it. */
+.task-blocknote-preview .bn-static-content {
+  padding-inline: 0;
+}
+
+/* Tables get their borders from `.bn-editor [data-content-type=table]` in BlockNote's own CSS,
+   which a static preview isn't inside — so a table in a card would otherwise lose its grid. */
+.task-blocknote-preview [data-content-type='table'] table {
+  border-collapse: collapse;
+}
+
+.task-blocknote-preview [data-content-type='table'] th,
+.task-blocknote-preview [data-content-type='table'] td {
+  border: 1px solid var(--color-border);
+  padding: 2px 4px;
+}
+
+/* Attachments are stored with showPreview: false so they render as a compact box instead of
+   a full inline preview. File/pdf/doc blocks already get BlockNote's own name+icon box for
+   that; image blocks just render a bare <a>, so style it to match the same look. */
+.task-blocknote [data-content-type='image'] .bn-file-block-content-wrapper > a {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: fit-content;
+  padding: 4px;
+  border-radius: 4px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.task-blocknote [data-content-type='image'] .bn-file-block-content-wrapper > a::before {
+  content: '';
+  display: inline-block;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  background-color: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor'%3E%3Cpath d='M3 8L9.00319 2H19.9978C20.5513 2 21 2.45531 21 2.9918V21.0082C21 21.556 20.5551 22 20.0066 22H3.9934C3.44476 22 3 21.5501 3 20.9932V8ZM10 4V9H5V20H19V4H10Z'%3E%3C/path%3E%3C/svg%3E")
+    center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor'%3E%3Cpath d='M3 8L9.00319 2H19.9978C20.5513 2 21 2.45531 21 2.9918V21.0082C21 21.556 20.5551 22 20.0066 22H3.9934C3.44476 22 3 21.5501 3 20.9932V8ZM10 4V9H5V20H19V4H10Z'%3E%3C/path%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
+
+.task-blocknote [data-content-type='image'] .bn-file-block-content-wrapper > a:hover {
+  background-color: var(--color-hover);
+}
+
+/* Attachment blocks are hidden inside a card/tile preview because the card already lists the
+   same attachments as chips in its footer. Rendering both put file-name boxes in the middle of
+   the text preview *and* icons at the bottom — the same attachment twice, in two different
+   shapes, which is what made the icons look like they were floating mid-card. The footer chips
+   remain the way to open one; the full document (with the blocks in place) is one tap away. */
+.task-blocknote-preview [data-content-type='image'],
+.task-blocknote-preview [data-content-type='file'] {
+  display: none;
+}
+
+/* BlockNote's default 16px body size (and em-based heading scale on top of it — a heading can
+   render at 3x that) is sized for a full editor, not a few lines glanced at inside a folder-grid
+   card. Scaling the preview's base size down brings body text in line with the rest of the
+   card's own type scale (title ~13.5px, meta ~11.5px) and, because heading sizes are relative
+   (--level is in em), shrinks them proportionally for free. Headings are then capped further so
+   an h1 in a task's notes doesn't blow out the card's fixed preview height on its own. */
+.task-blocknote-preview .bn-default-styles {
+  font-size: 13px;
+}
+
+@media (max-width: 640px) {
+  .task-blocknote-preview .bn-default-styles {
+    font-size: 12px;
+  }
+}
+
+.task-blocknote-preview [data-content-type='heading'] {
+  --level: 1.3em;
+}
+
+.task-blocknote-preview [data-content-type='heading'][data-level='2'] {
+  --level: 1.15em;
+}
+
+.task-blocknote-preview [data-content-type='heading'][data-level='3'],
+.task-blocknote-preview [data-content-type='heading'][data-level='4'],
+.task-blocknote-preview [data-content-type='heading'][data-level='5'],
+.task-blocknote-preview [data-content-type='heading'][data-level='6'] {
+  --level: 1em;
+}
+
+/* A block can genuinely be center/right/justify-aligned in the real editor, but a card/tile
+   preview is a small glance-and-open snippet — centered or right-aligned text there just
+   reads as broken, not intentional. Previews always render left regardless of the block's
+   real stored alignment; opening the task still shows (and lets you edit) the real alignment.
+   BlockNote's own rule for this is also !important, so a same-shape override can lose the
+   cascade depending on load order — this compound selector wins on specificity instead. */
+.task-blocknote-preview [data-text-alignment='center'],
+.task-blocknote-preview [data-text-alignment='right'],
+.task-blocknote-preview [data-text-alignment='justify'] {
+  text-align: left !important;
+  justify-content: flex-start !important;
+}

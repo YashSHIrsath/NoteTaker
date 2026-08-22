@@ -31,9 +31,7 @@ export function FolderViewPage() {
       onCreateFolder={(name) => {
         createFolder(name, folder.id)
       }}
-      onCreateTask={(title) => {
-        createTask(title, folder.id)
-      }}
+      onCreateTask={(title) => createTask(title, folder.id)}
     />
   )
 }

@@ -31,13 +31,13 @@ export function SearchInput({
         id={id}
         type="search"
         value={value}
-        placeholder="Search notes..."
+        placeholder="Search or run a command..."
         autoComplete="off"
         onChange={(event) => onChange(event.target.value)}
         onFocus={onFocus}
         onKeyDown={onKeyDown}
         className={cn(
-          'h-9 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)]',
+          'h-9 w-full rounded-full border border-[var(--color-border)] bg-[var(--color-surface)]',
           'pl-8 pr-3 text-sm text-[var(--color-text)] outline-none',
           'placeholder:text-[var(--color-text-muted)]',
           'focus:ring-2 focus:ring-[var(--color-accent)]/20',

@@ -33,5 +33,11 @@ export function TaskViewPage() {
     )
   }
 
-  return <TaskEditor task={task} folderPath={getPath(parentFolder.id)} />
+  return (
+    // Clearance for the floating bottom bar below lg — the dialog form of this editor doesn't
+    // need it, since a dialog covers the bar entirely.
+    <div className="h-full pb-24 lg:pb-0">
+      <TaskEditor task={task} folderPath={getPath(parentFolder.id)} />
+    </div>
+  )
 }

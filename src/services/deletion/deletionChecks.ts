@@ -26,6 +26,12 @@ const tasks: Task[] = [
     folderId: 'nested',
     content: '',
     isImportant: true,
+    isPinned: false,
+    dueAt: null,
+    remindBeforeMinutes: null,
+    status: null,
+    tags: [],
+    color: null,
     sortOrder: 0,
   },
 ]

@@ -109,6 +109,20 @@ export function getFolderPath(folders: Folder[], id: string): Folder[] {
   return path
 }
 
+/** Where a folder lives, as "MyNotes › Job Applied › Waiting" — for views that mix items from
+ *  all over the tree (Important, search results) and would otherwise show a bare name with no
+ *  clue whether it's a root folder or three levels down. Pass includeSelf: false when the name
+ *  itself is already displayed next to the trail. */
+export function folderPathLabel(
+  folders: Folder[],
+  folderId: string,
+  options?: { includeSelf?: boolean },
+): string {
+  const trail = getFolderPath(folders, folderId)
+  const parts = options?.includeSelf === false ? trail.slice(0, -1) : trail
+  return ['MyNotes', ...parts.map((folder) => folder.name)].join(' › ')
+}
+
 export function buildFolderForest(folders: Folder[]): FolderNode[] {
   const childrenByParent = new Map<string, Folder[]>()
 
