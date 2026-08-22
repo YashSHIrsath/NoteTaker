@@ -56,7 +56,7 @@ export function FolderView({
   const [activeTag, setActiveTag] = useState<string | null>(null)
   // Below lg the folder header floats over the scrolling content instead of taking a band of its
   // own; the hook measures it so the content can leave that much room clear.
-  const { headerRef, contentRef, contentStyle, condensed } = useFloatingHeader()
+  const { headerRef, contentRef, condensed } = useFloatingHeader()
   const navigate = useNavigate()
   const location = useLocation()
   const { folders, getForest, getTasksInFolder, toggleFolderImportant } = useFolders()
@@ -252,7 +252,6 @@ export function FolderView({
           <div
             ref={contentRef}
             className="min-h-0 flex-1 overflow-y-auto px-3 pb-28 sm:px-6 lg:pb-5"
-            style={contentStyle}
           >
             {allTagsInScope.length > 0 ? (
               <div className="mt-3 sm:mt-4">
@@ -270,7 +269,6 @@ export function FolderView({
           <div
             ref={contentRef}
             className="min-h-0 flex-1 overflow-y-auto bg-[var(--color-surface-muted)] px-3 pb-28 sm:px-6 lg:pb-5"
-            style={contentStyle}
           >
             {allTagsInScope.length > 0 ? (
               <div className="mt-3 sm:mt-4">

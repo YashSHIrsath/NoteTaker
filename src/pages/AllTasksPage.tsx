@@ -31,7 +31,7 @@ export function AllTasksPage() {
   const [activeTag, setActiveTag] = useState<string | null>(null)
   const [newTaskOpen, setNewTaskOpen] = useState(false)
   // Same floating top bar as the folder view, so the two pages' headers line up.
-  const { headerRef, contentRef, contentStyle, condensed } = useFloatingHeader()
+  const { headerRef, contentRef, condensed } = useFloatingHeader()
 
   const allTagsInScope = Array.from(new Set(tasks.flatMap((task) => task.tags))).sort()
   const visibleTasks = activeTag ? tasks.filter((task) => task.tags.includes(activeTag)) : tasks
@@ -117,7 +117,6 @@ export function AllTasksPage() {
       <div
         ref={contentRef}
         className="min-h-0 flex-1 overflow-y-auto px-4 pb-28 sm:px-6 lg:pb-5 lg:pt-1"
-        style={contentStyle}
       >
         {pinnedTasks.length > 0 ? (
           <section className="mt-4 lg:mt-6">

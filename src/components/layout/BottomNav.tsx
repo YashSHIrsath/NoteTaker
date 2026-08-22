@@ -2,6 +2,11 @@ import { ClipboardList, Folder, ListTree, Star } from 'lucide-react'
 import type { ReactNode } from 'react'
 import type { SidebarNavId } from '../../types'
 import { useAuth } from '../../hooks/useAuth'
+import {
+  INDICATOR_STRETCH_PER_SLOT,
+  INDICATOR_THIN_PER_SLOT,
+  useDragIndicator,
+} from '../../hooks/useDragIndicator'
 import { cn } from '../../lib/cn'
 
 type BottomNavId = SidebarNavId | 'profile'
@@ -12,6 +17,7 @@ interface BottomNavItem {
   icon: ReactNode
 }
 
+/** Caps how much the indicator can give, so a jump across the whole bar can't balloon it. */
 const ITEMS: BottomNavItem[] = [
   { id: 'tree', label: 'Tree', icon: <ListTree className="h-[18px] w-[18px]" aria-hidden /> },
   { id: 'mynotes', label: 'Notes', icon: <Folder className="h-[18px] w-[18px]" aria-hidden /> },
@@ -33,7 +39,8 @@ export interface BottomNavProps {
  *
  * The active indicator is one absolutely-positioned pill translated across the bar rather than a
  * background on each button — with five equal-width items, `translateX(index * 100%)` is exact,
- * and one moving element is what makes switching read as a slide instead of a swap.
+ * and one moving element is what lets it behave like a blob of liquid: it stretches along its
+ * travel, follows a finger dragged across the bar, and lands where a throw was heading.
  */
 export function BottomNav({ activeNav, profileActive = false, onSelectNav, onOpenProfile }: BottomNavProps) {
   const { user } = useAuth()
@@ -42,6 +49,21 @@ export function BottomNav({ activeNav, profileActive = false, onSelectNav, onOpe
 
   const activeId: BottomNavId | undefined = profileActive ? 'profile' : activeNav
   const activeIndex = ITEMS.findIndex((item) => item.id === activeId)
+
+  const selectIndex = (index: number) => {
+    const item = ITEMS[index]
+    if (!item) {
+      return
+    }
+    if (item.id === 'profile') {
+      onOpenProfile()
+    } else {
+      onSelectNav(item.id as SidebarNavId)
+    }
+  }
+
+  // Tap a tab or drag the blob — both come through here (see useDragIndicator).
+  const indicator = useDragIndicator(ITEMS.length, activeIndex, selectIndex)
 
   return (
     <nav
@@ -52,9 +74,11 @@ export function BottomNav({ activeNav, profileActive = false, onSelectNav, onOpe
         'px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]',
       )}
     >
+      {/* touch-none so dragging the blob sideways doesn't scroll the page under it. */}
       <div
+        onPointerDown={indicator.onPointerDown}
         className={cn(
-          'pointer-events-auto relative flex w-full max-w-md items-center rounded-full p-1',
+          'pointer-events-auto relative flex w-full max-w-md touch-none items-center overflow-hidden rounded-full p-1',
           // Glass: a translucent tint of the app's own surface over a blur, so it picks up
           // whatever scrolls underneath and stays legible in either theme.
           'border border-[var(--color-border)]/70 bg-[var(--color-surface)]/70 backdrop-blur-xl',
@@ -68,10 +92,23 @@ export function BottomNav({ activeNav, profileActive = false, onSelectNav, onOpe
             className={cn(
               'absolute inset-y-1 left-1 w-[calc((100%-0.5rem)/5)] rounded-full',
               'bg-[var(--color-accent-soft)] ring-1 ring-inset ring-[var(--color-accent)]/25',
-              'transition-transform duration-300 [transition-timing-function:var(--motion-ease)]',
+              // One transition for travel and stretch alike, on an overshooting curve so it
+              // arrives with a wobble instead of stopping dead — but never while dragging, where
+              // any transition would put the blob behind the finger.
+              indicator.dragging
+                ? 'transition-none'
+                : 'transition-transform duration-[420ms] [transition-timing-function:cubic-bezier(0.2,1.3,0.28,1)]',
               'motion-reduce:transition-none',
             )}
-            style={{ transform: `translateX(${activeIndex * 100}%)` }}
+            style={{
+              // translate first, so the percentage is of the untransformed width and the scales
+              // can't drag the indicator off its slot. The position is fractional while dragging.
+              transform: [
+                `translateX(${indicator.position * 100}%)`,
+                `scaleX(${1 + indicator.stretch * INDICATOR_STRETCH_PER_SLOT})`,
+                `scaleY(${1 - indicator.stretch * INDICATOR_THIN_PER_SLOT})`,
+              ].join(' '),
+            }}
           />
         ) : null}
 
@@ -82,7 +119,14 @@ export function BottomNav({ activeNav, profileActive = false, onSelectNav, onOpe
               key={item.id}
               type="button"
               aria-current={active ? 'page' : undefined}
-              onClick={() => (item.id === 'profile' ? onOpenProfile() : onSelectNav(item.id as SidebarNavId))}
+              onClick={() => {
+                // A drag ends with a click on whichever tab it finished over; the drag has already
+                // navigated, so this one is ignored.
+                if (indicator.wasDragged()) {
+                  return
+                }
+                selectIndex(ITEMS.indexOf(item))
+              }}
               className={cn(
                 'anim-press relative z-10 flex flex-1 flex-col items-center gap-0.5 rounded-full px-1 py-1.5',
                 'text-[10px] font-semibold transition-colors',

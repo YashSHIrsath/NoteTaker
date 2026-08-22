@@ -52,7 +52,7 @@ export function Header({ className }: HeaderProps) {
       className={cn(
         // min-h rather than h: the status-bar inset is added as padding, and a fixed height would
         // squash the row's contents into the strip instead of sitting below it.
-        'flex min-h-12 shrink-0 items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-2 sm:min-h-14 sm:gap-4 sm:px-4',
+        'flex min-h-12 shrink-0 items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-2 pb-1.5 sm:min-h-14 sm:gap-4 sm:px-4 sm:pb-0',
         'pt-[env(safe-area-inset-top)]',
         className,
       )}

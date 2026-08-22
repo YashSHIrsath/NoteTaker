@@ -46,7 +46,7 @@ export function ImportantPage() {
   const [filter, setFilter] = useState<ImportantFilter>('all')
   const [activeTag, setActiveTag] = useState<string | null>(null)
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
-  const { headerRef, contentRef, contentStyle, condensed } = useFloatingHeader()
+  const { headerRef, contentRef, condensed } = useFloatingHeader()
   const importantFolders = getImportantFolders(folders)
   const importantTasks = getImportantTasks(tasks)
   const isEmpty = importantFolders.length === 0 && importantTasks.length === 0
@@ -126,7 +126,6 @@ export function ImportantPage() {
       <div
         ref={contentRef}
         className="min-h-0 flex-1 overflow-y-auto bg-[var(--color-surface-muted)] px-4 pb-28 sm:px-6 lg:pb-5"
-        style={contentStyle}
       >
         {showFolders ? (
         <section className="mt-3 sm:mt-4 lg:mt-6">

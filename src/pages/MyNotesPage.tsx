@@ -18,7 +18,7 @@ export function MyNotesPage() {
   const { folders, createFolder } = useFolders()
   const rootFolders = getRootFolders(folders)
   const [createOpen, setCreateOpen] = useState(false)
-  const { headerRef, contentRef, contentStyle, condensed } = useFloatingHeader()
+  const { headerRef, contentRef, condensed } = useFloatingHeader()
 
   const newFolderButton = (
     <Button variant="subtle" size="sm" onClick={() => setCreateOpen(true)}>
@@ -63,7 +63,6 @@ export function MyNotesPage() {
       <div
         ref={contentRef}
         className="min-h-0 flex-1 overflow-y-auto px-4 pb-28 sm:px-6 lg:pb-5"
-        style={contentStyle}
       >
 
         {rootFolders.length === 0 ? (
