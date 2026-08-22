@@ -245,6 +245,29 @@ body {
   }
 }
 
+/* The gutter controls sliding in from the margin they live in. */
+@keyframes anim-slide-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes anim-slide-out-left {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+}
+
 @keyframes anim-overlay-in {
   from {
     opacity: 0;
@@ -293,6 +316,10 @@ body {
   animation: anim-pop var(--motion-slow) var(--motion-spring);
 }
 
+.anim-slide-in-left {
+  animation: anim-slide-in-left var(--motion-base) var(--motion-ease) backwards;
+}
+
 .anim-overlay-in {
   animation: anim-overlay-in var(--motion-fast) var(--motion-ease) backwards;
 }
@@ -331,6 +358,7 @@ body.dnd-touch-active {
 @media (prefers-reduced-motion: reduce) {
   .anim-item-in,
   .anim-pop,
+  .anim-slide-in-left,
   .anim-overlay-in,
   .anim-overlay-out,
   .anim-dialog-in,

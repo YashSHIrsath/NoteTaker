@@ -22,6 +22,8 @@ export interface TaskBlockNoteEditorProps {
 }
 
 const CONTENT_FLUSH_DELAY_MS = 300
+/** Matches the side menu's slide-out in TaskBlockNoteEditor.css. */
+const HANDLES_EXIT_MS = 180
 
 export function TaskBlockNoteEditor({
   taskId,
@@ -39,6 +41,9 @@ export function TaskBlockNoteEditor({
   } = useFolders()
   const { theme } = useTheme()
   const [previewAttachment, setPreviewAttachment] = useState<Attachment | null>(null)
+  // Unmounting the side menu the instant the toggle flips would cut its slide-out short, so it
+  // outlives the switch by exactly one animation.
+  const [handlesMounted, setHandlesMounted] = useState(showBlockHandles)
   const editorWrapperRef = useRef<HTMLDivElement>(null)
 
   // Seeds the editor once per task; BlockNote owns the live document after that, so later
@@ -115,6 +120,15 @@ export function TaskBlockNoteEditor({
   useEffect(() => {
     onContentChangeRef.current = onContentChange
   }, [onContentChange])
+
+  useEffect(() => {
+    if (showBlockHandles) {
+      setHandlesMounted(true)
+      return
+    }
+    const timer = window.setTimeout(() => setHandlesMounted(false), HANDLES_EXIT_MS)
+    return () => window.clearTimeout(timer)
+  }, [showBlockHandles])
 
   const flushContent = useCallback(() => {
     if (contentFlushTimerRef.current !== null) {
@@ -253,7 +267,7 @@ export function TaskBlockNoteEditor({
             same one with the block-move control matched to the input device — and only when the
             gutter controls are switched on. Everything else (the "/" menu included) is untouched. */}
         <BlockNoteView editor={editor} theme={theme === 'dark' ? 'dark' : 'light'} sideMenu={false}>
-          {showBlockHandles ? <TaskBlockSideMenu /> : null}
+          {handlesMounted ? <TaskBlockSideMenu /> : null}
         </BlockNoteView>
       </div>
 

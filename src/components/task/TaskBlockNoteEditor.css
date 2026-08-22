@@ -23,6 +23,35 @@
   padding-inline: 10px;
 }
 
+/* Toggling the handles moves every line of the note, so the gutter opens and closes instead of
+   jumping: padding-inline is animatable, and this is the one property that changes between the
+   two states. */
+.task-blocknote .bn-editor {
+  transition: padding-inline var(--motion-slow) var(--motion-ease);
+}
+
+/* And the controls themselves slide in out of that margin rather than blinking into place —
+   then back into it when the toggle goes off, which is why they stay mounted for one animation
+   after the switch flips (see HANDLES_EXIT_MS). */
+.task-blocknote .bn-side-menu {
+  animation: anim-slide-in-left var(--motion-base) var(--motion-ease) backwards;
+}
+
+.task-blocknote-flush .bn-side-menu {
+  animation: anim-slide-out-left var(--motion-fast) var(--motion-ease) forwards;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .task-blocknote .bn-editor {
+    transition: none;
+  }
+
+  .task-blocknote .bn-side-menu {
+    animation: none;
+  }
+}
+
 /* Deliberately no size/padding overrides on .bn-side-menu: BlockNote positions the handle
    against its own 30px menu box, and resizing or padding the children moved the visible handle
    away from that box — which looked like the handle "not lining up with its hitbox". The reason

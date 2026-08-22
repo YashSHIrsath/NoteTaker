@@ -1,4 +1,4 @@
-import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, HashRouter, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import { ThemeProvider } from './context/ThemeContext'
 import { AppLayout } from './pages/AppLayout'
@@ -13,10 +13,20 @@ import { ImportantPage } from './pages/ImportantPage'
 import { AllTasksPage } from './pages/AllTasksPage'
 import { ProfilePage } from './pages/ProfilePage'
 
+/**
+ * Hash routing in the Capacitor app, path routing on the web.
+ *
+ * A native build serves its assets from a local origin with no server to rewrite unknown paths,
+ * so a deep path like /folder/:id has nothing to fall back to — the same problem vercel.json
+ * solves for the web build. The mode is fixed at build time (`vite build --mode native`), which
+ * is exactly the granularity this needs.
+ */
+const Router = import.meta.env.MODE === 'native' ? HashRouter : BrowserRouter
+
 function App() {
   return (
     <ThemeProvider>
-      <BrowserRouter>
+      <Router>
         <AuthProvider>
           <Routes>
             <Route element={<GuestOnly />}>
@@ -38,7 +48,7 @@ function App() {
             </Route>
           </Routes>
         </AuthProvider>
-      </BrowserRouter>
+      </Router>
     </ThemeProvider>
   )
 }

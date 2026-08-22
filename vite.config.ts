@@ -4,7 +4,7 @@ import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   server: {
     // Bind to all interfaces, not just localhost, so a phone on the same Wi-Fi can reach it.
     host: true,
@@ -12,6 +12,12 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
+    // `--mode native` is the Capacitor build. A service worker inside a WebView caches the shell
+    // and then competes with app updates — the app's assets are already local, so it has nothing
+    // to add there and plenty to break. The web build keeps it.
+    ...(mode === 'native'
+      ? []
+      : [
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg'],
@@ -41,5 +47,6 @@ export default defineConfig({
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
       },
     }),
+        ]),
   ],
-})
+}))

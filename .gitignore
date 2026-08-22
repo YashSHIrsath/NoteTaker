@@ -28,3 +28,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Capacitor: the native project is generated from capacitor.config.ts + dist by CI
+# (see .github/workflows/android.yml), so it isn't tracked.
+android
+ios
