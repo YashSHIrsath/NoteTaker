@@ -228,18 +228,20 @@ export function AllTaskTile({ taskId, category, folderLabel, onOpen }: AllTaskTi
       {/* Plain weighted text, no chrome: the title is the one thing on the tile that doesn't need
         *  a chip around it, which is what lets the small pills beside it read as metadata.
         *
-        *  h-10/h-11 is exactly two lines at this size and leading: a one-line title keeps the
-        *  second line's worth of space, so the divider below sits at the same height in every
-        *  tile of a row whatever its title (and whatever its tags) turn out to be. */}
-      <div className="flex h-10 shrink-0 items-start gap-1.5 sm:h-11">
+        *  One line, truncated — a two-line title made the row taller than the pills beside it and
+        *  pushed the divider (and everything under it) out of step with the next tile. Fixed height
+        *  plus items-center is what puts the title, the pin, the tag count and the colour dot on
+        *  one baseline. */}
+      <div className="flex h-7 shrink-0 items-center gap-1.5">
         <h3
-          className="min-w-0 flex-1 text-[14.5px] font-bold leading-snug tracking-[-0.01em] line-clamp-2 sm:text-[15.5px]"
+          className="min-w-0 flex-1 truncate text-[14.5px] font-bold leading-snug tracking-[-0.01em] sm:text-[15.5px]"
           style={{ color: ink }}
+          title={task.title.trim() || 'Untitled'}
         >
           {task.title.trim() || 'Untitled'}
         </h3>
         {task.isPinned ? (
-          <Pin className="mt-0.5 h-3.5 w-3.5 shrink-0 fill-current" style={{ color: ink }} aria-label="Pinned" />
+          <Pin className="h-3.5 w-3.5 shrink-0 fill-current" style={{ color: ink }} aria-label="Pinned" />
         ) : null}
         {/* Tags live here as a count, opening on click — see TaskTagsPill. */}
         <TaskTagsPill tags={task.tags} ink={ink} />

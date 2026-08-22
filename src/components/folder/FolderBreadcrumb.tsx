@@ -19,7 +19,7 @@ export function FolderBreadcrumb({ path, currentLabel, currentIsTask = false }: 
             to="/"
             className="rounded-sm hover:text-[var(--color-text)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/20"
           >
-            MyNotes
+            Notes
           </Link>
         </li>
         {path.map((folder) => (

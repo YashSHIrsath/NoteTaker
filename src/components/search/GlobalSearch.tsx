@@ -85,7 +85,7 @@ export function GlobalSearch({ className }: GlobalSearchProps) {
       },
       {
         id: 'go-mynotes',
-        label: 'Go to MyNotes',
+        label: 'Go to Notes',
         icon: <FolderIcon className="h-4 w-4" aria-hidden />,
         run: () => runAction(() => navigate('/mynotes')),
       },

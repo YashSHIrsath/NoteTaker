@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli'
 
 const config: CapacitorConfig = {
   appId: 'com.yashshirsath.mynotes',
-  appName: 'MyNotes',
+  appName: 'Mindstack',
   // The app ships the built web assets inside the APK, so it needs no server of its own — it
   // talks straight to Supabase like the web build does.
   webDir: 'dist',

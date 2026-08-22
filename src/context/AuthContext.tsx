@@ -10,15 +10,17 @@ import {
 import type { Session, User } from '@supabase/supabase-js'
 import { getAuthEmailRedirectTo } from '../lib/authRedirect'
 import { getSupabaseClient } from '../lib/supabase'
-import type { ViewStyle } from '../lib/viewStyle'
+import type { TilesPerRow, ViewStyle } from '../lib/viewStyle'
 
 export interface ProfileUpdate {
   fullName?: string
   avatarUrl?: string
   /** IANA zone (e.g. "Asia/Kolkata") — kept fresh so reminder emails can show local time. */
   timezone?: string
-  /** Whether MyNotes/Important render as classic list cards or as the colorful clipboard tiles. */
+  /** Whether the Notes/Important pages render as classic list cards or as colorful tiles. */
   viewStyle?: ViewStyle
+  /** Tiles per row in the note grids, or 'auto' to let the available width decide. */
+  tilesPerRow?: TilesPerRow
 }
 
 interface AuthContextValue {
@@ -27,7 +29,7 @@ interface AuthContextValue {
   loading: boolean
   configured: boolean
   signIn: (email: string, password: string) => Promise<void>
-  signUp: (email: string, password: string) => Promise<{ needsEmailConfirmation: boolean }>
+  signUp: (email: string, password: string, fullName?: string) => Promise<{ needsEmailConfirmation: boolean }>
   signOut: () => Promise<void>
   updateProfile: (update: ProfileUpdate) => Promise<void>
 }
@@ -80,15 +82,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [client])
 
-  const signUp = useCallback(async (email: string, password: string) => {
+  const signUp = useCallback(async (email: string, password: string, fullName?: string) => {
     if (!client) {
       throw new Error('Supabase is not configured.')
     }
+    const name = fullName?.trim()
     const { data, error } = await client.auth.signUp({
       email,
       password,
       options: {
         emailRedirectTo: getAuthEmailRedirectTo(),
+        // Stored on the account at creation, so the sidebar, profile and bottom-bar avatar have a
+        // name to show from the very first session instead of falling back to the email.
+        data: name ? { full_name: name } : undefined,
       },
     })
     if (error) {
@@ -123,6 +129,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     if (update.viewStyle !== undefined) {
       data.view_style = update.viewStyle
+    }
+    if (update.tilesPerRow !== undefined) {
+      data.tiles_per_row = String(update.tilesPerRow)
     }
     const { data: result, error } = await client.auth.updateUser({ data })
     if (error) {

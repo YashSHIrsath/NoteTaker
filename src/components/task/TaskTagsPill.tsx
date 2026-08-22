@@ -41,7 +41,7 @@ export function TaskTagsPill({ tags, ink }: TaskTagsPillProps) {
         }}
         onPointerDown={(event) => event.stopPropagation()}
         className={cn(
-          'anim-press inline-flex h-5 shrink-0 items-center gap-0.5 rounded-full pl-1 pr-1.5 text-[10.5px] font-bold leading-none transition-transform',
+          'anim-press inline-flex h-[18px] shrink-0 items-center gap-0.5 rounded-full pl-1 pr-1.5 text-[10.5px] font-bold leading-none transition-transform',
           open && 'scale-105',
         )}
         style={{ color: ink, background: `color-mix(in srgb, ${ink} 16%, transparent)` }}

@@ -42,18 +42,18 @@ function buildReminderEmailHtml(title: string, dueLabel: string, taskLink: strin
     '<div style="background-color:#f8f9fb;padding:32px 16px;">',
     '<div style="max-width:480px;margin:0 auto;background-color:#ffffff;border:1px solid #e6e8ec;border-radius:16px;overflow:hidden;font-family:-apple-system,Segoe UI,Helvetica Neue,Arial,sans-serif;">',
     '<div style="background-color:#4f46e5;padding:20px 28px;">',
-    '<span style="color:#ffffff;font-size:18px;font-weight:700;letter-spacing:-0.01em;">MyNotes</span>',
+    '<span style="color:#ffffff;font-size:18px;font-weight:700;letter-spacing:-0.01em;">Mindstack</span>',
     '</div>',
     '<div style="padding:32px 28px 28px 28px;">',
     '<p style="margin:0 0 6px 0;font-size:13px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:#6b7180;">Task reminder</p>',
     `<h1 style="margin:0 0 18px 0;font-size:26px;line-height:1.3;font-weight:700;color:#14161a;">${title}</h1>`,
     `<div style="display:inline-block;background-color:#eef1ff;color:#372f9e;font-size:15px;font-weight:600;padding:8px 16px;border-radius:999px;margin-bottom:26px;">Due ${dueLabel}</div>`,
     taskLink
-      ? `<div><a href="${taskLink}" style="display:inline-block;background-color:#4f46e5;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;padding:12px 24px;border-radius:10px;">Open in MyNotes</a></div>`
+      ? `<div><a href="${taskLink}" style="display:inline-block;background-color:#4f46e5;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;padding:12px 24px;border-radius:10px;">Open in Mindstack</a></div>`
       : '',
     '</div>',
     '<div style="border-top:1px solid #e6e8ec;padding:16px 28px;">',
-    '<p style="margin:0;font-size:12.5px;color:#6b7180;">You\'re getting this because you set a reminder for this task in MyNotes.</p>',
+    '<p style="margin:0;font-size:12.5px;color:#6b7180;">You\'re getting this because you set a reminder for this task in Mindstack.</p>',
     '</div>',
     '</div>',
     '</div>',
@@ -64,7 +64,7 @@ function buildReminderEmailHtml(title: string, dueLabel: string, taskLink: strin
 function buildReminderEmailText(title: string, dueLabel: string, taskLink: string | null): string {
   const lines = [`${title} is due ${dueLabel}.`]
   if (taskLink) {
-    lines.push(`Open in MyNotes: ${taskLink}`)
+    lines.push(`Open in Mindstack: ${taskLink}`)
   }
   return lines.join('\n')
 }

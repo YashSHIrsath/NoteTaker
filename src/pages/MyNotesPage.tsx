@@ -47,7 +47,7 @@ export function MyNotesPage() {
                 className="truncate text-[17px] font-semibold tracking-tight text-[var(--color-text)] sm:text-[20px]"
                 style={{ fontFamily: 'var(--font-display)' }}
               >
-                MyNotes
+                Notes
               </h1>
               <p className="text-[11.5px] text-[var(--color-text-muted)] sm:text-[12.5px]">
                 {rootFolders.length} {rootFolders.length === 1 ? 'folder' : 'folders'}

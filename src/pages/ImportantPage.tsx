@@ -5,11 +5,12 @@ import { EmptyState } from '../components/common/EmptyState'
 import { StarButton } from '../components/common/StarButton'
 import { RowDeleteButton } from '../components/common/RowDeleteButton'
 import { FolderActions } from '../components/folder/FolderActions'
-import { AllTaskTile, TASK_TILE_GRID } from '../components/task/AllTaskTile'
+import { AllTaskTile } from '../components/task/AllTaskTile'
 import { TaskEditorDialog } from '../components/task/TaskEditorDialog'
 import { useAuth } from '../hooks/useAuth'
 import { useDeleteTask } from '../hooks/useDeleteTask'
 import { useFolders } from '../hooks/useFolders'
+import { useTileGrid } from '../hooks/useTileGrid'
 import { folderPathLabel, getImportantFolders } from '../lib/folders'
 import { getImportantTasks } from '../lib/tasks'
 import { categoryVar, getRootCategoryForFolder, scatterCategoryForId } from '../lib/folderColor'
@@ -47,6 +48,7 @@ export function ImportantPage() {
   const [activeTag, setActiveTag] = useState<string | null>(null)
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
   const { headerRef, contentRef, condensed } = useFloatingHeader()
+  const tileGrid = useTileGrid()
   const importantFolders = getImportantFolders(folders)
   const importantTasks = getImportantTasks(tasks)
   const isEmpty = importantFolders.length === 0 && importantTasks.length === 0
@@ -222,7 +224,7 @@ export function ImportantPage() {
               {activeTag ? `No important tasks tagged "${activeTag}"` : 'No important tasks'}
             </p>
           ) : viewStyle === 'clipboard' ? (
-            <div className={cn(TASK_TILE_GRID, 'mt-3')}>
+            <div className={cn(tileGrid.className, 'mt-3')} style={tileGrid.style}>
               {visibleImportantTasks.map((task) => (
                 <AllTaskTile
                   key={task.id}

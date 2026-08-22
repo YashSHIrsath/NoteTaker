@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { MoreHorizontal, Moon, Star, Sun, LogOut } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { IconButton } from '../ui/IconButton'
+import { ProjectLogo } from '../brand/ProjectLogo'
 import { DevMigrateNotesButton } from '../dev/DevMigrateNotesButton'
 import { GlobalSearch } from '../search/GlobalSearch'
 import { useAuth } from '../../hooks/useAuth'
@@ -57,14 +58,17 @@ export function Header({ className }: HeaderProps) {
         className,
       )}
     >
-      <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+      <div className="flex shrink-0 items-center gap-2">
+        {/* The mark stands in for the name where the name is too wide — on a phone the wordmark
+            was competing with the search field, and the mark says the same thing in 20px. */}
+        <ProjectLogo className="h-4 w-[22px] text-[var(--color-accent)]" label="Mindstack" />
         <h1
           // Dropped on the narrowest screens: the search bar needs the room far more, and the
           // bottom bar now carries the app's identity/navigation there.
           className="hidden shrink-0 whitespace-nowrap px-0.5 text-base font-semibold tracking-tight text-[var(--color-text)] sm:inline sm:text-lg"
           style={{ fontFamily: 'var(--font-display)' }}
         >
-          MyNotes
+          Mindstack
         </h1>
       </div>
 

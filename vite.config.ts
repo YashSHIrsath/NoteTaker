@@ -22,8 +22,8 @@ export default defineConfig(({ mode }) => ({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg'],
       manifest: {
-        name: 'MyNotes',
-        short_name: 'MyNotes',
+        name: 'Mindstack',
+        short_name: 'Mindstack',
         description: 'Notes, tasks, and folders that sync across your devices.',
         start_url: '/',
         scope: '/',

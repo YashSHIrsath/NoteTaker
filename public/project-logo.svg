@@ -1,6 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
-  <rect width="64" height="64" rx="14" fill="#1a1a18"/>
-  <g fill="#8b85f0" transform="translate(-6.5 4) scale(0.245)">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="48 22 196 136" fill="none">
+  <title>Mindstack</title>
+  <desc>Stacked-bar mark. currentColor so it can be recoloured by whatever renders it.</desc>
+  <g fill="currentColor">
     <rect x="54" y="28" width="28" height="47" rx="6"/>
     <rect x="54" y="84" width="28" height="68" rx="6"/>
     <rect x="93" y="64" width="28" height="88" rx="6"/>

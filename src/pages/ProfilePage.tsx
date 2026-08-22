@@ -6,7 +6,14 @@ import { useAuth } from '../hooks/useAuth'
 import { useFolders } from '../hooks/useFolders'
 import { toAuthErrorMessage } from '../lib/authErrors'
 import { cn } from '../lib/cn'
-import { readViewStyle, type ViewStyle } from '../lib/viewStyle'
+import {
+  MAX_TILES_PER_ROW,
+  MIN_TILES_PER_ROW,
+  readTilesPerRow,
+  readViewStyle,
+  type TilesPerRow,
+  type ViewStyle,
+} from '../lib/viewStyle'
 import { uploadAvatar } from '../services/profile/avatarUpload'
 
 const VIEW_STYLE_OPTIONS: Array<{ key: ViewStyle; label: string; description: string; icon: typeof Briefcase }> = [
@@ -52,7 +59,23 @@ export function ProfilePage() {
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
   const [viewStyleSaving, setViewStyleSaving] = useState(false)
+  const [tilesSaving, setTilesSaving] = useState(false)
   const viewStyle = readViewStyle(user?.user_metadata as Record<string, unknown> | undefined)
+  const tilesPerRow = readTilesPerRow(user?.user_metadata as Record<string, unknown> | undefined)
+
+  const changeTilesPerRow = async (next: TilesPerRow) => {
+    if (next === tilesPerRow) {
+      return
+    }
+    setTilesSaving(true)
+    try {
+      await updateProfile({ tilesPerRow: next })
+    } catch {
+      /* the profile card's own error banner covers a failed save */
+    } finally {
+      setTilesSaving(false)
+    }
+  }
 
   if (!user) {
     return null
@@ -113,7 +136,13 @@ export function ProfilePage() {
   }
 
   return (
-    <div className="h-full overflow-y-auto bg-[var(--color-surface-muted)] px-4 py-5 sm:px-6">
+    <div
+      // pb-28 below lg leaves room for the floating bottom bar: without it the last card — and the
+      // sign-out button on it — sat under the bar with nothing left to scroll.
+      className="h-full overflow-y-auto bg-[var(--color-surface-muted)] px-4 pb-28 pt-5 sm:px-6 lg:pb-5"
+    >
+      {/* One centred column instead of cards hugging the left edge of a wide window. */}
+      <div className="mx-auto w-full max-w-2xl">
       <div className="flex items-center gap-3">
         <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent-soft)] text-[var(--color-accent)] sm:h-9 sm:w-9">
           <UserIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" aria-hidden />
@@ -126,7 +155,7 @@ export function ProfilePage() {
         </h1>
       </div>
 
-      <div className="mt-6 max-w-lg rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-5">
+      <div className="mt-6 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-5">
         <div className="flex items-center gap-4">
           <div className="relative shrink-0">
             {avatarUrl ? (
@@ -205,7 +234,7 @@ export function ProfilePage() {
         </div>
       </div>
 
-      <div className="mt-4 max-w-lg rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-5">
+      <div className="mt-4 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-5">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
           Notes style
         </h2>
@@ -252,7 +281,57 @@ export function ProfilePage() {
         </div>
       </div>
 
-      <div className="mt-4 max-w-lg rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-5">
+      <div className="mt-4 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-5">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
+          Tiles per row
+        </h2>
+        <p className="mt-1.5 text-[12.5px] leading-relaxed text-[var(--color-text-muted)]">
+          How many note tiles sit side by side on Tasks, Important and the folder views. Auto fits
+          as many as the screen can actually carry — a fixed number is kept at every size, so high
+          counts get cramped on a phone.
+        </p>
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          <button
+            type="button"
+            aria-pressed={tilesPerRow === 'auto'}
+            disabled={tilesSaving}
+            onClick={() => void changeTilesPerRow('auto')}
+            className={cn(
+              'anim-press rounded-full border px-3 py-1.5 text-[12.5px] font-semibold transition-colors disabled:opacity-60',
+              tilesPerRow === 'auto'
+                ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
+                : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:bg-[var(--color-hover)] hover:text-[var(--color-text)]',
+            )}
+          >
+            Auto
+          </button>
+          {Array.from({ length: MAX_TILES_PER_ROW - MIN_TILES_PER_ROW + 1 }, (_, index) => index + MIN_TILES_PER_ROW).map(
+            (count) => {
+              const active = tilesPerRow === count
+              return (
+                <button
+                  key={count}
+                  type="button"
+                  aria-pressed={active}
+                  aria-label={`${count} per row`}
+                  disabled={tilesSaving}
+                  onClick={() => void changeTilesPerRow(count)}
+                  className={cn(
+                    'anim-press h-9 w-9 rounded-full border text-[13px] font-semibold transition-colors disabled:opacity-60',
+                    active
+                      ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
+                      : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:bg-[var(--color-hover)] hover:text-[var(--color-text)]',
+                  )}
+                >
+                  {count}
+                </button>
+              )
+            },
+          )}
+        </div>
+      </div>
+
+      <div className="mt-4 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-5">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
           Account
         </h2>
@@ -282,11 +361,12 @@ export function ProfilePage() {
         </dl>
       </div>
 
-      <div className="mt-4 max-w-lg">
+      <div className="mt-4">
         <Button variant="danger" onClick={() => void handleSignOut()}>
           <LogOut className="h-4 w-4" aria-hidden />
           Sign out
         </Button>
+      </div>
       </div>
     </div>
   )

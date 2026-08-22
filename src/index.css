@@ -8,7 +8,10 @@
    live in the plain :root[data-theme="dark"] block below, which is never tree-shaken. */
 @theme static {
   --font-sans: "Inter", "Segoe UI", "Helvetica Neue", system-ui, sans-serif;
-  --font-display: "Space Grotesk", "Inter", "Segoe UI", sans-serif;
+  /* Sansita carries the brand: headings, the wordmark, numbers on the Tree page. Inter stays the
+     text face — Sansita's high contrast and tight apertures are made for display sizes, and long
+     note text and 11px metadata read better in a UI face. */
+  --font-display: "Sansita", "Iowan Old Style", Georgia, serif;
 
   --color-surface: #ffffff;
   --color-surface-muted: #f8f9fb;

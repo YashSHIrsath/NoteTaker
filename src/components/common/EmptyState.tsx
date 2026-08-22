@@ -8,7 +8,7 @@ export interface EmptyStateProps {
 }
 
 export function EmptyState({
-  title = 'MyNotes',
+  title = 'Mindstack',
   description = 'Select something from the sidebar to get started.',
   className,
 }: EmptyStateProps) {

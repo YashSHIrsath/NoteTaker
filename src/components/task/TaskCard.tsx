@@ -24,6 +24,7 @@ import { findBlockAttachmentId, referencedAttachmentIds } from '../../lib/blockN
 import { AttachmentPreviewDialog } from '../attachment/AttachmentPreviewDialog'
 import { AttachmentTypeIcon, attachmentSortRank } from '../attachment/AttachmentTypeIcon'
 import { TaskContentPreview } from './TaskContentPreview'
+import { TaskTagsPill } from './TaskTagsPill'
 import { TaskStatusBadge } from './TaskStatusBadge'
 
 const DRAG_TYPE = 'text/plain'
@@ -197,7 +198,7 @@ export function TaskCard({
       className={cn(
         // A card that arrives — created, or re-mounted into another section/column by pinning —
         // fades up into place instead of appearing from nowhere.
-        'anim-item-in rounded-2xl border-y-2 border-transparent',
+        'anim-item-in h-full rounded-2xl border-y-2 border-transparent',
         hint === 'before' && 'border-t-[var(--color-accent)]',
         hint === 'after' && 'border-b-[var(--color-accent)]',
         isDragging && 'opacity-60 ring-2 ring-[var(--color-accent)]',
@@ -205,7 +206,10 @@ export function TaskCard({
     >
       <div
         className={cn(
-          'relative flex flex-col overflow-hidden rounded-2xl border transition-shadow',
+          // One fixed height, like the clipboard tiles: these sit in a real grid now, and a grid
+          // row is as tall as its tallest cell — so variable heights left gaps under the short
+          // cards. Content clips inside instead.
+          'relative flex h-[248px] flex-col overflow-hidden rounded-2xl border transition-shadow sm:h-[268px]',
           pinned
             ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft-hover)] shadow-[0_0_0_1px_var(--color-accent-soft),var(--shadow-md)] hover:shadow-[0_0_0_1px_var(--color-accent-soft),var(--shadow-lg)]'
             : showColor
@@ -240,7 +244,7 @@ export function TaskCard({
           onKeyDown={handleKeyDown}
           className="relative flex flex-1 flex-col gap-2 rounded-t-2xl p-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/20 focus-visible:ring-inset sm:gap-2.5 sm:p-3.5"
         >
-          <div className="flex items-center gap-2">
+          <div className="flex h-7 shrink-0 items-center gap-2">
             {!hasImageAttachment ? (
               <span
                 className={cn(
@@ -257,13 +261,15 @@ export function TaskCard({
                 />
               </span>
             ) : null}
-            {/* Plain weighted text, not a bordered pill — the pill made the title look like just
-              *  another chip alongside the tags directly beneath it. */}
+            {/* One line, truncated, on a fixed-height row — same reasoning as the tiles: a
+              *  wrapping title made this row taller than the chips beside it and pushed everything
+              *  below it out of step with the next card. */}
             <h3
-              className="min-w-0 flex-1 text-[14px] font-bold leading-snug tracking-[-0.01em] line-clamp-2"
+              className="min-w-0 flex-1 truncate text-[14px] font-bold leading-snug tracking-[-0.01em]"
               style={{
                 color: pinned ? 'var(--color-accent)' : showColor ? colors.ink : 'var(--color-text)',
               }}
+              title={title}
             >
               {title}
             </h3>
@@ -273,35 +279,18 @@ export function TaskCard({
                 aria-label="Pinned"
               />
             ) : null}
+            {/* Tags as a count that opens on click, exactly as on a tile — a wrapped row of chips
+              *  was the other thing making these cards different heights. */}
+            {task && task.tags.length > 0 ? (
+              <TaskTagsPill
+                tags={task.tags}
+                ink={showColor ? colors.ink : 'var(--color-text-muted)'}
+              />
+            ) : null}
           </div>
 
           {folderLabel ? (
             <p className="-mt-1.5 truncate text-[11.5px] text-[var(--color-text-muted)]">in {folderLabel}</p>
-          ) : null}
-
-          {task && task.tags.length > 0 ? (
-            <div className="flex flex-wrap gap-1">
-              {task.tags.map((tag) => (
-                <span
-                  key={tag}
-                  className={cn(
-                    'inline-flex max-w-[8rem] items-center gap-0.5 rounded-full px-2 py-0.5 text-[11px] font-semibold leading-none',
-                    !showColor && 'bg-[var(--color-hover)] text-[var(--color-text-muted)]',
-                  )}
-                  style={
-                    showColor
-                      ? {
-                          color: colors.ink,
-                          background: `color-mix(in srgb, ${colors.ink} 16%, transparent)`,
-                        }
-                      : undefined
-                  }
-                >
-                  <span className="opacity-50">#</span>
-                  <span className="min-w-0 truncate">{tag}</span>
-                </span>
-              ))}
-            </div>
           ) : null}
 
           <div
@@ -334,7 +323,9 @@ export function TaskCard({
         {attachments.length > 0 ? (
           <div
             className={cn(
-              'flex flex-wrap gap-1.5 border-t px-3 py-1.5 sm:py-2',
+              // One row that scrolls sideways rather than wrapping: wrapping ate the note preview
+              // and made every card a different height.
+              'flex gap-1.5 overflow-x-auto overscroll-x-contain border-t px-3 py-1.5 sm:py-2',
               pinned ? 'border-[var(--color-accent)]/25' : !showColor && 'border-[var(--color-border)]',
             )}
             style={
@@ -351,7 +342,7 @@ export function TaskCard({
                   event.stopPropagation()
                   setPreviewAttachment(attachment)
                 }}
-                className="flex max-w-[160px] items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-2.5 py-1 text-left text-[12px] font-medium text-[var(--color-text)] hover:bg-[var(--color-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/20"
+                className="anim-press flex max-w-[160px] shrink-0 items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-2.5 py-1 text-left text-[12px] font-medium text-[var(--color-text)] hover:bg-[var(--color-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/20"
               >
                 <AttachmentTypeIcon attachment={attachment} />
                 <span className="min-w-0 truncate">{attachment.name}</span>

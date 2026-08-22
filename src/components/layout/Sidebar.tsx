@@ -1,4 +1,5 @@
 import { ClipboardList, Folder, ListTree, PanelLeftClose, PanelLeftOpen, Star } from 'lucide-react'
+import { ProjectLogo } from '../brand/ProjectLogo'
 import { SidebarSection } from './SidebarSection'
 import { SidebarFolderItem } from './SidebarFolderItem'
 import type { Folder as FolderRecord, SidebarNavId } from '../../types'
@@ -61,21 +62,17 @@ export function Sidebar({
           )}
         >
           <span
-            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[15px] font-bold text-white shadow-[var(--shadow-sm)]"
-            style={{
-              background: 'linear-gradient(135deg, var(--color-accent), var(--cat-rose))',
-              fontFamily: 'var(--font-display)',
-            }}
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent-soft)] text-[var(--color-accent)] shadow-[var(--shadow-sm)]"
             aria-hidden
           >
-            M
+            <ProjectLogo className="h-3.5 w-[19px]" />
           </span>
           {!collapsed ? (
             <span
               className="truncate text-[16px] font-semibold tracking-tight text-[var(--color-text)]"
               style={{ fontFamily: 'var(--font-display)' }}
             >
-              MyNotes
+              Mindstack
             </span>
           ) : null}
         </div>
@@ -112,7 +109,7 @@ export function Sidebar({
 
           <SidebarSection
             icon={<Folder className="h-4 w-4" aria-hidden />}
-            label="MyNotes"
+            label="Notes"
             active={activeNav === 'mynotes'}
             onSelect={() => onSelectNav('mynotes')}
             expandable

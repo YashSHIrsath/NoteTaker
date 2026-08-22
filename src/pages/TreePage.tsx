@@ -16,7 +16,7 @@ export function TreePage() {
     return (
       <EmptyState
         title="Tree"
-        description="Create a folder in MyNotes to see it here."
+        description="Create a folder in Notes to see it here."
       />
     )
   }

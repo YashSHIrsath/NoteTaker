@@ -306,7 +306,7 @@ export function NewTaskDialog({ open, onClose, onCreated }: NewTaskDialogProps) 
                   ))}
                 </div>
               ) : (
-                <p className="mt-2 text-[11.5px] text-[var(--color-text-muted)]">inside MyNotes</p>
+                <p className="mt-2 text-[11.5px] text-[var(--color-text-muted)]">inside Notes</p>
               )}
 
               <div className="mt-2 flex justify-end">

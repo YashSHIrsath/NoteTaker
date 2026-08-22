@@ -2,13 +2,14 @@ import { useState } from 'react'
 import { ClipboardList, Pin, Plus } from 'lucide-react'
 import type { Task } from '../types'
 import { TagFilterMenu } from '../components/folder/TagFilterMenu'
-import { AllTaskTile, TASK_TILE_GRID } from '../components/task/AllTaskTile'
+import { AllTaskTile } from '../components/task/AllTaskTile'
 import { NewTaskDialog } from '../components/task/NewTaskDialog'
 import { TaskCard } from '../components/task/TaskCard'
 import { TaskEditorDialog } from '../components/task/TaskEditorDialog'
 import { Button } from '../components/ui/Button'
 import { useAuth } from '../hooks/useAuth'
 import { useFolders } from '../hooks/useFolders'
+import { useTileGrid } from '../hooks/useTileGrid'
 import {
   COLLAPSIBLE_TITLE_CLASS,
   FLOATING_HEADER_CLASS,
@@ -32,6 +33,7 @@ export function AllTasksPage() {
   const [newTaskOpen, setNewTaskOpen] = useState(false)
   // Same floating top bar as the folder view, so the two pages' headers line up.
   const { headerRef, contentRef, condensed } = useFloatingHeader()
+  const tileGrid = useTileGrid()
 
   const allTagsInScope = Array.from(new Set(tasks.flatMap((task) => task.tags))).sort()
   const visibleTasks = activeTag ? tasks.filter((task) => task.tags.includes(activeTag)) : tasks
@@ -42,7 +44,7 @@ export function AllTasksPage() {
 
   const renderTaskGrid = (taskList: Task[]) =>
     viewStyle === 'clipboard' ? (
-      <div className={TASK_TILE_GRID}>
+      <div className={tileGrid.className} style={tileGrid.style}>
         {taskList.map((task) => (
           <AllTaskTile
             key={task.id}
@@ -54,9 +56,11 @@ export function AllTasksPage() {
         ))}
       </div>
     ) : (
-      <div className={cn('mt-2 gap-3 sm:gap-4', taskList.length === 1 ? 'columns-1' : 'columns-1 md:columns-2')}>
+      // The same grid the tiles use, so "tiles per row" means the same thing in both styles; a
+      // masonry column layout could never honour a column count the user picked.
+      <div className={tileGrid.className} style={tileGrid.style}>
         {taskList.map((task) => (
-          <div key={task.id} className="mb-3 break-inside-avoid-column sm:mb-4">
+          <div key={task.id}>
             <TaskCard
               taskId={task.id}
               title={task.title}

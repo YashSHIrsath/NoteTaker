@@ -19,9 +19,9 @@ export function runFolderManagementChecks(): void {
     { id: 'root-b', name: 'ABC', parentId: null, isImportant: false, sortOrder: 0 },
   ]
   const roots = getRootFolders(folders)
-  assert(roots.length === 2, 'MyNotes lists only parent_id null folders')
+  assert(roots.length === 2, 'Notes lists only parent_id null folders')
   assert(roots[0]?.id === 'root-b' && roots[1]?.id === 'root-a', 'root folders stay sort_order ordered')
-  assert(!roots.some((folder) => folder.id === 'nested'), 'nested folders are not shown on MyNotes')
+  assert(!roots.some((folder) => folder.id === 'nested'), 'nested folders are not shown on Notes')
   assert(isRootFolder(folders[0]!) && !isRootFolder(folders[1]!), 'root vs nested is parentId only')
 
   const createdRoot: Folder = {
@@ -31,7 +31,7 @@ export function runFolderManagementChecks(): void {
     isImportant: false,
     sortOrder: 2,
   }
-  assert(createdRoot.parentId === null, 'MyNotes create uses parent_id null')
+  assert(createdRoot.parentId === null, 'Notes create uses parent_id null')
   assert(folders[1]!.parentId === 'root-a', 'nested create still uses the current folder id')
 
   const renamed = folders.map((folder) =>

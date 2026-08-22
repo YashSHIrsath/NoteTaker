@@ -5,6 +5,8 @@ import { AppLayout } from './pages/AppLayout'
 import { AuthenticatedApp } from './pages/AuthenticatedApp'
 import { GuestOnly, RequireAuth } from './pages/AuthGate'
 import { LoginPage, SignupPage } from './pages/AuthPages'
+import { LandingPage } from './pages/LandingPage'
+import { PrivacyPage, TermsPage } from './pages/LegalPages'
 import { TreePage } from './pages/TreePage'
 import { MyNotesPage } from './pages/MyNotesPage'
 import { FolderViewPage } from './pages/FolderViewPage'
@@ -29,7 +31,12 @@ function App() {
       <Router>
         <AuthProvider>
           <Routes>
+            {/* Readable signed in or out — a policy you can only see by signing out is no use. */}
+            <Route path="/privacy" element={<PrivacyPage />} />
+            <Route path="/terms" element={<TermsPage />} />
+
             <Route element={<GuestOnly />}>
+              <Route path="/welcome" element={<LandingPage />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/signup" element={<SignupPage />} />
             </Route>

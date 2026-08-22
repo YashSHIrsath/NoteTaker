@@ -4,12 +4,13 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import type { Folder as FolderRecord, Task } from '../../types'
 import { Button } from '../ui/Button'
 import { IconButton } from '../ui/IconButton'
+import { useTileGrid } from '../../hooks/useTileGrid'
 import { FolderBreadcrumb } from './FolderBreadcrumb'
 import { FolderSidePanel } from './FolderSidePanel'
 import { FolderBoardView } from './FolderBoardView'
 import { CreateFolderDialog } from './CreateFolderDialog'
 import { TaskCard } from '../task/TaskCard'
-import { AllTaskTile, TASK_TILE_GRID } from '../task/AllTaskTile'
+import { AllTaskTile } from '../task/AllTaskTile'
 import { TaskEditorDialog } from '../task/TaskEditorDialog'
 import { useFolders } from '../../hooks/useFolders'
 import { useAuth } from '../../hooks/useAuth'
@@ -57,6 +58,7 @@ export function FolderView({
   // Below lg the folder header floats over the scrolling content instead of taking a band of its
   // own; the hook measures it so the content can leave that much room clear.
   const { headerRef, contentRef, condensed } = useFloatingHeader()
+  const tileGrid = useTileGrid()
   const navigate = useNavigate()
   const location = useLocation()
   const { folders, getForest, getTasksInFolder, toggleFolderImportant } = useFolders()
@@ -115,7 +117,7 @@ export function FolderView({
 
   const renderTaskGrid = (taskList: Task[]) =>
     viewStyle === 'clipboard' ? (
-      <div className={TASK_TILE_GRID}>
+      <div className={tileGrid.className} style={tileGrid.style}>
         {taskList.map((task) => (
           <AllTaskTile
             key={task.id}
@@ -126,9 +128,11 @@ export function FolderView({
         ))}
       </div>
     ) : (
-      <div className={cn('mt-2 gap-3 sm:gap-4', taskList.length === 1 ? 'columns-1' : 'columns-1 md:columns-2')}>
+      // The same grid the tiles use, so "tiles per row" means the same thing in both styles; a
+      // masonry column layout could never honour a column count the user picked.
+      <div className={tileGrid.className} style={tileGrid.style}>
         {taskList.map((task) => (
-          <div key={task.id} className="mb-3 break-inside-avoid-column sm:mb-4">
+          <div key={task.id}>
             <TaskCard
               taskId={task.id}
               title={task.title}

@@ -17,7 +17,8 @@ export function RequireAuth() {
   }
 
   if (!session) {
-    return <Navigate to="/login" replace />
+    // The landing page, not the login form: it explains what this is and has both buttons on it.
+    return <Navigate to="/welcome" replace />
   }
 
   return <Outlet />
