@@ -1,14 +1,17 @@
+import { useState } from 'react'
 import { Folder, ListTree, Star, TreePine } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useFolders } from '../hooks/useFolders'
 import { FolderTree } from '../components/tree/FolderTree'
 import { TreeTaskList } from '../components/tree/TreeTaskList'
 import { EmptyState } from '../components/common/EmptyState'
+import { TaskEditorDialog } from '../components/task/TaskEditorDialog'
 import { FLOATING_HEADER_CLASS, useFloatingHeader } from '../hooks/useFloatingHeader'
 
 export function TreePage() {
   const { getForest, folders, tasks } = useFolders()
   const { headerRef, contentStyle } = useFloatingHeader()
+  const [openTaskId, setOpenTaskId] = useState<string | null>(null)
   const forest = getForest()
 
   if (forest.length === 0) {
@@ -100,7 +103,7 @@ export function TreePage() {
           </div>
 
           <div className="relative mb-6">
-            <TreeTaskList tasks={tasks} />
+            <TreeTaskList tasks={tasks} onOpenTask={setOpenTaskId} />
           </div>
 
           <div className="relative mb-3 flex items-center justify-between">
@@ -114,6 +117,10 @@ export function TreePage() {
           </div>
         </div>
       </div>
+
+      {openTaskId ? (
+        <TaskEditorDialog taskId={openTaskId} onClose={() => setOpenTaskId(null)} />
+      ) : null}
     </div>
   )
 }

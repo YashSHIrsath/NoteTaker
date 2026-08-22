@@ -97,20 +97,15 @@ export function TaskEditorDialog({ taskId, onClose }: TaskEditorDialogProps) {
         aria-label={task.title.trim() || 'Untitled task'}
         tabIndex={-1}
         className={cn(
-          // Height follows the note: a two-line note gets a short dialog, a long one grows until
-          // it hits the viewport cap and then scrolls. A fixed height meant every short note
-          // opened as a mostly-empty full-height sheet.
-          //
-          // The panel itself is the scroll container. Handing that job to a nested flex child
-          // instead is what broke scrolling in a long note: with the panel's height driven by its
-          // content, the inner box's `height: 100%` / flex basis resolved against the *unclamped*
-          // content height, so it never shrank, never scrolled, and the overflow was simply
-          // clipped — reachable only by moving the caret with the arrow keys.
-          'relative flex max-h-[min(88vh,860px)] min-h-[220px] w-full max-w-3xl flex-col overflow-y-auto overflow-x-hidden overscroll-contain rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-lg)] outline-none',
+          // A definite height, so the note's own writing area can be a fixed box that scrolls
+          // inside itself: 70% of the viewport on a phone, and up to 860px on a desktop. The
+          // panel no longer scrolls — its header is fixed and the writing area owns the overflow,
+          // which is what keeps the title and the toolbar in place while a long note scrolls.
+          'relative flex h-[70vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-lg)] outline-none sm:h-[min(88vh,860px)]',
           closing ? 'anim-dialog-out' : 'anim-dialog-in',
         )}
       >
-        <div className="sticky top-0 z-10 flex shrink-0 items-center justify-between gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5">
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5">
           <div className="flex items-center gap-0.5">
             <PinButton pinned={task.isPinned} onToggle={() => toggleTaskPinned(task.id)} />
             <StarButton important={task.isImportant} onToggle={() => toggleTaskImportant(task.id)} />
@@ -126,10 +121,7 @@ export function TaskEditorDialog({ taskId, onClose }: TaskEditorDialogProps) {
             <X className="h-4 w-4" />
           </IconButton>
         </div>
-        {/* No height games here: the note is laid out at its natural height and the panel above
-            scrolls it. flex-auto so it still fills the panel's minimum height when the note is
-            short. */}
-        <div className="flex-auto">
+        <div className="min-h-0 flex-1">
           <TaskEditor task={task} folderPath={folderPath} showActions={false} />
         </div>
       </div>

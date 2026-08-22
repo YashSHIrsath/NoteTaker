@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CalendarClock } from 'lucide-react'
+import { CalendarClock, GripVertical } from 'lucide-react'
 import type { Attachment, Folder, Task } from '../../types'
 import { FolderBreadcrumb } from '../folder/FolderBreadcrumb'
 import { TaskBlockNoteEditor } from './TaskBlockNoteEditor'
@@ -20,6 +20,7 @@ import { cn } from '../../lib/cn'
 import { formatDueDate, isOverdue } from '../../lib/dueDate'
 import { nextTaskStatus } from '../../lib/taskStatus'
 import { referencedAttachmentIds } from '../../lib/blockNoteContent'
+import { useBlockHandles } from '../../hooks/useBlockHandles'
 
 export interface TaskEditorProps {
   task: Task
@@ -43,6 +44,7 @@ export function TaskEditor({ task, folderPath, showActions = true }: TaskEditorP
   const { requestTaskDelete, dialog: taskDeleteDialog } = useDeleteTask()
   const { updateProfile } = useAuth()
   const [dueDialogOpen, setDueDialogOpen] = useState(false)
+  const { enabled: blockHandles, toggle: toggleBlockHandles } = useBlockHandles()
   const [previewAttachment, setPreviewAttachment] = useState<Attachment | null>(null)
   const overdue = task.dueAt !== null && task.status !== 'complete' && isOverdue(task.dueAt)
   // Deleting an attachment's block from the text doesn't delete the underlying attachment
@@ -54,9 +56,8 @@ export function TaskEditor({ task, folderPath, showActions = true }: TaskEditorP
 
   return (
     <div className="mx-auto flex h-full min-h-0 max-w-3xl flex-col">
-      {/* overflow-y-auto only matters where this has a definite height to overflow (the full-page
-          task route). In the dialog the panel is the scroller and this simply grows. */}
-      <div className="min-h-0 flex-auto overflow-y-auto px-4 pb-4 pt-2.5 sm:px-6 sm:pt-3">
+      {/* Header block: fixed, never scrolls — the note's own box below owns the overflow. */}
+      <div className="shrink-0 px-4 pt-2.5 sm:px-6 sm:pt-3">
       <FolderBreadcrumb path={folderPath} currentLabel={task.title.trim() || 'Untitled'} currentIsTask />
 
       {/* Title and every piece of metadata share one row: three stacked rows of chrome ate the
@@ -104,6 +105,24 @@ export function TaskEditor({ task, folderPath, showActions = true }: TaskEditorP
             />
           ) : null}
 
+          {/* Gutter controls on/off. Off is the default: the "+" and drag handle need a 54px
+              margin the text would rather have, and "/" does the same job inline. */}
+          <button
+            type="button"
+            aria-pressed={blockHandles}
+            onClick={toggleBlockHandles}
+            title={blockHandles ? 'Hide block handles (use / instead)' : 'Show block handles'}
+            aria-label={blockHandles ? 'Hide block handles' : 'Show block handles'}
+            className={cn(
+              'anim-press inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-colors',
+              blockHandles
+                ? 'border-[var(--color-accent)]/30 bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
+                : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:bg-[var(--color-hover)] hover:text-[var(--color-text)]',
+            )}
+          >
+            <GripVertical className="h-3 w-3" aria-hidden />
+          </button>
+
           {/* The full-page route has no dialog header to put these in; the dialog renders its own,
               alongside the save state. */}
           {showActions ? (
@@ -125,14 +144,21 @@ export function TaskEditor({ task, folderPath, showActions = true }: TaskEditorP
         <TaskTagInput tags={task.tags} onChange={(tags) => updateTaskTags(task.id, tags)} />
       </div>
 
-      <div className="mt-2 pb-6">
-        <TaskBlockNoteEditor
-          key={task.id}
-          taskId={task.id}
-          content={task.content}
-          onContentChange={(content) => updateTaskContent(task.id, content)}
-        />
       </div>
+
+      {/* The writing area: a fixed box, bordered so it reads as its own surface separated from the
+          title above it. Whatever is typed stays inside and scrolls here rather than growing the
+          page, so the title, the metadata and the attachment bar never move. */}
+      <div className="min-h-0 flex-1 px-4 pb-3 pt-2 sm:px-6">
+        <div className="h-full overflow-y-auto overscroll-contain rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] py-2">
+          <TaskBlockNoteEditor
+            key={task.id}
+            taskId={task.id}
+            content={task.content}
+            showBlockHandles={blockHandles}
+            onContentChange={(content) => updateTaskContent(task.id, content)}
+          />
+        </div>
       </div>
 
       {attachments.length > 0 ? (

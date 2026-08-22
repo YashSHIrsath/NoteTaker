@@ -8,6 +8,8 @@ export interface TreeTaskListProps {
   tasks: Task[]
   /** How many rows to show before the "N more" link takes over. */
   limit?: number
+  /** Opens the note in the editor popup — the same thing clicking a card does everywhere else. */
+  onOpenTask: (taskId: string) => void
 }
 
 const DEFAULT_LIMIT = 5
@@ -20,7 +22,7 @@ function previewOrder(tasks: Task[]): Task[] {
 
 /** The Tree page's task counterpart to the folder structure below it: a short, flat peek at the
  *  workspace's notes with a way through to the full list. */
-export function TreeTaskList({ tasks, limit = DEFAULT_LIMIT }: TreeTaskListProps) {
+export function TreeTaskList({ tasks, limit = DEFAULT_LIMIT, onOpenTask }: TreeTaskListProps) {
   const navigate = useNavigate()
   const { folders } = useFolders()
   const visible = previewOrder(tasks).slice(0, limit)
@@ -43,7 +45,7 @@ export function TreeTaskList({ tasks, limit = DEFAULT_LIMIT }: TreeTaskListProps
             <li key={task.id}>
               <button
                 type="button"
-                onClick={() => navigate(`/task/${task.id}`)}
+                onClick={() => onOpenTask(task.id)}
                 className={cn(
                   'flex w-full min-w-0 items-center gap-2.5 rounded-full px-2 py-1.5 text-left transition-colors',
                   'hover:bg-[var(--color-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/20',

@@ -16,6 +16,13 @@
   background: transparent;
 }
 
+/* Handles off: BlockNote reserves 54px each side for the gutter controls, which is a wide empty
+   margin when nothing is drawn in it. Two classes deep so this out-specifies BlockNote's own
+   `.bn-editor` rule. The controls are what need that room — with them hidden, the text takes it. */
+.task-blocknote-flush .bn-editor {
+  padding-inline: 10px;
+}
+
 /* Deliberately no size/padding overrides on .bn-side-menu: BlockNote positions the handle
    against its own 30px menu box, and resizing or padding the children moved the visible handle
    away from that box — which looked like the handle "not lining up with its hitbox". The reason

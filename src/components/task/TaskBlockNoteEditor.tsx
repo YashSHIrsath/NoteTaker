@@ -5,6 +5,7 @@ import '@blocknote/core/fonts/inter.css'
 import '@blocknote/mantine/style.css'
 import './TaskBlockNoteEditor.css'
 import type { Attachment } from '../../types'
+import { cn } from '../../lib/cn'
 import { useFolders } from '../../hooks/useFolders'
 import { useTheme } from '../../hooks/useTheme'
 import { attachmentIdFromUrl, attachmentUrlFor, buildInitialBlocks } from '../../lib/blockNoteContent'
@@ -16,11 +17,18 @@ export interface TaskBlockNoteEditorProps {
   taskId: string
   content: string
   onContentChange: (content: string) => void
+  /** Gutter controls ("+" and drag handle). Off, the editor gives that 54px back to the text. */
+  showBlockHandles?: boolean
 }
 
 const CONTENT_FLUSH_DELAY_MS = 300
 
-export function TaskBlockNoteEditor({ taskId, content, onContentChange }: TaskBlockNoteEditorProps) {
+export function TaskBlockNoteEditor({
+  taskId,
+  content,
+  onContentChange,
+  showBlockHandles = false,
+}: TaskBlockNoteEditorProps) {
   const {
     getAttachmentsForTask,
     getAttachmentPreviewUrl,
@@ -239,12 +247,13 @@ export function TaskBlockNoteEditor({ taskId, content, onContentChange }: TaskBl
   }
 
   return (
-    <div className="task-blocknote">
+    <div className={cn('task-blocknote', showBlockHandles ? null : 'task-blocknote-flush')}>
       <div ref={editorWrapperRef} className="relative" onClick={handleContentClick}>
-        {/* sideMenu={false} disables only BlockNote's *default* side menu; TaskBlockSideMenu
-            renders the same one with the block-move control matched to the input device. */}
+        {/* sideMenu={false} disables BlockNote's *default* side menu; TaskBlockSideMenu renders the
+            same one with the block-move control matched to the input device — and only when the
+            gutter controls are switched on. Everything else (the "/" menu included) is untouched. */}
         <BlockNoteView editor={editor} theme={theme === 'dark' ? 'dark' : 'light'} sideMenu={false}>
-          <TaskBlockSideMenu />
+          {showBlockHandles ? <TaskBlockSideMenu /> : null}
         </BlockNoteView>
       </div>
 

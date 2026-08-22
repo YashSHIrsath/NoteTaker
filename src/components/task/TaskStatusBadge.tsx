@@ -43,7 +43,7 @@ export function TaskStatusBadge({ status, onCycle, compact = false, iconOnly = f
         'anim-press inline-flex items-center gap-1.5 rounded-full border font-medium transition-colors hover:brightness-95',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/20',
         iconOnly
-          ? 'h-[18px] w-[18px] justify-center'
+          ? 'h-5 w-5 justify-center'
           : compact
             ? 'px-2 py-0.5 text-[11px]'
             : 'px-2.5 py-1 text-[12.5px]',
