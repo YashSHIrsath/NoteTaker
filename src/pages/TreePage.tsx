@@ -36,26 +36,28 @@ export function TreePage() {
 
   return (
     <div className="relative flex h-full min-h-0 flex-col">
-      <div className="shrink-0 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2.5 sm:px-6 sm:py-3">
-        <div className="mx-auto flex w-full max-w-5xl items-center gap-2.5 sm:gap-3">
-          <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent-soft)] text-[var(--color-accent)] sm:h-9 sm:w-9">
-            <ListTree className="h-4 w-4 sm:h-[18px] sm:w-[18px]" aria-hidden />
-          </span>
-          <div className="min-w-0">
-            <h1
-              className="truncate text-[17px] font-semibold tracking-tight text-[var(--color-text)] sm:text-[21px]"
-              style={{ fontFamily: 'var(--font-display)' }}
-            >
-              Tree
-            </h1>
-            <p className="truncate text-[11.5px] text-[var(--color-text-muted)] sm:text-[12.5px]">
-              A bird&rsquo;s-eye view of everything in your workspace
-            </p>
+      <div className="min-h-0 flex-1 overflow-y-auto pb-24 lg:pb-0">
+        {/* Sticky, not a band above the scroll area: pinned to the top whatever the page does
+            around it, and it stays with the content it labels. */}
+        <div className="sticky top-0 z-10 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2.5 sm:px-6 sm:py-3">
+          <div className="mx-auto flex w-full max-w-5xl items-center gap-2.5 sm:gap-3">
+            <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent-soft)] text-[var(--color-accent)] sm:h-9 sm:w-9">
+              <ListTree className="h-4 w-4 sm:h-[18px] sm:w-[18px]" aria-hidden />
+            </span>
+            <div className="min-w-0">
+              <h1
+                className="truncate text-[17px] font-semibold tracking-tight text-[var(--color-text)] sm:text-[21px]"
+                style={{ fontFamily: 'var(--font-display)' }}
+              >
+                Tree
+              </h1>
+              <p className="truncate text-[11.5px] text-[var(--color-text-muted)] sm:text-[12.5px]">
+                A bird&rsquo;s-eye view of everything in your workspace
+              </p>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto pb-24 lg:pb-0">
         <div className="relative mx-auto max-w-5xl px-4 pb-6 sm:px-6 sm:pb-8">
           <div
             className="pointer-events-none absolute -right-16 -top-24 h-72 w-72 rounded-full opacity-70"

@@ -151,32 +151,29 @@ export function FolderView({
     <div className="relative flex h-full min-h-0">
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
         <div ref={headerRef} className={FLOATING_HEADER_CLASS}>
-          {/* Breadcrumb and folder identity roll up on scroll; the actions stay. */}
+          {/* Two bands: what the page *is* (breadcrumb + folder identity), and what you can *do*
+            *  here. Only the first rolls up on scroll, so the bar keeps shrinking to its controls
+            *  as you read instead of holding a title you've already seen — while "which folder am
+            *  I in" is one scroll back to the top away. */}
           <div
             className={cn(
               COLLAPSIBLE_TITLE_CLASS,
-              condensed ? 'max-h-0 opacity-0' : 'max-h-24 opacity-100',
+              condensed ? 'max-h-0 opacity-0' : 'mb-2 max-h-28 opacity-100',
             )}
           >
             <FolderBreadcrumb path={path} />
 
-          {/* Below lg this is two full-width rows that each justify edge to edge (identity left,
-            *  secondary controls right) rather than a wrapping left-hugging clump. At lg it
-            *  collapses to the original single row — `flex-nowrap` there so a long folder name
-            *  truncates instead of bumping the action buttons onto a second line, and
-            *  `lg:contents` dissolves the compact-only subgroups so that row stays flat. */}
-          <div className="mt-3 flex flex-col gap-2 lg:mt-5 lg:flex-row lg:flex-nowrap lg:items-center lg:justify-between lg:gap-3">
-            <div className="flex w-full min-w-0 items-center justify-between gap-2 lg:w-auto lg:justify-start lg:gap-3">
-              <div className="flex min-w-0 items-center gap-2 lg:contents">
+            <div className="mt-2 flex w-full min-w-0 items-center justify-between gap-2 sm:gap-3">
+              <div className="flex min-w-0 items-center gap-2 sm:gap-3">
                 <span
-                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full shadow-[var(--shadow-sm)] sm:h-10 sm:w-10"
+                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full shadow-[var(--shadow-sm)] sm:h-9 sm:w-9"
                   style={{ background: categoryVar(category, 'soft'), color: categoryVar(category, 'ink') }}
                   aria-hidden
                 >
-                  <Folder className="h-4 w-4 sm:h-[19px] sm:w-[19px]" aria-hidden />
+                  <Folder className="h-4 w-4 sm:h-[18px] sm:w-[18px]" aria-hidden />
                 </span>
                 <h1
-                  className="min-w-0 max-w-[55vw] truncate text-[15px] font-semibold tracking-tight text-[var(--color-text)] sm:max-w-none sm:text-[22px]"
+                  className="min-w-0 truncate text-[16px] font-semibold tracking-tight text-[var(--color-text)] sm:text-[20px]"
                   style={{ fontFamily: 'var(--font-display)' }}
                 >
                   {folder.name}
@@ -186,7 +183,8 @@ export function FolderView({
                   onToggle={() => toggleFolderImportant(folder.id)}
                 />
               </div>
-              <div className="flex shrink-0 items-center gap-1 lg:contents">
+
+              <div className="flex shrink-0 items-center gap-1">
                 <FolderActions folderId={folder.id} folderName={folder.name} />
                 {effectiveViewMode === 'list' ? (
                   <IconButton
@@ -200,54 +198,54 @@ export function FolderView({
                 ) : null}
               </div>
             </div>
-            </div>
-
-            <div className="flex w-full shrink-0 items-center justify-between gap-1.5 lg:w-auto lg:justify-end lg:gap-2">
-              <Button variant="primary" size="sm" className="h-8 sm:h-9" onClick={handleCreateTask}>
-                <Plus className="h-4 w-4" aria-hidden />
-                New Task
-              </Button>
-              <div className="flex shrink-0 items-center gap-1.5 lg:contents">
-                <Button variant="subtle" size="sm" className="h-8 sm:h-9" onClick={() => setFolderDialogOpen(true)}>
-                  <Folder className="h-4 w-4" aria-hidden />
-                  <span className="hidden sm:inline">New Folder</span>
-                </Button>
-                {childFolders.length > 0 ? (
-                  <div className="inline-flex h-8 items-center gap-0.5 rounded-full border border-[var(--color-border)] bg-[var(--color-hover)] p-1 sm:h-9">
-                    <button
-                      type="button"
-                      aria-pressed={viewMode === 'list'}
-                      onClick={() => setViewMode('list')}
-                      className={cn(
-                        'anim-press inline-flex h-full items-center gap-1.5 rounded-full px-2.5 text-[12.5px] font-medium transition-[background-color,color,box-shadow,transform] duration-200',
-                        viewMode === 'list'
-                          ? 'bg-[var(--color-surface)] text-[var(--color-text)] shadow-[var(--shadow-sm)]'
-                          : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]',
-                      )}
-                    >
-                      <LayoutList className="h-3.5 w-3.5" aria-hidden />
-                      <span className="hidden sm:inline">List</span>
-                    </button>
-                    <button
-                      type="button"
-                      aria-pressed={viewMode === 'board'}
-                      onClick={() => setViewMode('board')}
-                      className={cn(
-                        'anim-press inline-flex h-full items-center gap-1.5 rounded-full px-2.5 text-[12.5px] font-medium transition-[background-color,color,box-shadow,transform] duration-200',
-                        viewMode === 'board'
-                          ? 'bg-[var(--color-surface)] text-[var(--color-text)] shadow-[var(--shadow-sm)]'
-                          : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]',
-                      )}
-                    >
-                      <Kanban className="h-3.5 w-3.5" aria-hidden />
-                      <span className="hidden sm:inline">Board</span>
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-            </div>
           </div>
 
+          {/* The row that survives scrolling. */}
+          <div className="flex w-full items-center justify-between gap-1.5 sm:gap-2">
+            <Button variant="primary" size="sm" className="h-8 sm:h-9" onClick={handleCreateTask}>
+              <Plus className="h-4 w-4" aria-hidden />
+              New Task
+            </Button>
+
+            <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+              <Button variant="subtle" size="sm" className="h-8 sm:h-9" onClick={() => setFolderDialogOpen(true)}>
+                <Folder className="h-4 w-4" aria-hidden />
+                <span className="hidden sm:inline">New Folder</span>
+              </Button>
+              {childFolders.length > 0 ? (
+                <div className="inline-flex h-8 items-center gap-0.5 rounded-full border border-[var(--color-border)] bg-[var(--color-hover)] p-1 sm:h-9">
+                  <button
+                    type="button"
+                    aria-pressed={viewMode === 'list'}
+                    onClick={() => setViewMode('list')}
+                    className={cn(
+                      'anim-press inline-flex h-full items-center gap-1.5 rounded-full px-2.5 text-[12.5px] font-medium transition-[background-color,color,box-shadow,transform] duration-200',
+                      viewMode === 'list'
+                        ? 'bg-[var(--color-surface)] text-[var(--color-text)] shadow-[var(--shadow-sm)]'
+                        : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]',
+                    )}
+                  >
+                    <LayoutList className="h-3.5 w-3.5" aria-hidden />
+                    <span className="hidden sm:inline">List</span>
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={viewMode === 'board'}
+                    onClick={() => setViewMode('board')}
+                    className={cn(
+                      'anim-press inline-flex h-full items-center gap-1.5 rounded-full px-2.5 text-[12.5px] font-medium transition-[background-color,color,box-shadow,transform] duration-200',
+                      viewMode === 'board'
+                        ? 'bg-[var(--color-surface)] text-[var(--color-text)] shadow-[var(--shadow-sm)]'
+                        : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]',
+                    )}
+                  >
+                    <Kanban className="h-3.5 w-3.5" aria-hidden />
+                    <span className="hidden sm:inline">Board</span>
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          </div>
         </div>
 
         {effectiveViewMode === 'board' ? (
