@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CalendarClock, GripVertical } from 'lucide-react'
+import { CalendarClock, ChevronDown, ChevronUp, GripVertical } from 'lucide-react'
 import type { Attachment, Folder, Task } from '../../types'
 import { FolderBreadcrumb } from '../folder/FolderBreadcrumb'
 import { TaskBlockNoteEditor } from './TaskBlockNoteEditor'
@@ -19,8 +19,7 @@ import { useDeleteTask } from '../../hooks/useDeleteTask'
 import { cn } from '../../lib/cn'
 import { formatDueDate, isOverdue } from '../../lib/dueDate'
 import { nextTaskStatus } from '../../lib/taskStatus'
-import { referencedAttachmentIds } from '../../lib/blockNoteContent'
-import { useBlockHandles } from '../../hooks/useBlockHandles'
+import { useBlockHandles, useCollapseImages } from '../../hooks/useBlockHandles'
 
 export interface TaskEditorProps {
   task: Task
@@ -45,14 +44,16 @@ export function TaskEditor({ task, folderPath, showActions = true }: TaskEditorP
   const { updateProfile } = useAuth()
   const [dueDialogOpen, setDueDialogOpen] = useState(false)
   const { enabled: blockHandles, toggle: toggleBlockHandles } = useBlockHandles()
+  const { collapsed: imagesCollapsed, toggle: toggleImages } = useCollapseImages()
   const [previewAttachment, setPreviewAttachment] = useState<Attachment | null>(null)
   const overdue = task.dueAt !== null && task.status !== 'complete' && isOverdue(task.dueAt)
-  // Deleting an attachment's block from the text doesn't delete the underlying attachment
-  // record, so this bar only lists ones still actually referenced somewhere in the document.
-  const referencedIds = referencedAttachmentIds(task.content)
-  const attachments = getAttachmentsForTask(task.id)
-    .filter((attachment) => referencedIds.has(attachment.id))
-    .sort((a, b) => attachmentSortRank(a) - attachmentSortRank(b))
+  // Every file attached to the note. Not filtered by what the text still references: documents
+  // aren't inserted into the text any more (they live here), so that filter would hide the very
+  // files this bar exists for.
+  const attachments = getAttachmentsForTask(task.id).sort(
+    (a, b) => attachmentSortRank(a) - attachmentSortRank(b),
+  )
+  const hasImage = attachments.some((attachment) => attachment.isImage)
 
   return (
     <div className="mx-auto flex h-full min-h-0 max-w-3xl flex-col">
@@ -103,6 +104,30 @@ export function TaskEditor({ task, folderPath, showActions = true }: TaskEditorP
               iconOnly
               onCycle={() => updateTaskStatus(task.id, nextTaskStatus(task.status!))}
             />
+          ) : null}
+
+          {/* Pictures shown or collapsed to their filename. Same chip shape as the controls
+              beside it, and it only appears when the note actually has an image to collapse. */}
+          {hasImage ? (
+            <button
+              type="button"
+              aria-pressed={imagesCollapsed}
+              onClick={toggleImages}
+              title={imagesCollapsed ? 'Show images' : 'Collapse images'}
+              aria-label={imagesCollapsed ? 'Show images' : 'Collapse images'}
+              className={cn(
+                'anim-press inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-colors',
+                imagesCollapsed
+                  ? 'border-[var(--color-accent)]/30 bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
+                  : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:bg-[var(--color-hover)] hover:text-[var(--color-text)]',
+              )}
+            >
+              {imagesCollapsed ? (
+                <ChevronDown className="h-3 w-3" aria-hidden />
+              ) : (
+                <ChevronUp className="h-3 w-3" aria-hidden />
+              )}
+            </button>
           ) : null}
 
           {/* Gutter controls on/off. Off is the default: the "+" and drag handle need a 54px
@@ -156,24 +181,31 @@ export function TaskEditor({ task, folderPath, showActions = true }: TaskEditorP
             taskId={task.id}
             content={task.content}
             showBlockHandles={blockHandles}
+            collapseImages={imagesCollapsed}
             onContentChange={(content) => updateTaskContent(task.id, content)}
           />
         </div>
       </div>
 
+      {/* Every file on the note, in one bar pinned to the bottom: a single row that scrolls
+          sideways, so a hundred files is still one bar rather than a wall of wrapped chips eating
+          the writing area. shrink-0 keeps it out of the playground's scroll, and the safe-area
+          padding keeps it clear of the gesture bar in the app. */}
       {attachments.length > 0 ? (
-        <div className="flex shrink-0 flex-wrap gap-2 border-t border-[var(--color-border)] px-4 py-3 sm:px-6">
-          {attachments.map((attachment) => (
-            <button
-              key={attachment.id}
-              type="button"
-              onClick={() => setPreviewAttachment(attachment)}
-              className="flex max-w-[220px] items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-2.5 py-1.5 text-left text-[13px] font-medium text-[var(--color-text)] hover:bg-[var(--color-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/20"
-            >
-              <AttachmentTypeIcon attachment={attachment} />
-              <span className="min-w-0 truncate">{attachment.name}</span>
-            </button>
-          ))}
+        <div className="shrink-0 border-t border-[var(--color-border)] pb-[env(safe-area-inset-bottom)]">
+          <div className="flex gap-2 overflow-x-auto overscroll-x-contain px-4 py-2.5 sm:px-6">
+            {attachments.map((attachment) => (
+              <button
+                key={attachment.id}
+                type="button"
+                onClick={() => setPreviewAttachment(attachment)}
+                className="anim-press flex max-w-[200px] shrink-0 items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-2.5 py-1.5 text-left text-[12.5px] font-medium text-[var(--color-text)] hover:bg-[var(--color-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/20"
+              >
+                <AttachmentTypeIcon attachment={attachment} />
+                <span className="min-w-0 truncate">{attachment.name}</span>
+              </button>
+            ))}
+          </div>
         </div>
       ) : null}
 

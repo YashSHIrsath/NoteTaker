@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { ClipboardList, Pin, Plus } from 'lucide-react'
 import type { Task } from '../types'
+import { TagFilterMenu } from '../components/folder/TagFilterMenu'
 import { AllTaskTile, TASK_TILE_GRID } from '../components/task/AllTaskTile'
 import { NewTaskDialog } from '../components/task/NewTaskDialog'
 import { TaskCard } from '../components/task/TaskCard'
@@ -8,7 +9,11 @@ import { TaskEditorDialog } from '../components/task/TaskEditorDialog'
 import { Button } from '../components/ui/Button'
 import { useAuth } from '../hooks/useAuth'
 import { useFolders } from '../hooks/useFolders'
-import { FLOATING_HEADER_CLASS, useFloatingHeader } from '../hooks/useFloatingHeader'
+import {
+  COLLAPSIBLE_TITLE_CLASS,
+  FLOATING_HEADER_CLASS,
+  useFloatingHeader,
+} from '../hooks/useFloatingHeader'
 import { getRootCategoryForFolder, scatterCategoryForId } from '../lib/folderColor'
 import { focusTaskTitle } from '../lib/focusTaskTitle'
 import { readViewStyle } from '../lib/viewStyle'
@@ -26,7 +31,7 @@ export function AllTasksPage() {
   const [activeTag, setActiveTag] = useState<string | null>(null)
   const [newTaskOpen, setNewTaskOpen] = useState(false)
   // Same floating top bar as the folder view, so the two pages' headers line up.
-  const { headerRef, contentStyle } = useFloatingHeader()
+  const { headerRef, contentRef, contentStyle, condensed } = useFloatingHeader()
 
   const allTagsInScope = Array.from(new Set(tasks.flatMap((task) => task.tags))).sort()
   const visibleTasks = activeTag ? tasks.filter((task) => task.tags.includes(activeTag)) : tasks
@@ -69,18 +74,34 @@ export function AllTasksPage() {
   return (
     <div className="relative flex h-full min-h-0 flex-col">
       <div ref={headerRef} className={FLOATING_HEADER_CLASS}>
-        <div className="flex items-center justify-between gap-3">
+        {/* Full header at the top of the page, controls only once it's scrolled — a bar that
+            overlays the content shouldn't keep spending its height on a title you've read. */}
+        <div
+          className={cn(
+            COLLAPSIBLE_TITLE_CLASS,
+            condensed ? 'max-h-0 opacity-0' : 'mb-2 max-h-12 opacity-100',
+          )}
+        >
           <div className="flex min-w-0 items-center gap-3">
             <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent-soft)] text-[var(--color-accent)] sm:h-9 sm:w-9">
               <ClipboardList className="h-3.5 w-3.5 sm:h-4 sm:w-4" aria-hidden />
             </span>
             <h1
-              className="text-[18px] font-semibold tracking-tight text-[var(--color-text)] sm:text-[22px]"
+              className="truncate text-[18px] font-semibold tracking-tight text-[var(--color-text)] sm:text-[22px]"
               style={{ fontFamily: 'var(--font-display)' }}
             >
               Tasks
             </h1>
           </div>
+        </div>
+
+        {/* The row that survives scrolling: sort on the left, the primary action on the right. */}
+        <div className="flex items-center justify-between gap-2">
+          {allTagsInScope.length > 0 ? (
+            <TagFilterMenu tags={allTagsInScope} activeTag={activeTag} onSelect={setActiveTag} />
+          ) : (
+            <span />
+          )}
           <Button
             variant="primary"
             size="sm"
@@ -91,40 +112,10 @@ export function AllTasksPage() {
             New Task
           </Button>
         </div>
-
-        {allTagsInScope.length > 0 ? (
-          <div className="mt-2 flex flex-wrap items-center gap-1.5 lg:mt-4">
-            <span className="text-[12px] font-medium text-[var(--color-text-muted)]">Sort by tags:</span>
-            {allTagsInScope.map((tag) => (
-              <button
-                key={tag}
-                type="button"
-                aria-pressed={activeTag === tag}
-                onClick={() => setActiveTag((current) => (current === tag ? null : tag))}
-                className={cn(
-                  'anim-press rounded-full border px-2.5 py-1 text-[12px] font-medium transition-colors',
-                  activeTag === tag
-                    ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
-                    : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:bg-[var(--color-hover)] hover:text-[var(--color-text)]',
-                )}
-              >
-                {tag}
-              </button>
-            ))}
-            {activeTag ? (
-              <button
-                type="button"
-                onClick={() => setActiveTag(null)}
-                className="text-[12px] font-medium text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
-              >
-                Clear
-              </button>
-            ) : null}
-          </div>
-        ) : null}
       </div>
 
       <div
+        ref={contentRef}
         className="min-h-0 flex-1 overflow-y-auto px-4 pb-28 sm:px-6 lg:pb-5 lg:pt-1"
         style={contentStyle}
       >

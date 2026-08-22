@@ -1,11 +1,21 @@
 name: Android APK
 
-# Run it by hand from the Actions tab (or by pushing a v* tag). The APK lands as a build
-# artifact you download and install on the phone — nothing is served from a dev machine.
+# Every push to main builds an APK, and it can also be run by hand from the Actions tab or by
+# pushing a v* tag. The APK lands as a build artifact you download and install on the phone —
+# nothing is served from a dev machine.
+#
+# paths-ignore keeps a docs-only or workflow-only commit from spending ~5 minutes of CI on an
+# identical binary.
 on:
   workflow_dispatch:
   push:
+    branches: [main]
     tags: ['v*']
+    paths-ignore:
+      - '**/*.md'
+      - '.gitignore'
+      - 'vercel.json'
+      - 'supabase/**'
 
 jobs:
   apk:

@@ -205,7 +205,7 @@ export function GlobalSearch({ className }: GlobalSearchProps) {
       {showPanel ? (
         <div
           className={cn(
-            'fixed inset-x-3 top-12 z-50 max-h-[70vh] overflow-y-auto rounded-2xl border border-[var(--color-border)] sm:top-14',
+            'fixed inset-x-3 top-[calc(3rem+env(safe-area-inset-top))] z-50 max-h-[70vh] overflow-y-auto rounded-2xl border border-[var(--color-border)] sm:top-[calc(3.5rem+env(safe-area-inset-top))]',
             'bg-[var(--color-surface)] shadow-lg',
             'sm:absolute sm:inset-x-auto sm:top-auto sm:right-0 sm:left-auto sm:mt-1 sm:w-[min(100%,24rem)]',
           )}

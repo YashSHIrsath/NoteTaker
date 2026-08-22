@@ -6,11 +6,9 @@ import { FolderTree } from '../components/tree/FolderTree'
 import { TreeTaskList } from '../components/tree/TreeTaskList'
 import { EmptyState } from '../components/common/EmptyState'
 import { TaskEditorDialog } from '../components/task/TaskEditorDialog'
-import { FLOATING_HEADER_CLASS, useFloatingHeader } from '../hooks/useFloatingHeader'
 
 export function TreePage() {
   const { getForest, folders, tasks } = useFolders()
-  const { headerRef, contentStyle } = useFloatingHeader()
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
   const forest = getForest()
 
@@ -38,7 +36,7 @@ export function TreePage() {
 
   return (
     <div className="relative flex h-full min-h-0 flex-col">
-      <div ref={headerRef} className={FLOATING_HEADER_CLASS}>
+      <div className="shrink-0 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2.5 sm:px-6 sm:py-3">
         <div className="mx-auto flex w-full max-w-5xl items-center gap-2.5 sm:gap-3">
           <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent-soft)] text-[var(--color-accent)] sm:h-9 sm:w-9">
             <ListTree className="h-4 w-4 sm:h-[18px] sm:w-[18px]" aria-hidden />
@@ -57,7 +55,7 @@ export function TreePage() {
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto pb-24 lg:pb-0" style={contentStyle}>
+      <div className="min-h-0 flex-1 overflow-y-auto pb-24 lg:pb-0">
         <div className="relative mx-auto max-w-5xl px-4 pb-6 sm:px-6 sm:pb-8">
           <div
             className="pointer-events-none absolute -right-16 -top-24 h-72 w-72 rounded-full opacity-70"

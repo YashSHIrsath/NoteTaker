@@ -27,6 +27,25 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     document.documentElement.dataset.theme = theme
   }, [theme])
 
+  // Native only: the app draws behind the status bar (Android 15 enforces edge-to-edge), so the
+  // system icons sit on our own header. Their color is a system setting, not CSS — without this
+  // the light theme gets white icons on a white header, i.e. an invisible clock. Style.Dark means
+  // "dark background, light icons", so it follows the theme rather than opposing it.
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      const { Capacitor } = await import('@capacitor/core')
+      if (cancelled || !Capacitor.isNativePlatform()) {
+        return
+      }
+      const { StatusBar, Style } = await import('@capacitor/status-bar')
+      await StatusBar.setStyle({ style: theme === 'dark' ? Style.Dark : Style.Light }).catch(() => undefined)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [theme])
+
   const toggleTheme = () => {
     setTheme((current) => {
       const next: Theme = current === 'dark' ? 'light' : 'dark'

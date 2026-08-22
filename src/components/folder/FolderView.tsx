@@ -20,7 +20,11 @@ import { TagFilterMenu } from './TagFilterMenu'
 import { categoryVar, getRootCategoryForFolder, scatterCategoryForId } from '../../lib/folderColor'
 import { focusTaskTitle } from '../../lib/focusTaskTitle'
 import { readViewStyle } from '../../lib/viewStyle'
-import { FLOATING_HEADER_CLASS, useFloatingHeader } from '../../hooks/useFloatingHeader'
+import {
+  COLLAPSIBLE_TITLE_CLASS,
+  FLOATING_HEADER_CLASS,
+  useFloatingHeader,
+} from '../../hooks/useFloatingHeader'
 
 export interface FolderViewProps {
   folder: FolderRecord
@@ -52,7 +56,7 @@ export function FolderView({
   const [activeTag, setActiveTag] = useState<string | null>(null)
   // Below lg the folder header floats over the scrolling content instead of taking a band of its
   // own; the hook measures it so the content can leave that much room clear.
-  const { headerRef, contentStyle } = useFloatingHeader()
+  const { headerRef, contentRef, contentStyle, condensed } = useFloatingHeader()
   const navigate = useNavigate()
   const location = useLocation()
   const { folders, getForest, getTasksInFolder, toggleFolderImportant } = useFolders()
@@ -147,7 +151,14 @@ export function FolderView({
     <div className="relative flex h-full min-h-0">
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
         <div ref={headerRef} className={FLOATING_HEADER_CLASS}>
-          <FolderBreadcrumb path={path} />
+          {/* Breadcrumb and folder identity roll up on scroll; the actions stay. */}
+          <div
+            className={cn(
+              COLLAPSIBLE_TITLE_CLASS,
+              condensed ? 'max-h-0 opacity-0' : 'max-h-24 opacity-100',
+            )}
+          >
+            <FolderBreadcrumb path={path} />
 
           {/* Below lg this is two full-width rows that each justify edge to edge (identity left,
             *  secondary controls right) rather than a wrapping left-hugging clump. At lg it
@@ -189,6 +200,8 @@ export function FolderView({
                 ) : null}
               </div>
             </div>
+            </div>
+
             <div className="flex w-full shrink-0 items-center justify-between gap-1.5 lg:w-auto lg:justify-end lg:gap-2">
               <Button variant="primary" size="sm" className="h-8 sm:h-9" onClick={handleCreateTask}>
                 <Plus className="h-4 w-4" aria-hidden />
@@ -239,6 +252,7 @@ export function FolderView({
 
         {effectiveViewMode === 'board' ? (
           <div
+            ref={contentRef}
             className="min-h-0 flex-1 overflow-y-auto px-3 pb-28 sm:px-6 lg:pb-5"
             style={contentStyle}
           >
@@ -256,6 +270,7 @@ export function FolderView({
           </div>
         ) : (
           <div
+            ref={contentRef}
             className="min-h-0 flex-1 overflow-y-auto bg-[var(--color-surface-muted)] px-3 pb-28 sm:px-6 lg:pb-5"
             style={contentStyle}
           >

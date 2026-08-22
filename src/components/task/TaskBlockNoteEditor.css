@@ -16,6 +16,63 @@
   background: transparent;
 }
 
+/* A PDF or document in the note is a pill, not a full-width box: BlockNote's default renders the
+   whole filename, and an export-style name ("623c60...GET_JD__ERS_&_Digital_Business.pdf") then
+   wraps across two lines and reads as a wall of text in the middle of a note. One line, truncated,
+   with the real name still on the block — the formatting toolbar's Rename (select the pill) sets a
+   shorter one, and the note's bottom bar lists the file in full. */
+.task-blocknote [data-content-type='file'] .bn-file-name-with-icon,
+.task-blocknote [data-content-type='audio'] .bn-file-name-with-icon,
+.task-blocknote [data-content-type='video'] .bn-file-name-with-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: min(100%, 17rem);
+  padding: 3px 10px 3px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface-muted);
+}
+
+.task-blocknote [data-content-type='file'] .bn-file-name,
+.task-blocknote [data-content-type='audio'] .bn-file-name,
+.task-blocknote [data-content-type='video'] .bn-file-name {
+  overflow: hidden;
+  font-size: 12.5px;
+  line-height: 1.4;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.task-blocknote [data-content-type='file'] .bn-file-icon,
+.task-blocknote [data-content-type='audio'] .bn-file-icon,
+.task-blocknote [data-content-type='video'] .bn-file-icon {
+  flex-shrink: 0;
+}
+
+/* Images collapsed: hide the picture and put its filename in its place. The name is already on
+   the block as data-name, so this needs no extra markup and no second render path — and because
+   it's only CSS, expanding again is instant. */
+.task-blocknote-images-collapsed [data-content-type='image'] .bn-file-block-content-wrapper {
+  display: none;
+}
+
+.task-blocknote-images-collapsed [data-content-type='image']::after {
+  content: '🖼 ' attr(data-name);
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  overflow: hidden;
+  padding: 2px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 /* Handles off: BlockNote reserves 54px each side for the gutter controls, which is a wide empty
    margin when nothing is drawn in it. Two classes deep so this out-specifies BlockNote's own
    `.bn-editor` rule. The controls are what need that room — with them hidden, the text takes it. */

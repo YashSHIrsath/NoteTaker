@@ -6,14 +6,19 @@ import { CreateFolderDialog } from '../components/folder/CreateFolderDialog'
 import { RootFolderList } from '../components/folder/RootFolderList'
 import { useFolders } from '../hooks/useFolders'
 import { getRootFolders } from '../lib/folders'
-import { FLOATING_HEADER_CLASS, useFloatingHeader } from '../hooks/useFloatingHeader'
+import { cn } from '../lib/cn'
+import {
+  COLLAPSIBLE_TITLE_CLASS,
+  FLOATING_HEADER_CLASS,
+  useFloatingHeader,
+} from '../hooks/useFloatingHeader'
 
 export function MyNotesPage() {
   const navigate = useNavigate()
   const { folders, createFolder } = useFolders()
   const rootFolders = getRootFolders(folders)
   const [createOpen, setCreateOpen] = useState(false)
-  const { headerRef, contentStyle } = useFloatingHeader()
+  const { headerRef, contentRef, contentStyle, condensed } = useFloatingHeader()
 
   const newFolderButton = (
     <Button variant="subtle" size="sm" onClick={() => setCreateOpen(true)}>
@@ -25,7 +30,14 @@ export function MyNotesPage() {
   return (
     <div className="relative flex h-full min-h-0 flex-col">
       <div ref={headerRef} className={FLOATING_HEADER_CLASS}>
-        <div className="flex items-center justify-between gap-3">
+        {/* Full header at the top of the page, controls only once it's scrolled — a bar that
+            overlays the content shouldn't keep spending its height on a title you've read. */}
+        <div
+          className={cn(
+            COLLAPSIBLE_TITLE_CLASS,
+            condensed ? 'max-h-0 opacity-0' : 'mb-2 max-h-14 opacity-100',
+          )}
+        >
           <div className="flex min-w-0 items-center gap-3">
             <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent-soft)] text-[var(--color-accent)] sm:h-9 sm:w-9">
               <Folder className="h-3.5 w-3.5 sm:h-4 sm:w-4" aria-hidden />
@@ -42,11 +54,17 @@ export function MyNotesPage() {
               </p>
             </div>
           </div>
-          {newFolderButton}
         </div>
+
+        {/* The row that survives scrolling. */}
+        <div className="flex items-center justify-end gap-3">{newFolderButton}</div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-28 sm:px-6 lg:pb-5" style={contentStyle}>
+      <div
+        ref={contentRef}
+        className="min-h-0 flex-1 overflow-y-auto px-4 pb-28 sm:px-6 lg:pb-5"
+        style={contentStyle}
+      >
 
         {rootFolders.length === 0 ? (
           <div className="mt-16 flex flex-col items-center px-6 text-center">

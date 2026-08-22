@@ -17,11 +17,11 @@ import { useFolders } from '../../hooks/useFolders'
 import { useItemDnd } from '../../context/ItemDndContext'
 import { AttachmentPreviewDialog } from '../attachment/AttachmentPreviewDialog'
 import { TaskColorButton } from './TaskColorButton'
+import { TaskTagsPill } from './TaskTagsPill'
 import { AttachmentTypeIcon, attachmentSortRank } from '../attachment/AttachmentTypeIcon'
 import { TaskContentPreview } from './TaskContentPreview'
 import { cn } from '../../lib/cn'
 
-const MAX_VISIBLE_TAGS = 3
 const DRAG_TYPE = 'text/plain'
 /** Hold before a touch on a tile becomes a drag rather than a tap or a scroll. */
 const TOUCH_HOLD_MS = 320
@@ -57,10 +57,9 @@ export interface AllTaskTileProps {
 
 /** A single-color sticky-note tile for the flat "all tasks" grid.
  *
- *  Height is content-driven between a floor and a ceiling rather than locked to a square: a
- *  square tile's height was dictated by the column width, which meant a narrow column starved
- *  the content while a wide one left a large empty gap above the footer. Tiles in the same grid
- *  row still line up, because grid items stretch to their row. */
+ *  One fixed height for every tile — a portrait rectangle — so the grid stays even whatever a note
+ *  contains. Fixed in pixels rather than as an aspect ratio on purpose: an aspect ratio ties height
+ *  to column width, which is what turned these into tall empty squares on a wide screen. */
 export function AllTaskTile({ taskId, category, folderLabel, onOpen }: AllTaskTileProps) {
   const { getTask, getAttachmentsForTask, updateTaskColor, reorderSiblingTasks, moveTaskToFolder } =
     useFolders()
@@ -97,9 +96,6 @@ export function AllTaskTile({ taskId, category, folderLabel, onOpen }: AllTaskTi
   if (!task) {
     return null
   }
-
-  const visibleTags = task.tags.slice(0, MAX_VISIBLE_TAGS)
-  const extraTagCount = task.tags.length - visibleTags.length
 
   const handleContentClick = (event: MouseEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement
@@ -224,16 +220,18 @@ export function AllTaskTile({ taskId, category, folderLabel, onOpen }: AllTaskTi
         }
       }}
       className={cn(
-        'anim-item-in group flex h-full min-h-[128px] w-full flex-col overflow-hidden rounded-2xl p-3 text-left transition-transform hover:-translate-y-0.5 hover:shadow-[var(--shadow-md)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/40 sm:p-3.5',
+        'anim-item-in group flex h-[248px] w-full flex-col overflow-hidden rounded-2xl p-3 text-left transition-transform hover:-translate-y-0.5 hover:shadow-[var(--shadow-md)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/40 sm:h-[268px] sm:p-3.5',
         isDragging && 'opacity-60 ring-2 ring-[var(--color-accent)]',
       )}
       style={{ background: colors.card }}
     >
-      {/* The title used to be a bordered pill too, which put it in the same visual bracket as the
-        *  tag chips right under it — two rounded, tinted, outlined things arguing over which was
-        *  the heading. The title is now plain weighted text (the one thing on the card with no
-        *  chrome), so the chips below can only read as metadata. */}
-      <div className="flex items-start gap-1.5">
+      {/* Plain weighted text, no chrome: the title is the one thing on the tile that doesn't need
+        *  a chip around it, which is what lets the small pills beside it read as metadata.
+        *
+        *  h-10/h-11 is exactly two lines at this size and leading: a one-line title keeps the
+        *  second line's worth of space, so the divider below sits at the same height in every
+        *  tile of a row whatever its title (and whatever its tags) turn out to be. */}
+      <div className="flex h-10 shrink-0 items-start gap-1.5 sm:h-11">
         <h3
           className="min-w-0 flex-1 text-[14.5px] font-bold leading-snug tracking-[-0.01em] line-clamp-2 sm:text-[15.5px]"
           style={{ color: ink }}
@@ -243,6 +241,8 @@ export function AllTaskTile({ taskId, category, folderLabel, onOpen }: AllTaskTi
         {task.isPinned ? (
           <Pin className="mt-0.5 h-3.5 w-3.5 shrink-0 fill-current" style={{ color: ink }} aria-label="Pinned" />
         ) : null}
+        {/* Tags live here as a count, opening on click — see TaskTagsPill. */}
+        <TaskTagsPill tags={task.tags} ink={ink} />
         <TaskColorButton
           compact
           activeColor={colors.solid}
@@ -250,31 +250,6 @@ export function AllTaskTile({ taskId, category, folderLabel, onOpen }: AllTaskTi
           onSelect={(color) => updateTaskColor(taskId, color)}
         />
       </div>
-
-      {visibleTags.length > 0 ? (
-        // Borderless tint plus a "#": these are the only chips on the card now, so they can't be
-        // confused with the heading above them.
-        <div className="mt-1.5 flex shrink-0 flex-wrap items-center gap-1">
-          {visibleTags.map((tag) => (
-            <span
-              key={tag}
-              className="inline-flex max-w-[6rem] items-center gap-0.5 rounded-full px-2 py-[3px] text-[10.5px] font-semibold leading-none tracking-wide"
-              style={{ color: ink, background: `color-mix(in srgb, ${ink} 16%, transparent)` }}
-            >
-              <span className="opacity-50">#</span>
-              <span className="min-w-0 truncate">{tag}</span>
-            </span>
-          ))}
-          {extraTagCount > 0 ? (
-            <span
-              className="inline-flex shrink-0 items-center rounded-full px-1.5 py-[3px] text-[10.5px] font-semibold leading-none"
-              style={{ color: ink, background: `color-mix(in srgb, ${ink} 16%, transparent)` }}
-            >
-              +{extraTagCount}
-            </span>
-          ) : null}
-        </div>
-      ) : null}
 
       {/* One hairline instead of per-element borders: it separates header from body without
         *  adding another outlined box to the card. */}
@@ -291,7 +266,7 @@ export function AllTaskTile({ taskId, category, folderLabel, onOpen }: AllTaskTi
       <div
         ref={bodyRef}
         onClick={handleContentClick}
-        className="relative mt-2 min-h-0 flex-1 overflow-hidden pointer-events-none text-[12.5px] max-h-44"
+        className="relative mt-2 min-h-0 flex-1 overflow-hidden pointer-events-none text-[12.5px]"
         style={{ color: ink }}
       >
         <TaskContentPreview taskId={taskId} content={task.content} />

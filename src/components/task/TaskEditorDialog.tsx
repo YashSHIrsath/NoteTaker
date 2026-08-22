@@ -83,7 +83,7 @@ export function TaskEditorDialog({ taskId, onClose }: TaskEditorDialogProps) {
   const folderPath = getPath(parentFolder.id)
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4">
       <button
         type="button"
         aria-label="Close"
@@ -97,11 +97,12 @@ export function TaskEditorDialog({ taskId, onClose }: TaskEditorDialogProps) {
         aria-label={task.title.trim() || 'Untitled task'}
         tabIndex={-1}
         className={cn(
-          // A definite height, so the note's own writing area can be a fixed box that scrolls
-          // inside itself: 70% of the viewport on a phone, and up to 860px on a desktop. The
-          // panel no longer scrolls — its header is fixed and the writing area owns the overflow,
-          // which is what keeps the title and the toolbar in place while a long note scrolls.
-          'relative flex h-[70vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-lg)] outline-none sm:h-[min(88vh,860px)]',
+          // Full screen on a phone (dvh, so the software keyboard shrinks it instead of pushing
+          // the bottom bar off-screen), a centred panel from sm up. Either way the height is
+          // definite, which is what lets the writing area be a fixed box that scrolls inside
+          // itself while the header and the attachment bar stay put.
+          'relative flex h-[100dvh] w-full flex-col overflow-hidden border-[var(--color-border)] bg-[var(--color-surface)] outline-none',
+          'pt-[env(safe-area-inset-top)] sm:h-[min(88vh,860px)] sm:max-w-3xl sm:rounded-xl sm:border sm:pt-0 sm:shadow-[var(--shadow-lg)]',
           closing ? 'anim-dialog-out' : 'anim-dialog-in',
         )}
       >

@@ -19,6 +19,8 @@ export interface TaskBlockNoteEditorProps {
   onContentChange: (content: string) => void
   /** Gutter controls ("+" and drag handle). Off, the editor gives that 54px back to the text. */
   showBlockHandles?: boolean
+  /** Inline pictures shown as a name chip instead of the picture itself. */
+  collapseImages?: boolean
 }
 
 const CONTENT_FLUSH_DELAY_MS = 300
@@ -30,6 +32,7 @@ export function TaskBlockNoteEditor({
   content,
   onContentChange,
   showBlockHandles = false,
+  collapseImages = false,
 }: TaskBlockNoteEditorProps) {
   const {
     getAttachmentsForTask,
@@ -74,8 +77,12 @@ export function TaskBlockNoteEditor({
           // BlockNote only auto-wraps a returned *string* into { props: { url, name } } before
           // calling updateBlock; a returned object is passed to updateBlock as-is, so it must
           // already be shaped as a block-props patch or the url/name never actually apply.
-          // showPreview: false keeps it a compact name+icon box instead of a full inline preview.
-          return { props: { url: attachmentUrlFor(attachment.id), name: file.name, showPreview: false } }
+          const url = attachmentUrlFor(attachment.id)
+
+          // Pictures are shown inline; anything else stays a compact pill (see the file-block
+          // rules in TaskBlockNoteEditor.css) that can be renamed from the formatting toolbar and
+          // opened from the note's bottom bar.
+          return { props: { url, name: file.name, showPreview: attachment.isImage } }
         } catch (error) {
           // The addImageAttachment/addPdfAttachment/addDocumentAttachment call now rethrows
           // the real repository error (bucket missing, RLS denial, size limit, etc.) instead
@@ -261,7 +268,13 @@ export function TaskBlockNoteEditor({
   }
 
   return (
-    <div className={cn('task-blocknote', showBlockHandles ? null : 'task-blocknote-flush')}>
+    <div
+      className={cn(
+        'task-blocknote',
+        showBlockHandles ? null : 'task-blocknote-flush',
+        collapseImages ? 'task-blocknote-images-collapsed' : null,
+      )}
+    >
       <div ref={editorWrapperRef} className="relative" onClick={handleContentClick}>
         {/* sideMenu={false} disables BlockNote's *default* side menu; TaskBlockSideMenu renders the
             same one with the block-move control matched to the input device — and only when the

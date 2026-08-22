@@ -50,10 +50,24 @@ function textBlock(text: string): StoredBlock {
 function attachmentBlock(attachment: Attachment): StoredBlock {
   return {
     type: attachment.isImage ? 'image' : 'file',
-    // Attachments show as a compact name+icon box rather than a full inline preview; clicking
-    // one opens the real content in a dialog instead.
-    props: { url: attachmentUrlFor(attachment.id), name: attachment.name, showPreview: false },
+    // Pictures are shown; other files stay a compact name+icon box and are opened from the
+    // note's attachment bar.
+    props: {
+      url: attachmentUrlFor(attachment.id),
+      name: attachment.name,
+      showPreview: attachment.isImage,
+    },
   }
+}
+
+/** Notes written before pictures were shown inline stored them with showPreview: false. Flipping
+ *  it as the document loads means an old note looks like a new one without a data migration. */
+function withShownImages(blocks: StoredBlock[]): StoredBlock[] {
+  return blocks.map((block) => ({
+    ...block,
+    props: block.type === 'image' ? { ...block.props, showPreview: true } : block.props,
+    children: block.children ? withShownImages(block.children) : block.children,
+  }))
 }
 
 function subtaskBlock(subtask: Subtask, allSubtasks: Subtask[]): StoredBlock {
@@ -76,7 +90,7 @@ const EMPTY_DOCUMENT: StoredBlock[] = [{ type: 'paragraph', content: [] }]
 export function buildInitialBlocks(content: string, attachments: Attachment[], subtasks: Subtask[]): StoredBlock[] {
   if (isBlockNoteContent(content)) {
     const parsed = JSON.parse(content) as StoredBlock[]
-    return parsed.length > 0 ? parsed : EMPTY_DOCUMENT
+    return parsed.length > 0 ? withShownImages(parsed) : EMPTY_DOCUMENT
   }
 
   const attachmentsById = new Map(attachments.map((attachment) => [attachment.id, attachment]))

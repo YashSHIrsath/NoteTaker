@@ -15,7 +15,11 @@ import { getImportantTasks } from '../lib/tasks'
 import { categoryVar, getRootCategoryForFolder, scatterCategoryForId } from '../lib/folderColor'
 import { readViewStyle } from '../lib/viewStyle'
 import { cn } from '../lib/cn'
-import { FLOATING_HEADER_CLASS, useFloatingHeader } from '../hooks/useFloatingHeader'
+import {
+  COLLAPSIBLE_TITLE_CLASS,
+  FLOATING_HEADER_CLASS,
+  useFloatingHeader,
+} from '../hooks/useFloatingHeader'
 
 const CARD_GRID = 'mt-2.5 grid grid-cols-1 gap-2.5 sm:grid-cols-2 sm:gap-3 xl:grid-cols-3'
 // Same width rule as the task tiles: rows only split into columns once each one has room.
@@ -42,7 +46,7 @@ export function ImportantPage() {
   const [filter, setFilter] = useState<ImportantFilter>('all')
   const [activeTag, setActiveTag] = useState<string | null>(null)
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
-  const { headerRef, contentStyle } = useFloatingHeader()
+  const { headerRef, contentRef, contentStyle, condensed } = useFloatingHeader()
   const importantFolders = getImportantFolders(folders)
   const importantTasks = getImportantTasks(tasks)
   const isEmpty = importantFolders.length === 0 && importantTasks.length === 0
@@ -65,7 +69,14 @@ export function ImportantPage() {
   return (
     <div className="relative flex h-full min-h-0 flex-col">
       <div ref={headerRef} className={FLOATING_HEADER_CLASS}>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+        {/* Full header at the top of the page, controls only once it's scrolled — a bar that
+            overlays the content shouldn't keep spending its height on a title you've read. */}
+        <div
+          className={cn(
+            COLLAPSIBLE_TITLE_CLASS,
+            condensed ? 'max-h-0 opacity-0' : 'mb-2 max-h-12 opacity-100',
+          )}
+        >
           <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
             <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--cat-rose-soft)] text-[var(--cat-rose)] sm:h-9 sm:w-9">
               <Star className="h-3.5 w-3.5 sm:h-4 sm:w-4" aria-hidden />
@@ -77,8 +88,11 @@ export function ImportantPage() {
               Important
             </h1>
           </div>
+        </div>
 
-          <div className="inline-flex w-full shrink-0 items-center gap-0.5 rounded-full border border-[var(--color-border)] bg-[var(--color-hover)] p-1 sm:w-auto">
+        {/* The row that survives scrolling. */}
+        <div className="flex items-center gap-2">
+          <div className="inline-flex w-full shrink-0 items-center gap-0.5 rounded-full border border-[var(--color-border)] bg-[var(--color-hover)] p-1 lg:w-auto">
             {FILTERS.map((item) => {
               const count =
                 item.key === 'folders'
@@ -94,7 +108,7 @@ export function ImportantPage() {
                   aria-pressed={active}
                   onClick={() => setFilter(item.key)}
                   className={cn(
-                    'anim-press flex-1 rounded-full px-2.5 py-1 text-[12.5px] font-semibold transition-[background-color,color,box-shadow,transform] duration-200 sm:flex-none',
+                    'anim-press flex-1 rounded-full px-2.5 py-1 text-[12.5px] font-semibold transition-[background-color,color,box-shadow,transform] duration-200 lg:flex-none',
                     active
                       ? 'bg-[var(--color-surface-raised)] text-[var(--color-text)] shadow-[var(--shadow-sm)]'
                       : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]',
@@ -110,6 +124,7 @@ export function ImportantPage() {
       </div>
 
       <div
+        ref={contentRef}
         className="min-h-0 flex-1 overflow-y-auto bg-[var(--color-surface-muted)] px-4 pb-28 sm:px-6 lg:pb-5"
         style={contentStyle}
       >
