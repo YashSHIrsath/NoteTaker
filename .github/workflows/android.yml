@@ -52,6 +52,9 @@ jobs:
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          # Without this the app's own origin (capacitor://localhost) ends up in confirmation
+          # emails, which is not a link anyone can open.
+          VITE_PUBLIC_APP_URL: ${{ secrets.VITE_PUBLIC_APP_URL }}
 
       - uses: actions/setup-java@v4
         with:
