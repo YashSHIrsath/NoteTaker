@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
+import { BlockNoteSchema, defaultBlockSpecs } from '@blocknote/core'
 import { useCreateBlockNote, useEditorChange } from '@blocknote/react'
 import { BlockNoteView } from '@blocknote/mantine'
 import '@blocknote/core/fonts/inter.css'
@@ -12,6 +13,18 @@ import { attachmentIdFromUrl, attachmentUrlFor, buildInitialBlocks } from '../..
 import { detectDocumentType, isAcceptedImageFile, isAcceptedPdfFile } from '../../services/attachments'
 import { AttachmentPreviewDialog } from '../attachment/AttachmentPreviewDialog'
 import { TaskBlockSideMenu } from './TaskBlockSideMenu'
+
+/**
+ * The editor's blocks, minus audio and video.
+ *
+ * Neither can be stored: uploads are limited to images, PDFs and documents, so picking "Video"
+ * from the slash menu could only ever end in a rejected upload or an embed pointing at somebody
+ * else's server. Removing them from the schema removes them everywhere at once — the slash menu,
+ * the "+" menu and paste handling all read from it — rather than hiding two menu entries and
+ * leaving the blocks reachable by other routes.
+ */
+const { audio: _audio, video: _video, ...supportedBlockSpecs } = defaultBlockSpecs
+const schema = BlockNoteSchema.create({ blockSpecs: supportedBlockSpecs })
 
 export interface TaskBlockNoteEditorProps {
   taskId: string
@@ -58,6 +71,7 @@ export function TaskBlockNoteEditor({
 
   const editor = useCreateBlockNote(
     {
+      schema,
       initialContent,
       uploadFile: async (file: File) => {
         try {

@@ -1,10 +1,15 @@
-import { useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
+import { useEffect, useRef, useState } from 'react'
 import { Download, X } from 'lucide-react'
 import type { Attachment } from '../../types'
 import { cn } from '../../lib/cn'
 import { useDialogFocus } from '../../hooks/useDialogFocus'
 import { IconButton } from '../ui/IconButton'
+import { Spinner } from '../ui/Spinner'
+import { useFolders } from '../../hooks/useFolders'
+import { saveAttachment } from '../../lib/saveAttachment'
 import { ImagePreview } from './ImagePreview'
+import { PdfPreview } from './PdfPreview'
 import { DocumentPreview } from './DocumentPreview'
 import { CsvPreview } from './CsvPreview'
 import { ExcelPreview } from './ExcelPreview'
@@ -19,21 +24,7 @@ function AttachmentPreviewBody({ attachment }: { attachment: Attachment }) {
     return <ImagePreview src={attachment.previewUrl} alt={attachment.name} />
   }
   if (attachment.isPdf) {
-    return (
-      <>
-        <iframe
-          title={`${attachment.name} preview`}
-          src={attachment.previewUrl}
-          className="h-full w-full border-0 bg-[var(--color-surface)]"
-        />
-        {/* An Android WebView has no PDF renderer, so that iframe is simply blank there — which
-            is what "I can't see PDFs" was. The header's Open button hands the file to a real PDF
-            app instead; this line says so rather than leaving an empty panel unexplained. */}
-        <p className="pointer-events-none absolute inset-x-0 bottom-0 p-3 text-center text-[12px] text-[var(--color-text-muted)]">
-          No preview? Use Open to view this in another app.
-        </p>
-      </>
-    )
+    return <PdfPreview attachment={attachment} />
   }
   if (attachment.type === 'csv') {
     return <CsvPreview attachment={attachment} />
@@ -46,6 +37,8 @@ function AttachmentPreviewBody({ attachment }: { attachment: Attachment }) {
 
 export function AttachmentPreviewDialog({ attachment, onClose }: AttachmentPreviewDialogProps) {
   const panelRef = useRef<HTMLDivElement>(null)
+  const { getAttachmentFile } = useFolders()
+  const [saving, setSaving] = useState(false)
   const open = attachment !== null
 
   useDialogFocus(open, panelRef)
@@ -67,7 +60,23 @@ export function AttachmentPreviewDialog({ attachment, onClose }: AttachmentPrevi
     return null
   }
 
-  return (
+  const save = async () => {
+    setSaving(true)
+    try {
+      const file = await Promise.resolve(getAttachmentFile(attachment.id))
+      await saveAttachment(file, attachment.previewUrl, attachment.name)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Portalled to the body, and it has to be. This dialog is rendered from inside a task card,
+  // and cards sit in grid items that react-grid-layout positions with `transform` — a transform
+  // makes that element the containing block for any `position: fixed` descendant, so `inset-0`
+  // resolved to the card's own box instead of the viewport. That's why a photo opened at
+  // thumbnail size inside the note rather than over the screen. The other dialogs in the app
+  // (MoveTaskDialog and friends) portal for the same reason.
+  return createPortal(
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-0 sm:p-4">
       <button type="button" aria-label="Close" className="absolute inset-0 bg-black/30" onClick={onClose} />
       <div
@@ -88,20 +97,13 @@ export function AttachmentPreviewDialog({ attachment, onClose }: AttachmentPrevi
         <div className="flex shrink-0 items-center justify-between gap-2 border-b border-[var(--color-border)] px-3 py-1.5">
           <span className="min-w-0 truncate text-sm font-medium text-[var(--color-text)]">{attachment.name}</span>
           <div className="flex shrink-0 items-center gap-0.5">
-            {/* A plain link, not a fetch + blob dance: the browser (or Android) already knows how
-                to hand a file off, and `download` gives it the real filename instead of a blob id.
-                target=_blank is what makes a WebView pass a PDF to an app that can show it. */}
-            <a
-              href={attachment.previewUrl}
-              download={attachment.name}
-              target="_blank"
-              rel="noreferrer"
-              aria-label={`Open ${attachment.name}`}
-              title="Open / download"
-              className="anim-press inline-flex h-9 w-9 items-center justify-center rounded-full text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-hover)] hover:text-[var(--color-text)]"
+            <IconButton
+              label={saving ? `Saving ${attachment.name}` : `Download ${attachment.name}`}
+              onClick={() => void save()}
+              disabled={saving}
             >
-              <Download className="h-4 w-4" aria-hidden />
-            </a>
+              {saving ? <Spinner /> : <Download className="h-4 w-4" />}
+            </IconButton>
             <IconButton label="Close" onClick={onClose}>
               <X className="h-4 w-4" />
             </IconButton>
@@ -111,6 +113,7 @@ export function AttachmentPreviewDialog({ attachment, onClose }: AttachmentPrevi
           <AttachmentPreviewBody attachment={attachment} />
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

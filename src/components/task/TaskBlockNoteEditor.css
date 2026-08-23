@@ -380,3 +380,102 @@
     background-color: transparent;
   }
 }
+
+
+/* ------------------------------------------------------------ the file block and its panel
+
+   Two separate things look wrong here, for the same underlying reason: BlockNote is styled for
+   its own palette, not this app's.
+
+   The "Add file" bar hardcodes #f2f1ee (light) and #464646 (dark) — a warm grey that belongs to
+   nothing else on the page, sitting in the middle of a note. It becomes a dashed drop target in
+   the app's own colours, which also says what it is: somewhere to put a file, not a filled row.
+
+   The upload panel underneath is a portalled popover, so it can't be reached through
+   .task-blocknote — these are scoped to .bn-root, the class BlockNote puts on the portal too. It
+   arrives with no surface of its own (the library deliberately makes .bn-panel-popover
+   transparent and unpadded), which is why it read as bare tabs and a stray full-width button
+   floating over the note. Mapping --bn-colors-* to this app's tokens fixes the panel, the slash
+   menu and every other BlockNote surface in one go, rather than restyling each by hand. */
+.bn-root {
+  --bn-colors-editor-text: var(--color-text);
+  --bn-colors-editor-background: transparent;
+  --bn-colors-menu-text: var(--color-text);
+  --bn-colors-menu-background: var(--color-surface-raised);
+  --bn-colors-tooltip-text: var(--color-text);
+  --bn-colors-tooltip-background: var(--color-surface-raised);
+  --bn-colors-hovered-text: var(--color-text);
+  --bn-colors-hovered-background: var(--color-hover);
+  --bn-colors-selected-text: #ffffff;
+  --bn-colors-selected-background: var(--color-accent);
+  --bn-colors-disabled-text: var(--color-text-muted);
+  --bn-colors-disabled-background: var(--color-hover);
+  --bn-colors-border: var(--color-border);
+  --bn-colors-side-menu: var(--color-text-muted);
+}
+
+/* The popover gets a real surface: the same card treatment as every other floating thing in the
+   app, so the tabs sit on something instead of over the note. */
+.bn-root .bn-panel-popover {
+  background-color: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  max-width: min(22rem, calc(100vw - 2rem));
+}
+
+.bn-root .bn-panel-popover .mantine-Tabs-root {
+  background-color: transparent;
+}
+
+.bn-root .bn-panel-popover .mantine-Tabs-tab {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 12px;
+}
+
+/* Mantine's file input is a full-width bordered bar with centred bold text; as the only control
+   in the panel it read as a heading rather than a button. This makes it the app's own button. */
+.bn-root .bn-panel-popover .mantine-FileInput-input,
+.bn-root .bn-panel-popover .mantine-Button-root {
+  background-color: var(--color-accent);
+  border: none;
+  border-radius: 999px;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  min-height: 36px;
+}
+
+.bn-root .bn-panel-popover .mantine-FileInput-input:hover,
+.bn-root .bn-panel-popover .mantine-Button-root:hover {
+  background-color: var(--color-accent-hover);
+}
+
+.bn-root .bn-panel-popover .mantine-TextInput-input {
+  border-radius: 10px;
+}
+
+/* The block itself: a place to drop something, in this app's colours. */
+.task-blocknote [data-file-block] .bn-add-file-button {
+  background-color: transparent;
+  border: 1px dashed var(--color-border-strong);
+  border-radius: 12px;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  gap: 8px;
+  padding: 10px 12px;
+}
+
+.bn-editor[contenteditable='true'] .task-blocknote [data-file-block] .bn-add-file-button:hover,
+.task-blocknote [data-file-block] .bn-add-file-button:hover {
+  background-color: var(--color-hover);
+  border-color: var(--color-accent);
+  color: var(--color-text);
+}
+
+.task-blocknote [data-file-block] .bn-add-file-button-icon {
+  width: 18px;
+  height: 18px;
+}
