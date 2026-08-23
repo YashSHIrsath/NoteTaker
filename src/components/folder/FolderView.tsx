@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { createPortal } from 'react-dom'
 import { Folder, FolderTree, Kanban, LayoutList, Pin, Plus } from 'lucide-react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import type { Folder as FolderRecord, Task } from '../../types'
@@ -16,7 +15,6 @@ import { TaskEditorDialog } from '../task/TaskEditorDialog'
 import { useFolders } from '../../hooks/useFolders'
 import { useAuth } from '../../hooks/useAuth'
 import { useIsCompact } from '../../hooks/useMediaQuery'
-import { useAnchoredPanel } from '../../hooks/useAnchoredPanel'
 import { cn } from '../../lib/cn'
 import { StarButton } from '../common/StarButton'
 import { FolderActions } from './FolderActions'
@@ -43,7 +41,6 @@ export interface FolderViewProps {
 type ViewMode = 'list' | 'board'
 
 const NEW_TASK_TITLE = 'New note'
-const SUBFOLDER_PANEL_WIDTH = 304
 
 export function FolderView({
   folder,
@@ -61,7 +58,9 @@ export function FolderView({
   const [viewMode, setViewMode] = useState<ViewMode>('list')
   const [activeTag, setActiveTag] = useState<string | null>(null)
   const isCompact = useIsCompact()
-  const subfolderPanel = useAnchoredPanel<HTMLDivElement>(SUBFOLDER_PANEL_WIDTH)
+  // The compact folders sheet is only ever open or closed — it's pinned to the bottom bar, so
+  // there's nothing to anchor or measure against the control that opens it.
+  const [subfoldersSheetOpen, setSubfoldersSheetOpen] = useState(false)
   // Below lg the folder header floats over the scrolling content instead of taking a band of its
   // own; the hook measures it so the content can leave that much room clear.
   const { headerRef, contentRef, condensed } = useFloatingHeader()
@@ -91,7 +90,7 @@ export function FolderView({
   const effectiveViewMode: ViewMode = childFolders.length === 0 ? 'list' : viewMode
 
   const openChildFolder = (folderId: string) => {
-    subfolderPanel.setOpen(false)
+    setSubfoldersSheetOpen(false)
     navigate(`/folder/${folderId}`)
   }
 
@@ -196,25 +195,25 @@ export function FolderView({
                 />
               </div>
 
-              <div ref={subfolderPanel.anchorRef} className="flex shrink-0 items-center gap-1">
+              <div className="flex shrink-0 items-center gap-1">
                 <FolderActions folderId={folder.id} folderName={folder.name} />
                 {effectiveViewMode === 'list' ? (
                   <IconButton
                     label={
-                      (isCompact ? subfolderPanel.open : foldersPanelOpen)
+                      (isCompact ? subfoldersSheetOpen : foldersPanelOpen)
                         ? 'Hide subfolders'
                         : 'Browse subfolders'
                     }
-                    aria-pressed={isCompact ? subfolderPanel.open : foldersPanelOpen}
+                    aria-pressed={isCompact ? subfoldersSheetOpen : foldersPanelOpen}
                     onClick={() => {
                       if (isCompact) {
-                        subfolderPanel.setOpen((open) => !open)
+                        setSubfoldersSheetOpen((open) => !open)
                         return
                       }
                       setFoldersPanelOpen((open) => !open)
                     }}
                     className={cn(
-                      (isCompact ? subfolderPanel.open : foldersPanelOpen) &&
+                      (isCompact ? subfoldersSheetOpen : foldersPanelOpen) &&
                         'bg-[var(--color-hover)] text-[var(--color-text)]',
                     )}
                   >
@@ -342,31 +341,59 @@ export function FolderView({
             className={cn('hidden lg:flex', !foldersPanelOpen && 'lg:hidden')}
           />
 
-          {subfolderPanel.open && subfolderPanel.position
-            ? createPortal(
-                <div
-                  ref={subfolderPanel.panelRef}
-                  role="dialog"
-                  aria-label="Subfolders"
-                  className="anim-panel-in fixed z-50 w-[19rem] max-w-[calc(100vw-1rem)] lg:hidden"
-                  style={{ top: subfolderPanel.position.top, left: subfolderPanel.position.left }}
-                >
-                  <FolderSidePanel
-                    folders={childFolders}
-                    currentFolderId={folder.id}
-                    forest={forest}
-                    locationPathIds={locationPathIds}
-                    onSelectFolder={openChildFolder}
-                    onCreateFolder={() => {
-                      subfolderPanel.setOpen(false)
-                      setFolderDialogOpen(true)
-                    }}
-                    variant="popover"
-                  />
-                </div>,
-                document.body,
-              )
-            : null}
+          {/* Below lg the subfolders arrive as a sheet that rises out of the bottom bar, not as a
+              panel hanging off the icon that opened it: the icon sits in a header that floats over
+              the cards, so an anchored panel opened mid-screen on top of the content it was meant
+              to navigate. Kept mounted rather than conditionally rendered so it animates on the
+              way out as well as in. */}
+          <div
+            className={cn(
+              // fixed (not absolute) — this has to pin to the actual viewport, not to
+              // whatever height this flex ancestor happens to compute to.
+              'fixed inset-0 z-20 lg:hidden',
+              subfoldersSheetOpen ? 'pointer-events-auto' : 'pointer-events-none',
+            )}
+            aria-hidden={!subfoldersSheetOpen}
+          >
+            <button
+              type="button"
+              aria-label="Close folders"
+              className={cn(
+                'absolute inset-0 bg-black/40 transition-opacity duration-[var(--motion-slow)]',
+                '[transition-timing-function:var(--motion-ease)] motion-reduce:transition-none',
+                subfoldersSheetOpen ? 'opacity-100' : 'opacity-0',
+              )}
+              onClick={() => setSubfoldersSheetOpen(false)}
+            />
+            <FolderSidePanel
+              folders={childFolders}
+              currentFolderId={folder.id}
+              forest={forest}
+              locationPathIds={locationPathIds}
+              onSelectFolder={openChildFolder}
+              onCreateFolder={() => {
+                setSubfoldersSheetOpen(false)
+                setFolderDialogOpen(true)
+              }}
+              variant="sheet"
+              className={cn(
+                // Stops above the bottom bar rather than sliding under it — at bottom-0 the bar
+                // (z-40, and floating over everything) covered the sheet's own header and its
+                // "know where you are" row, which is what you most wanted to reach.
+                'absolute bottom-[calc(var(--bottom-nav-inset)+0.5rem)] z-10',
+                // The bar's gutter and width cap, so the two line up edge to edge.
+                'inset-x-3 mx-auto max-w-md',
+                // Grown from its bottom edge — i.e. out of the bar sitting right below it —
+                // rather than slid up from off-screen, on the overshooting curve so it settles
+                // with a small bounce.
+                'origin-bottom transition-[transform,opacity] duration-[var(--motion-slow)]',
+                '[transition-timing-function:var(--motion-spring)] motion-reduce:transition-none',
+                subfoldersSheetOpen
+                  ? 'translate-y-0 scale-100 opacity-100'
+                  : 'pointer-events-none translate-y-4 scale-95 opacity-0',
+              )}
+            />
+          </div>
 
           {!foldersPanelOpen ? (
             <div className="hidden h-full shrink-0 flex-col items-center border-l border-[var(--color-border)] bg-[var(--color-surface-muted)] px-1.5 py-3 lg:flex">

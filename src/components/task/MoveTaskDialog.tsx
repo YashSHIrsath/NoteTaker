@@ -89,7 +89,7 @@ export function MoveTaskDialog({ open, taskId, onClose }: MoveTaskDialogProps) {
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[100] flex items-end justify-center sm:items-center sm:p-4">
+    <div className="fixed inset-0 z-[100] flex items-end justify-center px-3 pb-[calc(var(--bottom-nav-inset)+0.5rem)] sm:items-center sm:p-4">
       <button
         type="button"
         aria-label="Close dialog"
@@ -100,7 +100,11 @@ export function MoveTaskDialog({ open, taskId, onClose }: MoveTaskDialogProps) {
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="anim-dialog-in relative flex max-h-[min(82dvh,34rem)] w-full max-w-none flex-col overflow-hidden rounded-t-[24px] border-x border-t border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-lg)] outline-none sm:max-h-[min(90vh,34rem)] sm:max-w-md sm:rounded-2xl sm:border"
+        // Below sm this is a popup that rises out of the bottom bar, sharing the subfolders
+        // sheet's gutter, width cap and clearance so the two sit in exactly the same place. It
+        // used to be a full-bleed sheet pinned to the bottom edge at 82dvh, which covered the bar
+        // and took the whole lower half of the screen to offer a list of six folders.
+        className="anim-dialog-in relative flex max-h-[min(58dvh,26rem)] w-full max-w-md flex-col overflow-hidden rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-lg)] outline-none sm:max-h-[min(90vh,34rem)] sm:rounded-2xl"
       >
         <div className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-[var(--color-border-strong)] sm:hidden" aria-hidden />
         <div className="flex items-center justify-between gap-3 border-b border-[var(--color-border)] px-4 py-3 sm:px-5">

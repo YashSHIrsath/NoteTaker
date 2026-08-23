@@ -1,4 +1,4 @@
-import { useMemo, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 import { GridLayout, useContainerWidth, verticalCompactor, type LayoutItem } from 'react-grid-layout'
 import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
@@ -6,8 +6,20 @@ import './TaskGridCanvas.css'
 import type { Task } from '../../types'
 import { useFolders } from '../../hooks/useFolders'
 import { useCardsPerRow } from '../../hooks/useTileGrid'
+import { useArrivalSide } from '../../hooks/usePageEnterDirection'
 import { GRID_COLS, GRID_MARGIN, GRID_ROW_HEIGHT, buildGridLayout, minWidthFor, snapWidth } from '../../lib/taskGrid'
 import { cn } from '../../lib/cn'
+
+/** Kept only as the value react-grid-layout falls back to; nothing is painted at it. */
+const INITIAL_WIDTH = 1280
+
+/** How much wider the cards start than they end, as a fraction of the canvas.
+ *
+ *  This is the squeeze, and it is deliberately small. It used to be whatever the gap happened to
+ *  be between the library's 1280px guess and the real container — on a phone, nearly a metre of
+ *  travel, which read as the cards being flung across the screen rather than settling. 12% of a
+ *  360px column is ~43px: a card noticeably wider for a moment, and nothing more. */
+const SQUEEZE = 0.12
 
 export interface TaskGridCanvasProps {
   tasks: Task[]
@@ -46,8 +58,61 @@ export interface TaskGridCanvasProps {
  */
 export function TaskGridCanvas({ tasks, children, handleColor, className }: TaskGridCanvasProps) {
   const { updateTaskLayouts } = useFolders()
-  const { width, containerRef } = useContainerWidth({ initialWidth: 1280 })
+  const { width, containerRef, mounted } = useContainerWidth({
+    // Measure before painting anything: the guessed width must never reach the screen, or its
+    // correction becomes an animation of its own on top of the one below.
+    measureBeforeMount: true,
+    initialWidth: INITIAL_WIDTH,
+  })
   const cardsPerRow = useCardsPerRow()
+
+  /**
+   * The arrival squeeze: cards are laid out a little wider than they belong, then settle to their
+   * real size under the grid's own transition — the same width animation as before, just over a
+   * distance chosen here rather than inherited from a placeholder width.
+   *
+   * Two frames of the wider layout, so the browser paints it before the settle begins. One isn't
+   * enough: the style change would land in the same frame and there'd be nothing to transition
+   * from.
+   */
+  const [settled, setSettled] = useState(false)
+  useEffect(() => {
+    if (!mounted || settled) {
+      return
+    }
+    let second = 0
+    const first = requestAnimationFrame(() => {
+      second = requestAnimationFrame(() => setSettled(true))
+    })
+    return () => {
+      cancelAnimationFrame(first)
+      cancelAnimationFrame(second)
+    }
+  }, [mounted, settled])
+
+  const squeezing = mounted && !settled
+  const renderWidth = squeezing ? Math.round(width * (1 + SQUEEZE)) : width
+
+  /**
+   * Which edge the squeeze collapses onto.
+   *
+   * Left to itself it converges on x=0, so the cards always appear to come in from the right.
+   * Arriving from the left, the canvas starts shifted by the same amount the layout is
+   * overwidth and settles back alongside the cards, which lines the wide layout up on its right
+   * edge instead — the same squeeze, converging the other way.
+   */
+  const arriveFrom = useArrivalSide()
+  /**
+   * Played as a keyframe animation, and only once the settle has actually begun.
+   *
+   * Setting the offset as a plain style while a transition sat on the element made it animate
+   * *into* the offset first and then back out of it: the canvas slid left, then right, while the
+   * cards collapsed leftward — a squeeze arriving from both sides at once. An animation has one
+   * direction and one trigger, and adding its class on the same commit the cards start moving
+   * keeps the two together.
+   */
+  const mirrored = arriveFrom === 'left' && settled
+  const mirrorX = Math.round(-width * SQUEEZE)
 
   const layout = useMemo(() => buildGridLayout(tasks, cardsPerRow), [tasks, cardsPerRow])
 
@@ -86,9 +151,22 @@ export function TaskGridCanvas({ tasks, children, handleColor, className }: Task
   }
 
   return (
-    <div ref={containerRef} className={cn('task-grid-canvas relative w-full', className)}>
+    <div
+      ref={containerRef}
+      className={cn(
+        'task-grid-canvas relative w-full',
+        mirrored && 'task-grid-canvas--mirrored',
+        className,
+      )}
+      style={
+        arriveFrom === 'left' ? ({ '--grid-enter-x': `${mirrorX}px` } as CSSProperties) : undefined
+      }
+    >
+      {/* Nothing is rendered until the width is known, so the guessed layout never reaches the
+          screen and there is no relayout to watch. */}
+      {mounted ? (
       <GridLayout
-        width={width}
+        width={renderWidth}
         layout={layout}
         // Only for live feedback mid-resize — it shoves the overlapped neighbour down as you
         // pull. What is actually kept is re-flowed from scratch on release, so whatever this
@@ -128,6 +206,7 @@ export function TaskGridCanvas({ tasks, children, handleColor, className }: Task
           </div>
         ))}
       </GridLayout>
+      ) : null}
     </div>
   )
 }

@@ -5,6 +5,7 @@ import { Sidebar } from '../components/layout/Sidebar'
 import { BottomNav } from '../components/layout/BottomNav'
 import { useFolders } from '../hooks/useFolders'
 import type { SidebarNavId } from '../types'
+import { useTrackNavSection } from '../hooks/usePageEnterDirection'
 
 const SIDEBAR_COLLAPSED_KEY = 'mynotes-sidebar-collapsed'
 
@@ -29,6 +30,11 @@ export function AppLayout() {
       ? getPath(task.folderId)
       : []
   const activeFolderId = folderPath[0]?.id
+  // Every route passes through here, so this is where the section you're leaving gets recorded.
+  // The pages that animate their arrival can only see one section back, and only the sections
+  // that ask — so the asking has to happen for all of them, in one place.
+  useTrackNavSection()
+
   const activeNav: SidebarNavId | undefined =
     location.pathname === '/'
       ? 'tree'

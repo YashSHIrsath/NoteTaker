@@ -15,6 +15,45 @@ import {
 } from './mappers'
 import { loadPersistedUiState, persistUiState, normalizeUiState } from './uiStateStore'
 
+/**
+ * Every column the tasks query reads back.
+ *
+ * A comment used to ask the next person to keep this in step with TaskRow, and twice it wasn't:
+ * a saved card colour came back as "Auto" on reload, and then a resized card came back at its
+ * default size — both written to the database but never selected out of it. The two checks below
+ * make that a compile error instead of a field that quietly resets on the next page load.
+ *
+ * It stays a literal rather than a joined array because supabase-js reads the string as a type:
+ * hand .select() a plain string and the row comes back as GenericStringError[].
+ */
+const TASK_COLUMNS =
+  'id,folder_id,title,content,is_important,is_pinned,sort_order,due_at,remind_before_minutes,status,tags,color,grid_layout'
+
+type SplitColumns<S extends string> = S extends `${infer Head},${infer Rest}`
+  ? Head | SplitColumns<Rest>
+  : S
+
+/** A type error here means TaskRow has a field TASK_COLUMNS doesn't select — it would load as
+ *  undefined and reset to the mapper's default on every reload. */
+const _everyTaskColumnIsSelected: Exclude<
+  keyof TaskRow,
+  SplitColumns<typeof TASK_COLUMNS>
+> extends never
+  ? true
+  : never = true
+
+/** And a type error here means TASK_COLUMNS names a column TaskRow doesn't have, which Postgres
+ *  would reject at query time. */
+const _everySelectedColumnExists: Exclude<
+  SplitColumns<typeof TASK_COLUMNS>,
+  keyof TaskRow
+> extends never
+  ? true
+  : never = true
+
+void _everyTaskColumnIsSelected
+void _everySelectedColumnExists
+
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -62,12 +101,7 @@ export class SupabaseNotesDataRepository implements NotesDataRepository {
           .order('sort_order', { ascending: true }),
         this.client
           .from('tasks')
-          .select(
-            // Explicit column list: every field on TaskRow has to be named here, or it silently
-            // loads as undefined and the mapper falls back to a default — which is how a saved
-            // card color came back as "Auto" on reload.
-            'id,folder_id,title,content,is_important,is_pinned,sort_order,due_at,remind_before_minutes,status,tags,color',
-          )
+          .select(TASK_COLUMNS)
           .order('sort_order', { ascending: true }),
         this.client.from('subtasks').select('id,task_id,parent_subtask_id,title,completed'),
       ])

@@ -16,6 +16,7 @@ import { getImportantTasks } from '../lib/tasks'
 import { categoryVar, getRootCategoryForFolder, scatterCategoryForId } from '../lib/folderColor'
 import { taskColorStyle } from '../lib/taskColor'
 import { readViewStyle } from '../lib/viewStyle'
+import { usePageEnter } from '../hooks/usePageEnterDirection'
 import { cn } from '../lib/cn'
 import { performWithTaskExit } from '../lib/taskExitAnimation'
 import {
@@ -50,6 +51,8 @@ export function ImportantPage() {
   const [activeTag, setActiveTag] = useState<string | null>(null)
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
   const { headerRef, contentRef, condensed } = useFloatingHeader()
+  // Which side this whole view slides in from — the side of the bar you came from.
+  const pageEnter = usePageEnter()
   const importantFolders = getImportantFolders(folders)
   const importantTasks = getImportantTasks(tasks)
   const isEmpty = importantFolders.length === 0 && importantTasks.length === 0
@@ -74,7 +77,12 @@ export function ImportantPage() {
   }
 
   return (
-    <div className="relative flex h-full min-h-0 flex-col">
+    // The animation sits on the whole view, header included, so the page arrives as one piece
+    // rather than as a list sliding around underneath a stationary title.
+    <div
+      className={cn('relative flex h-full min-h-0 flex-col', pageEnter.className)}
+      style={pageEnter.style}
+    >
       <div ref={headerRef} className={FLOATING_HEADER_CLASS}>
         {/* Full header at the top of the page, controls only once it's scrolled — a bar that
             overlays the content shouldn't keep spending its height on a title you've read. */}

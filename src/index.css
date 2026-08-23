@@ -471,6 +471,33 @@ body {
   animation: anim-rise var(--motion-slow) var(--motion-ease) backwards;
 }
 
+/* A page arriving from the side you travelled in from. The bar sits in a row — Tree, Notes,
+   Tasks, Starred, You — so moving rightwards along it brings the next view in from the right,
+   and moving back leftwards mirrors it. One direction for every navigation made the bar and the
+   content disagree about which way you'd just gone.
+
+   The distance is a variable rather than two fixed keyframes: the sign carries the direction and
+   the magnitude carries how far you jumped, so one pair of frames covers every combination. It
+   slides only — no scale — because the view is the same size before and after; scaling it makes
+   the cards read as being squeezed into place rather than as the page moving. */
+@keyframes anim-page-enter {
+  from {
+    opacity: 0;
+    transform: translateX(var(--page-enter-x, 0px));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* `both`, so the first frame is the offset one rather than a flash of the settled page, and the
+   last is transform: none — a lingering transform would make this a containing block for
+   anything fixed inside it. */
+.anim-page-enter {
+  animation: anim-page-enter var(--motion-slow) var(--motion-ease) both;
+}
+
 .anim-loader-bar {
   transform-origin: bottom;
   animation: anim-loader-bar 900ms var(--motion-ease) infinite;
@@ -545,6 +572,7 @@ body.dnd-touch-active {
   .anim-item-in,
   .anim-pop,
   .anim-rise,
+  .anim-page-enter,
   .anim-loader-bar,
   .anim-delayed-in,
   .anim-panel-in,

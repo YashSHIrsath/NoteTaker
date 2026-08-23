@@ -32,6 +32,31 @@
   transition-timing-function: var(--motion-spring);
 }
 
+/* The arrival squeeze collapses onto the edge you came from.
+
+   The cards do the shrinking themselves, under the .react-grid-item transition above — they're
+   laid out a little wide and settle to size, which on its own converges on x=0 and so always
+   reads as arriving from the right. All this adds is the other direction: the canvas starts
+   offset by the same amount the layout is overwidth and settles back alongside the cards, lining
+   the wide layout up on its right edge instead.
+
+   A keyframe animation rather than a transition, because a transition would animate *into* the
+   offset as well as out of it — the canvas sliding one way and then the other while the cards
+   collapsed, which is a squeeze arriving from both sides at once. Same duration and curve as the
+   cards, or the two pull apart mid-flight. */
+@keyframes task-grid-mirror {
+  from {
+    transform: translateX(var(--grid-enter-x, 0px));
+  }
+  to {
+    transform: none;
+  }
+}
+
+.task-grid-canvas--mirrored {
+  animation: task-grid-mirror 340ms var(--motion-spring) both;
+}
+
 /* The card being resized must track the pointer exactly. */
 .task-grid-canvas .react-grid-item.resizing {
   transition: none;
@@ -146,5 +171,9 @@
   .task-grid-canvas .task-grid-cell > *,
   .task-grid-canvas .react-resizable-handle {
     transition: none;
+  }
+
+  .task-grid-canvas--mirrored {
+    animation: none;
   }
 }

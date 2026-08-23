@@ -19,6 +19,7 @@ import { getRootCategoryForFolder, scatterCategoryForId } from '../lib/folderCol
 import { taskColorStyle } from '../lib/taskColor'
 import { focusTaskTitle } from '../lib/focusTaskTitle'
 import { readViewStyle } from '../lib/viewStyle'
+import { usePageEnter } from '../hooks/usePageEnterDirection'
 import { cn } from '../lib/cn'
 
 
@@ -34,6 +35,8 @@ export function AllTasksPage() {
   const [newTaskOpen, setNewTaskOpen] = useState(false)
   // Same floating top bar as the folder view, so the two pages' headers line up.
   const { headerRef, contentRef, condensed } = useFloatingHeader()
+  // Which side this whole view slides in from — the side of the bar you came from.
+  const pageEnter = usePageEnter()
 
   const allTagsInScope = Array.from(new Set(tasks.flatMap((task) => task.tags))).sort()
   const visibleTasks = activeTag ? tasks.filter((task) => task.tags.includes(activeTag)) : tasks
@@ -77,43 +80,60 @@ export function AllTasksPage() {
     )
 
   return (
-    <div className="relative flex h-full min-h-0 flex-col">
+    // The animation sits on the whole view, header included, so the page arrives as one piece
+    // rather than as a list sliding around underneath a stationary title.
+    <div
+      className={cn('relative flex h-full min-h-0 flex-col', pageEnter.className)}
+      style={pageEnter.style}
+    >
       <div ref={headerRef} className={FLOATING_HEADER_CLASS}>
-        {/* Full header at the top of the page, controls only once it's scrolled — a bar that
-            overlays the content shouldn't keep spending its height on a title you've read. */}
-        <div
-          className={cn(
-            COLLAPSIBLE_TITLE_CLASS,
-            condensed ? 'max-h-0 opacity-0' : 'mb-2 max-h-16 opacity-100',
-          )}
-        >
-          <div className="flex min-w-0 items-center gap-3">
-            <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent-soft)] text-[var(--color-accent)] sm:h-9 sm:w-9">
-              <ClipboardList className="h-3.5 w-3.5 sm:h-4 sm:w-4" aria-hidden />
-            </span>
-            <div className="min-w-0 flex-1">
-              <h1
-                className="truncate text-[18px] font-semibold tracking-tight text-[var(--color-text)] sm:text-[22px]"
-                style={{ fontFamily: 'var(--font-display)' }}
-              >
-                Tasks
-              </h1>
-              <p className="mt-0.5 truncate text-[11.5px] text-[var(--color-text-muted)] sm:text-[12.5px]">
-                Plan, prioritise, and keep your work moving.
-              </p>
-            </div>
-          <Button
-            variant="primary"
-            size="sm"
-            className="h-8 shrink-0 sm:h-9"
-            onClick={() => setNewTaskOpen(true)}
+        {/* One row: the title and the controls sit side by side, and only the title half rolls
+            up on scroll. What matters is *what* COLLAPSIBLE_TITLE_CLASS wraps — it collapses
+            everything inside it, so wrapping the whole row (as this page used to) took the New
+            Task button away with the title and left an empty bar hovering over the cards. Wrapped
+            around the title alone, the row keeps its controls and still gives the height back. */}
+        <div className="flex w-full items-center justify-between gap-2 sm:gap-3">
+          <div
+            className={cn(
+              COLLAPSIBLE_TITLE_CLASS,
+              'min-w-0 flex-1',
+              condensed ? 'max-h-0 opacity-0' : 'max-h-16 opacity-100',
+            )}
           >
-            <Plus className="h-4 w-4" aria-hidden />
-            New Task
-          </Button>
-          {allTagsInScope.length > 0 ? (
-            <TagFilterMenu tags={allTagsInScope} activeTag={activeTag} onSelect={setActiveTag} />
-          ) : null}
+            <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+              <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent-soft)] text-[var(--color-accent)] sm:h-9 sm:w-9">
+                <ClipboardList className="h-3.5 w-3.5 sm:h-4 sm:w-4" aria-hidden />
+              </span>
+              <div className="min-w-0 flex-1">
+                {/* Sized to the folder view's title rather than a step larger, so moving between
+                    the two pages doesn't move the heading. */}
+                <h1
+                  className="truncate text-[16px] font-semibold tracking-tight text-[var(--color-text)] sm:text-[20px]"
+                  style={{ fontFamily: 'var(--font-display)' }}
+                >
+                  Tasks
+                </h1>
+                <p className="mt-0.5 truncate text-[11.5px] text-[var(--color-text-muted)] sm:text-[12.5px]">
+                  Plan, prioritise, and keep your work moving.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* The half that survives scrolling. */}
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+            <Button
+              variant="primary"
+              size="sm"
+              className="h-8 sm:h-9"
+              onClick={() => setNewTaskOpen(true)}
+            >
+              <Plus className="h-4 w-4" aria-hidden />
+              New Task
+            </Button>
+            {allTagsInScope.length > 0 ? (
+              <TagFilterMenu tags={allTagsInScope} activeTag={activeTag} onSelect={setActiveTag} />
+            ) : null}
           </div>
         </div>
       </div>
