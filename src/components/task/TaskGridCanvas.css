@@ -1,0 +1,149 @@
+/* Styling for the resizable task canvas. react-grid-layout ships the positioning CSS; this is the
+   part that makes it look like this app rather than like a dashboard tool. */
+
+/* Room under the last row. The canvas has no container padding, so this leaves a normal section
+   gap after the final card without affecting the layout's card positions. */
+.task-grid-canvas {
+  padding-bottom: 1.25rem;
+}
+
+/* An animated grid height makes the scroll range lag behind cards that have already moved. The
+   cards can still animate into their cells; the canvas itself must update immediately. */
+.task-grid-canvas .react-grid-layout {
+  transition: none;
+}
+
+/* A cell is sized by the grid, so the card inside must fill it for resizing to be visible. */
+.task-grid-cell {
+  height: 100%;
+  min-height: 0;
+}
+
+/* The resize handle is injected next to the cell by react-resizable; only the card wrapper should
+   inherit the cell's full height. */
+.task-grid-cell > *:not(.react-resizable-handle) {
+  height: 100%;
+}
+
+/* Notes should settle into position rather than slide like dashboard widgets. */
+.task-grid-canvas .react-grid-item {
+  transition-property: transform, width, height;
+  transition-duration: 340ms;
+  transition-timing-function: var(--motion-spring);
+}
+
+/* The card being resized must track the pointer exactly. */
+.task-grid-canvas .react-grid-item.resizing {
+  transition: none;
+  z-index: 30;
+}
+
+/* Apply lift to the card, not the grid item: the grid owns the item's transform. */
+.task-grid-canvas .task-grid-cell > * {
+  transition: box-shadow 200ms var(--motion-ease);
+}
+
+.task-grid-canvas .react-grid-item.resizing .task-grid-cell > * {
+  box-shadow: var(--shadow-lg);
+}
+
+/* The landing position should be obvious without overpowering the note itself. */
+.task-grid-canvas .react-grid-item.react-grid-placeholder {
+  background: var(--color-accent);
+  opacity: 0.16;
+  border-radius: 1rem;
+  transition-duration: var(--motion-fast);
+}
+
+/* ------------------------------------------------------------ resize handles
+
+   The resizer stays inside the card's rounded corner. The previous outside quarter-arc was
+   visually detached, overlapped the next tile, and was easily clipped at the viewport edge.
+   Three small diagonal dots make the action familiar without competing with the card content.
+   Colour comes from --task-grid-handle, which each coloured view supplies per card. */
+.task-grid-canvas {
+  --grid-handle-size: 16px;
+  --grid-handle-hit: 30px;
+  --grid-handle-inset: 6px;
+}
+
+.task-grid-canvas .react-resizable-handle {
+  position: absolute;
+  width: var(--grid-handle-hit);
+  height: var(--grid-handle-hit);
+  padding: 0;
+  box-sizing: border-box;
+  background: none;
+  box-shadow: none;
+  border: 0;
+  color: var(--task-grid-handle, var(--color-border-strong));
+  opacity: 0.5;
+  cursor: nwse-resize;
+  touch-action: none;
+  transform: none;
+  transition:
+    opacity var(--motion-base) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease);
+  z-index: 4;
+}
+
+/* Match react-grid-layout's SE-handle selector so its default `right: 0; bottom: 0` cannot win
+   on specificity. This centres the hit target around the visible grip, rather than pushing it
+   outside the card. */
+.task-grid-canvas .react-grid-item > .react-resizable-handle.react-resizable-handle-se {
+  right: calc(var(--grid-handle-inset) - (var(--grid-handle-hit) - var(--grid-handle-size)) / 2);
+  bottom: calc(var(--grid-handle-inset) - (var(--grid-handle-hit) - var(--grid-handle-size)) / 2);
+}
+
+/* React-resizable's stock grey wedge lives in ::after. Replace it with an aligned, diagonal
+   three-dot grip while retaining its larger touch target on the handle element. */
+.task-grid-canvas .react-grid-item > .react-resizable-handle::after {
+  content: '';
+  position: absolute;
+  right: calc((var(--grid-handle-hit) - var(--grid-handle-size)) / 2 + 1px);
+  bottom: calc((var(--grid-handle-hit) - var(--grid-handle-size)) / 2 + 1px);
+  width: 3px;
+  height: 3px;
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow:
+    5px -5px currentColor,
+    10px -10px currentColor;
+}
+
+/* Avoid the library's second pseudo-element, which draws its default corner wedge. */
+.task-grid-canvas .react-resizable-handle::before {
+  content: none;
+}
+
+.task-grid-canvas .react-grid-item:hover,
+.task-grid-canvas .react-grid-item:focus-within {
+  z-index: 5;
+}
+
+.task-grid-canvas .react-grid-item:hover .react-resizable-handle,
+.task-grid-canvas .react-grid-item:focus-within .react-resizable-handle,
+.task-grid-canvas .react-resizable-handle:hover,
+.task-grid-canvas .react-grid-item.resizing .react-resizable-handle {
+  opacity: 1;
+}
+
+/* Touch screens have no hover state, so the grip needs to be clear before a finger reaches it. */
+@media (hover: none) {
+  .task-grid-canvas {
+    --grid-handle-hit: 32px;
+    --grid-handle-inset: 7px;
+  }
+
+  .task-grid-canvas .react-resizable-handle {
+    opacity: 0.72;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .task-grid-canvas .react-grid-item,
+  .task-grid-canvas .task-grid-cell > *,
+  .task-grid-canvas .react-resizable-handle {
+    transition: none;
+  }
+}

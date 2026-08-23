@@ -48,6 +48,7 @@ function sampleSnapshot(name: string): AppSnapshot {
         status: null,
         tags: [],
         color: null,
+        gridLayout: null,
         sortOrder: 0,
       },
     ],

@@ -6,14 +6,15 @@ import { StarButton } from '../components/common/StarButton'
 import { RowDeleteButton } from '../components/common/RowDeleteButton'
 import { FolderActions } from '../components/folder/FolderActions'
 import { AllTaskTile } from '../components/task/AllTaskTile'
+import { TaskGridCanvas } from '../components/task/TaskGridCanvas'
 import { TaskEditorDialog } from '../components/task/TaskEditorDialog'
 import { useAuth } from '../hooks/useAuth'
 import { useDeleteTask } from '../hooks/useDeleteTask'
 import { useFolders } from '../hooks/useFolders'
-import { useTileGrid } from '../hooks/useTileGrid'
 import { folderPathLabel, getImportantFolders } from '../lib/folders'
 import { getImportantTasks } from '../lib/tasks'
 import { categoryVar, getRootCategoryForFolder, scatterCategoryForId } from '../lib/folderColor'
+import { taskColorStyle } from '../lib/taskColor'
 import { readViewStyle } from '../lib/viewStyle'
 import { cn } from '../lib/cn'
 import {
@@ -48,7 +49,6 @@ export function ImportantPage() {
   const [activeTag, setActiveTag] = useState<string | null>(null)
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
   const { headerRef, contentRef, condensed } = useFloatingHeader()
-  const tileGrid = useTileGrid()
   const importantFolders = getImportantFolders(folders)
   const importantTasks = getImportantTasks(tasks)
   const isEmpty = importantFolders.length === 0 && importantTasks.length === 0
@@ -224,17 +224,20 @@ export function ImportantPage() {
               {activeTag ? `No important tasks tagged "${activeTag}"` : 'No important tasks'}
             </p>
           ) : viewStyle === 'clipboard' ? (
-            <div className={cn(tileGrid.className, 'mt-3')} style={tileGrid.style}>
-              {visibleImportantTasks.map((task) => (
+            <TaskGridCanvas
+              tasks={visibleImportantTasks}
+              className="mt-3"
+              handleColor={(task) => taskColorStyle(task.color, scatterCategoryForId(task.id)).ink}
+            >
+              {(task) => (
                 <AllTaskTile
-                  key={task.id}
                   taskId={task.id}
                   category={scatterCategoryForId(task.id)}
                   folderLabel={folderPathLabel(folders, task.folderId)}
                   onOpen={() => setOpenTaskId(task.id)}
                 />
-              ))}
-            </div>
+              )}
+            </TaskGridCanvas>
           ) : (
             <div className={CARD_GRID}>
               {visibleImportantTasks.map((task) => {

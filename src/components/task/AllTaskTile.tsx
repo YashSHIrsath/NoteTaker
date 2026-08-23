@@ -3,28 +3,22 @@ import {
   useLayoutEffect,
   useRef,
   useState,
-  type DragEvent,
   type MouseEvent,
-  type PointerEvent as ReactPointerEvent,
 } from 'react'
-import { ChevronRight, Pin } from 'lucide-react'
+import { ChevronRight, FolderInput, Pin } from 'lucide-react'
 import type { Attachment } from '../../types'
 import type { FolderCategory } from '../../lib/folderColor'
 import { taskColorStyle } from '../../lib/taskColor'
 import { formatDueDate } from '../../lib/dueDate'
 import { findBlockAttachmentId, referencedAttachmentIds } from '../../lib/blockNoteContent'
 import { useFolders } from '../../hooks/useFolders'
-import { useItemDnd } from '../../context/ItemDndContext'
 import { AttachmentPreviewDialog } from '../attachment/AttachmentPreviewDialog'
 import { TaskColorButton } from './TaskColorButton'
+import { MoveTaskDialog } from './MoveTaskDialog'
 import { TaskTagsPill } from './TaskTagsPill'
 import { AttachmentTypeIcon, attachmentSortRank } from '../attachment/AttachmentTypeIcon'
 import { TaskContentPreview } from './TaskContentPreview'
 import { cn } from '../../lib/cn'
-
-const DRAG_TYPE = 'text/plain'
-/** Hold before a touch on a tile becomes a drag rather than a tap or a scroll. */
-const TOUCH_HOLD_MS = 320
 
 /**
  * Column count comes from the space actually available: auto-fill fits as many columns as the
@@ -61,13 +55,12 @@ export interface AllTaskTileProps {
  *  contains. Fixed in pixels rather than as an aspect ratio on purpose: an aspect ratio ties height
  *  to column width, which is what turned these into tall empty squares on a wide screen. */
 export function AllTaskTile({ taskId, category, folderLabel, onOpen }: AllTaskTileProps) {
-  const { getTask, getAttachmentsForTask, updateTaskColor, reorderSiblingTasks, moveTaskToFolder } =
+  const { getTask, getAttachmentsForTask, updateTaskColor } =
     useFolders()
-  const { dragging, dropHint, getDragging, beginDrag, updateDropHint, endDrag, startPointerDrag, isPointerDragging } =
-    useItemDnd()
   const [isOverflowing, setIsOverflowing] = useState(false)
   const [attachmentsScrollable, setAttachmentsScrollable] = useState(false)
   const [previewAttachment, setPreviewAttachment] = useState<Attachment | null>(null)
+  const [moveOpen, setMoveOpen] = useState(false)
   const bodyRef = useRef<HTMLDivElement>(null)
   const attachmentsRef = useRef<HTMLDivElement>(null)
 
@@ -119,65 +112,6 @@ export function AllTaskTile({ taskId, category, folderLabel, onOpen }: AllTaskTi
   }
 
   const folderId = task?.folderId ?? null
-  const isDragging = dragging?.kind === 'task' && dragging.itemId === taskId
-  // Tiles sit in a grid, so the insertion point reads as a vertical edge — left or right of the
-  // tile under the pointer — rather than the above/below a single-column list uses.
-  const hint = dropHint?.kind === 'task' && dropHint.itemId === taskId ? dropHint.position : null
-
-  const dropPositionFrom = (clientX: number, element: HTMLElement): 'before' | 'after' => {
-    const rect = element.getBoundingClientRect()
-    return clientX < rect.left + rect.width / 2 ? 'before' : 'after'
-  }
-
-  const isOtherTaskInSameFolder = (session: ReturnType<typeof getDragging>) =>
-    session !== null && session.kind === 'task' && session.itemId !== taskId && session.groupId === folderId
-
-  const handleDragStart = (event: DragEvent<HTMLDivElement>) => {
-    event.dataTransfer.effectAllowed = 'move'
-    event.dataTransfer.setData(DRAG_TYPE, taskId)
-    beginDrag({ kind: 'task', itemId: taskId, groupId: folderId })
-  }
-
-  const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
-    if (!isOtherTaskInSameFolder(getDragging())) {
-      return
-    }
-    event.preventDefault()
-    updateDropHint({
-      kind: 'task',
-      itemId: taskId,
-      position: dropPositionFrom(event.clientX, event.currentTarget),
-    })
-  }
-
-  const handleDrop = (event: DragEvent<HTMLDivElement>) => {
-    const session = getDragging()
-    if (!isOtherTaskInSameFolder(session)) {
-      // Not a same-folder reorder — leave the event to bubble to whatever ancestor can handle it.
-      return
-    }
-    event.preventDefault()
-    reorderSiblingTasks(session!.itemId, taskId, dropPositionFrom(event.clientX, event.currentTarget))
-    endDrag()
-  }
-
-  const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (folderId === null) {
-      return
-    }
-    // A hold on one of the tile's own controls (the color swatch, an attachment chip) belongs to
-    // that control. The tile body is a role="button" div, not a <button>, so it still drags.
-    if ((event.target as HTMLElement).closest('button, a, input, textarea, label')) {
-      return
-    }
-    startPointerDrag(
-      event,
-      { kind: 'task', itemId: taskId, groupId: folderId },
-      { reorder: reorderSiblingTasks, moveToZone: (zoneId) => moveTaskToFolder(taskId, zoneId) },
-      { holdMs: TOUCH_HOLD_MS },
-    )
-  }
-
   const scrollAttachments = (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation()
     attachmentsRef.current?.scrollBy({ left: 88, behavior: 'smooth' })
@@ -185,34 +119,11 @@ export function AllTaskTile({ taskId, category, folderLabel, onOpen }: AllTaskTi
 
   return (
     <Fragment>
-    {/* The drop indicator and the drag wiring live on a wrapper so the tile itself keeps its own
-        rounding and overflow clipping — a border on the tile would shift its contents. */}
-    <div
-      draggable={folderId !== null}
-      onDragStart={handleDragStart}
-      onDragOver={handleDragOver}
-      onDrop={handleDrop}
-      onDragEnd={() => endDrag()}
-      onPointerDown={handlePointerDown}
-      data-dnd-item={taskId}
-      data-dnd-kind="task"
-      data-dnd-group={folderId ?? ''}
-      className={cn(
-        'h-full rounded-2xl border-x-2 border-transparent',
-        hint === 'before' && 'border-l-[var(--color-accent)]',
-        hint === 'after' && 'border-r-[var(--color-accent)]',
-      )}
-    >
+    <div className="h-full rounded-2xl">
     <div
       role="button"
       tabIndex={0}
-      onClick={() => {
-        // A touch drag ends with a click on the tile it was dropped on; that shouldn't open it.
-        if (isPointerDragging()) {
-          return
-        }
-        onOpen()
-      }}
+      onClick={onOpen}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault()
@@ -220,8 +131,8 @@ export function AllTaskTile({ taskId, category, folderLabel, onOpen }: AllTaskTi
         }
       }}
       className={cn(
-        'anim-item-in group flex h-[248px] w-full flex-col overflow-hidden rounded-2xl p-3 text-left transition-transform hover:-translate-y-0.5 hover:shadow-[var(--shadow-md)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/40 sm:h-[268px] sm:p-3.5',
-        isDragging && 'opacity-60 ring-2 ring-[var(--color-accent)]',
+        // Fills the grid cell rather than setting its own height — the canvas owns the size.
+        'anim-item-in group flex h-full min-h-0 w-full flex-col overflow-hidden rounded-2xl p-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/40 sm:p-3.5',
       )}
       style={{ background: colors.card }}
     >
@@ -245,6 +156,22 @@ export function AllTaskTile({ taskId, category, folderLabel, onOpen }: AllTaskTi
         ) : null}
         {/* Tags live here as a count, opening on click — see TaskTagsPill. */}
         <TaskTagsPill tags={task.tags} ink={ink} />
+        {/* Dragging a tile now places it on the canvas, so this is how a note changes folder. */}
+        {folderId ? (
+          <button
+            type="button"
+            aria-label={`Move ${task.title.trim() || 'note'} to another folder`}
+            title="Move to folder"
+            onClick={(event) => {
+              event.stopPropagation()
+              setMoveOpen(true)
+            }}
+            className="anim-press inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-black/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/40"
+            style={{ color: ink }}
+          >
+            <FolderInput className="h-3.5 w-3.5" aria-hidden />
+          </button>
+        ) : null}
         <TaskColorButton
           compact
           activeColor={colors.solid}
@@ -335,6 +262,7 @@ export function AllTaskTile({ taskId, category, folderLabel, onOpen }: AllTaskTi
       ) : null}
     </div>
     </div>
+    <MoveTaskDialog open={moveOpen} taskId={taskId} onClose={() => setMoveOpen(false)} />
     <AttachmentPreviewDialog attachment={previewAttachment} onClose={() => setPreviewAttachment(null)} />
     </Fragment>
   )

@@ -1,24 +1,28 @@
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Folder, FolderTree, Kanban, LayoutList, Pin, Plus } from 'lucide-react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import type { Folder as FolderRecord, Task } from '../../types'
 import { Button } from '../ui/Button'
 import { IconButton } from '../ui/IconButton'
-import { useTileGrid } from '../../hooks/useTileGrid'
 import { FolderBreadcrumb } from './FolderBreadcrumb'
 import { FolderSidePanel } from './FolderSidePanel'
 import { FolderBoardView } from './FolderBoardView'
 import { CreateFolderDialog } from './CreateFolderDialog'
 import { TaskCard } from '../task/TaskCard'
 import { AllTaskTile } from '../task/AllTaskTile'
+import { TaskGridCanvas } from '../task/TaskGridCanvas'
 import { TaskEditorDialog } from '../task/TaskEditorDialog'
 import { useFolders } from '../../hooks/useFolders'
 import { useAuth } from '../../hooks/useAuth'
+import { useIsCompact } from '../../hooks/useMediaQuery'
+import { useAnchoredPanel } from '../../hooks/useAnchoredPanel'
 import { cn } from '../../lib/cn'
 import { StarButton } from '../common/StarButton'
 import { FolderActions } from './FolderActions'
 import { TagFilterMenu } from './TagFilterMenu'
 import { categoryVar, getRootCategoryForFolder, scatterCategoryForId } from '../../lib/folderColor'
+import { taskColorStyle } from '../../lib/taskColor'
 import { focusTaskTitle } from '../../lib/focusTaskTitle'
 import { readViewStyle } from '../../lib/viewStyle'
 import {
@@ -39,6 +43,7 @@ export interface FolderViewProps {
 type ViewMode = 'list' | 'board'
 
 const NEW_TASK_TITLE = 'New note'
+const SUBFOLDER_PANEL_WIDTH = 304
 
 export function FolderView({
   folder,
@@ -55,10 +60,11 @@ export function FolderView({
   )
   const [viewMode, setViewMode] = useState<ViewMode>('list')
   const [activeTag, setActiveTag] = useState<string | null>(null)
+  const isCompact = useIsCompact()
+  const subfolderPanel = useAnchoredPanel<HTMLDivElement>(SUBFOLDER_PANEL_WIDTH)
   // Below lg the folder header floats over the scrolling content instead of taking a band of its
   // own; the hook measures it so the content can leave that much room clear.
   const { headerRef, contentRef, condensed } = useFloatingHeader()
-  const tileGrid = useTileGrid()
   const navigate = useNavigate()
   const location = useLocation()
   const { folders, getForest, getTasksInFolder, toggleFolderImportant } = useFolders()
@@ -85,6 +91,7 @@ export function FolderView({
   const effectiveViewMode: ViewMode = childFolders.length === 0 ? 'list' : viewMode
 
   const openChildFolder = (folderId: string) => {
+    subfolderPanel.setOpen(false)
     navigate(`/folder/${folderId}`)
   }
 
@@ -117,31 +124,32 @@ export function FolderView({
 
   const renderTaskGrid = (taskList: Task[]) =>
     viewStyle === 'clipboard' ? (
-      <div className={tileGrid.className} style={tileGrid.style}>
-        {taskList.map((task) => (
+      <TaskGridCanvas
+        tasks={taskList}
+        className="mt-3"
+        handleColor={(task) => taskColorStyle(task.color, scatterCategoryForId(task.id)).ink}
+      >
+        {(task) => (
           <AllTaskTile
             key={task.id}
             taskId={task.id}
             category={scatterCategoryForId(task.id)}
             onOpen={() => setOpenTaskId(task.id)}
           />
-        ))}
-      </div>
+        )}
+      </TaskGridCanvas>
     ) : (
-      // The same grid the tiles use, so "tiles per row" means the same thing in both styles; a
-      // masonry column layout could never honour a column count the user picked.
-      <div className={tileGrid.className} style={tileGrid.style}>
-        {taskList.map((task) => (
-          <div key={task.id}>
-            <TaskCard
+      // The same canvas the tiles use, so a card keeps its place and size whichever style is on.
+      <TaskGridCanvas tasks={taskList} className="mt-3">
+        {(task) => (
+          <TaskCard
               taskId={task.id}
               title={task.title}
               category={category}
-              onOpen={() => setOpenTaskId(task.id)}
-            />
-          </div>
-        ))}
-      </div>
+            onOpen={() => setOpenTaskId(task.id)}
+          />
+        )}
+      </TaskGridCanvas>
     )
 
   const handleCreateTask = () => {
@@ -188,14 +196,27 @@ export function FolderView({
                 />
               </div>
 
-              <div className="flex shrink-0 items-center gap-1">
+              <div ref={subfolderPanel.anchorRef} className="flex shrink-0 items-center gap-1">
                 <FolderActions folderId={folder.id} folderName={folder.name} />
                 {effectiveViewMode === 'list' ? (
                   <IconButton
-                    label={foldersPanelOpen ? 'Hide subfolders' : 'Browse subfolders'}
-                    aria-pressed={foldersPanelOpen}
-                    onClick={() => setFoldersPanelOpen((open) => !open)}
-                    className={cn(foldersPanelOpen && 'bg-[var(--color-hover)] text-[var(--color-text)]')}
+                    label={
+                      (isCompact ? subfolderPanel.open : foldersPanelOpen)
+                        ? 'Hide subfolders'
+                        : 'Browse subfolders'
+                    }
+                    aria-pressed={isCompact ? subfolderPanel.open : foldersPanelOpen}
+                    onClick={() => {
+                      if (isCompact) {
+                        subfolderPanel.setOpen((open) => !open)
+                        return
+                      }
+                      setFoldersPanelOpen((open) => !open)
+                    }}
+                    className={cn(
+                      (isCompact ? subfolderPanel.open : foldersPanelOpen) &&
+                        'bg-[var(--color-hover)] text-[var(--color-text)]',
+                    )}
                   >
                     <FolderTree className="h-5 w-5" />
                   </IconButton>
@@ -255,7 +276,7 @@ export function FolderView({
         {effectiveViewMode === 'board' ? (
           <div
             ref={contentRef}
-            className="min-h-0 flex-1 overflow-y-auto px-3 pb-28 sm:px-6 lg:pb-5"
+            className="min-h-0 flex-1 overflow-y-auto px-4 pb-28 sm:px-6 lg:pb-5"
           >
             {allTagsInScope.length > 0 ? (
               <div className="mt-3 sm:mt-4">
@@ -272,7 +293,7 @@ export function FolderView({
         ) : (
           <div
             ref={contentRef}
-            className="min-h-0 flex-1 overflow-y-auto bg-[var(--color-surface-muted)] px-3 pb-28 sm:px-6 lg:pb-5"
+            className="min-h-0 flex-1 overflow-y-auto bg-[var(--color-surface-muted)] px-4 pb-28 sm:px-6 lg:pb-5"
           >
             {allTagsInScope.length > 0 ? (
               <div className="mt-3 sm:mt-4">
@@ -280,7 +301,7 @@ export function FolderView({
               </div>
             ) : null}
             {pinnedTasks.length > 0 ? (
-              <section className="mt-3 sm:mt-6">
+              <section className="mt-2 sm:mt-6">
                 <h2 className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-accent)]/30 bg-[var(--color-accent-soft)] px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-accent)] sm:px-3 sm:py-1 sm:text-xs">
                   <Pin className="h-3 w-3 fill-current" aria-hidden />
                   Pinned tasks
@@ -289,7 +310,7 @@ export function FolderView({
               </section>
             ) : null}
 
-            <section className="mt-4 sm:mt-6">
+            <section className="mt-2 sm:mt-6">
               <h2 className="inline-flex items-center rounded-full border border-[var(--color-border)] bg-[var(--color-hover)] px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)] sm:px-3 sm:py-1 sm:text-xs">
                 Tasks
               </h2>
@@ -321,51 +342,31 @@ export function FolderView({
             className={cn('hidden lg:flex', !foldersPanelOpen && 'lg:hidden')}
           />
 
-          <div
-            className={cn(
-              // fixed (not absolute) — this has to pin to the actual viewport, not to
-              // whatever height this flex ancestor happens to compute to.
-              'fixed inset-0 z-20 lg:hidden',
-              foldersPanelOpen ? 'pointer-events-auto' : 'pointer-events-none',
-            )}
-            aria-hidden={!foldersPanelOpen}
-          >
-            <button
-              type="button"
-              aria-label="Close folders"
-              className={cn(
-                'absolute inset-0 bg-black/40 transition-opacity duration-[var(--motion-slow)]',
-                '[transition-timing-function:var(--motion-ease)] motion-reduce:transition-none',
-                foldersPanelOpen ? 'opacity-100' : 'opacity-0',
-              )}
-              onClick={() => setFoldersPanelOpen(false)}
-            />
-            <FolderSidePanel
-              folders={childFolders}
-              currentFolderId={folder.id}
-              forest={forest}
-              locationPathIds={locationPathIds}
-              onSelectFolder={openChildFolder}
-              onCreateFolder={() => setFolderDialogOpen(true)}
-              variant="sheet"
-              className={cn(
-                // Stops above the bottom bar rather than sliding under it — at bottom-0 the bar
-                // (z-40, and floating over everything) covered the sheet's own header and its
-                // "know where you are" row, which is what you most wanted to reach.
-                'absolute bottom-[calc(var(--bottom-nav-inset)+0.5rem)] z-10',
-                // The bar's gutter and width cap, so the two line up edge to edge.
-                'inset-x-3 mx-auto max-w-md',
-                // Grown from its bottom edge — i.e. out of the bar sitting right below it —
-                // rather than slid up from off-screen, on the overshooting curve so it settles
-                // with a small bounce.
-                'origin-bottom transition-[transform,opacity] duration-[var(--motion-slow)]',
-                '[transition-timing-function:var(--motion-spring)] motion-reduce:transition-none',
-                foldersPanelOpen
-                  ? 'translate-y-0 scale-100 opacity-100'
-                  : 'pointer-events-none translate-y-4 scale-95 opacity-0',
-              )}
-            />
-          </div>
+          {subfolderPanel.open && subfolderPanel.position
+            ? createPortal(
+                <div
+                  ref={subfolderPanel.panelRef}
+                  role="dialog"
+                  aria-label="Subfolders"
+                  className="anim-panel-in fixed z-50 w-[19rem] max-w-[calc(100vw-1rem)] lg:hidden"
+                  style={{ top: subfolderPanel.position.top, left: subfolderPanel.position.left }}
+                >
+                  <FolderSidePanel
+                    folders={childFolders}
+                    currentFolderId={folder.id}
+                    forest={forest}
+                    locationPathIds={locationPathIds}
+                    onSelectFolder={openChildFolder}
+                    onCreateFolder={() => {
+                      subfolderPanel.setOpen(false)
+                      setFolderDialogOpen(true)
+                    }}
+                    variant="popover"
+                  />
+                </div>,
+                document.body,
+              )
+            : null}
 
           {!foldersPanelOpen ? (
             <div className="hidden h-full shrink-0 flex-col items-center border-l border-[var(--color-border)] bg-[var(--color-surface-muted)] px-1.5 py-3 lg:flex">

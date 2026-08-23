@@ -203,7 +203,7 @@ export function SignupPage() {
             type="text"
             name="name"
             autoComplete="name"
-            placeholder="Yash Shirsath"
+            placeholder="Your Name"
             value={fullName}
             onChange={(event) => setFullName(event.target.value)}
             required

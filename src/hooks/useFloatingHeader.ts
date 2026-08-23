@@ -52,6 +52,32 @@ export function useFloatingHeader(): FloatingHeader {
   const contentNodeRef = useRef<HTMLDivElement | null>(null)
   const [condensed, setCondensed] = useState(false)
 
+  /**
+   * The tallest the header has been, which is the clearance every state reserves.
+   *
+   * Reserving only the *current* height is what made a barely-scrollable page unscrollable: scroll
+   * past the threshold, the title rolls up, the clearance shrinks with it, and the page loses ~30px
+   * of height. If that took it under the viewport the browser clamped scrollTop back to 0 — which
+   * is below the expand threshold, so the title rolled back down, the page became scrollable
+   * again, and the next scroll repeated the whole thing. From the outside: scrolling down snaps you
+   * to the top, forever, until the content is tall enough to survive losing those 30px.
+   *
+   * Holding the expanded height costs a little empty space above a condensed header and cannot
+   * feed back into the scroll position, because the content's height no longer depends on it.
+   */
+  const reservedRef = useRef(0)
+
+  const clearance = (header: HTMLElement) => {
+    reservedRef.current = Math.max(reservedRef.current, header.offsetHeight)
+    return reservedRef.current + 16
+  }
+
+  // A header that genuinely changes shape (a tag row appearing, a different page) should not be
+  // stuck with the tallest clearance any previous one needed.
+  useLayoutEffect(() => {
+    reservedRef.current = 0
+  }, [isCompact])
+
   // The clearance is written straight to the node instead of going through state. The header
   // changes height for a fifth of a second every time the title rolls up, and a ResizeObserver
   // feeding that into React re-rendered a whole page of cards on every frame of the animation —
@@ -66,7 +92,7 @@ export function useFloatingHeader(): FloatingHeader {
       if (!content) {
         return
       }
-      content.style.paddingTop = isCompact ? `${header.offsetHeight + 16}px` : ''
+      content.style.paddingTop = isCompact ? `${clearance(header)}px` : ''
     }
     apply()
     if (!isCompact) {
@@ -92,7 +118,7 @@ export function useFloatingHeader(): FloatingHeader {
     }
     const header = headerRef.current
     if (header) {
-      node.style.paddingTop = `${header.offsetHeight + 16}px`
+      node.style.paddingTop = `${clearance(header)}px`
     }
     const onScroll = () => {
       // A functional update that returns the current value doesn't re-render, so this runs on

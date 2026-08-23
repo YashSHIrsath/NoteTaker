@@ -5,9 +5,9 @@ import {
   Camera,
   Check,
   ClipboardList,
+  LayoutGrid,
   FileText,
   Folder,
-  LayoutGrid,
   LogOut,
   Sparkles,
   User as UserIcon,
@@ -229,6 +229,7 @@ export function ProfilePage() {
   const viewStyle = readViewStyle(user?.user_metadata as Record<string, unknown> | undefined)
   const tilesPerRow = readTilesPerRow(user?.user_metadata as Record<string, unknown> | undefined)
   const maxTilesPerRow = useMaxTilesPerRow()
+  const effectivePerRow = tilesPerRow === 'auto' ? maxTilesPerRow : Math.min(tilesPerRow, maxTilesPerRow)
 
   const changeTilesPerRow = async (next: TilesPerRow) => {
     if (next === tilesPerRow) {
@@ -250,8 +251,6 @@ export function ProfilePage() {
 
   const initial = (fullName || user.email || 'Y').charAt(0).toUpperCase()
   const dirty = fullName.trim() !== (metadata.full_name ?? '')
-  // Auto shows what auto is currently doing, rather than nothing.
-  const previewTiles = tilesPerRow === 'auto' ? maxTilesPerRow : Math.min(tilesPerRow, maxTilesPerRow)
 
   const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -550,24 +549,24 @@ export function ProfilePage() {
           </div>
         </Card>
 
-        {/* -------------------------------------------------------- tiles per row */}
+        {/* ------------------------------------------------------- smallest card */}
         <Card order={3}>
           <CardTitle icon={<LayoutGrid className="h-3.5 w-3.5" aria-hidden />} category="teal">
-            Tiles per row
+            Cards per row
           </CardTitle>
           <p className="mt-3 text-[12.5px] leading-relaxed text-[var(--color-text-muted)]">
-            How many note tiles sit side by side on Tasks, Important and the folder views. Auto fits
-            as many as the screen can actually carry. The counts offered are the ones this screen can
-            hold and still leave a tile readable — a wider display offers more.
+            How small a card is allowed to get on the grid. At 2, a card can never be narrower than
+            half the width; at 4, never narrower than a quarter. It's a floor, not a fixed size —
+            any card can still be pulled wider, right up to the full width, and dragged wherever you
+            want it. Auto uses as many as this screen can fit and still leave a card readable.
           </p>
 
-          {/* A live miniature of the choice. The pills are abstract on their own — a number tells
-              you nothing about how the grid will feel — and this costs one row to answer it. */}
+          {/* A live miniature of the choice: how wide the smallest card can be. */}
           <div
             className="mt-3.5 flex gap-1.5 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-2.5"
             aria-hidden
           >
-            {Array.from({ length: previewTiles }, (_, index) => (
+            {Array.from({ length: effectivePerRow }, (_, index) => (
               <span
                 key={index}
                 className="anim-item-in h-9 flex-1 rounded-lg"
@@ -622,7 +621,7 @@ export function ProfilePage() {
 
           {typeof tilesPerRow === 'number' && tilesPerRow > maxTilesPerRow ? (
             <p className="mt-3 text-[12px] leading-relaxed text-[var(--color-text-muted)]">
-              Your saved {tilesPerRow} per row needs a wider screen, so this one is showing{' '}
+              Your saved {tilesPerRow} per row needs a wider screen, so this one is using{' '}
               {maxTilesPerRow}. The choice is kept — it comes back on a display that can hold it.
             </p>
           ) : null}

@@ -1,5 +1,5 @@
 import { NOTES_STORAGE_VERSION } from '../../services/storage/types'
-import type { Attachment, AttachmentType, Folder, Subtask, Task, TaskStatus } from '../../types'
+import type { Attachment, AttachmentType, Folder, Subtask, Task, TaskGridLayout, TaskStatus } from '../../types'
 import { isTaskColor } from '../../lib/taskColor'
 import type { AppSnapshot, UiState } from '../types'
 
@@ -24,6 +24,7 @@ export interface TaskRow {
   status: string | null
   tags: string[]
   color: string | null
+  grid_layout: unknown
 }
 
 export interface SubtaskRow {
@@ -68,6 +69,7 @@ export function taskFromRow(row: TaskRow): Task {
     status: isTaskStatus(row.status) ? row.status : null,
     tags: Array.isArray(row.tags) ? row.tags : [],
     color: isTaskColor(row.color) ? row.color : null,
+    gridLayout: toGridLayout(row.grid_layout),
   }
 }
 
@@ -85,7 +87,21 @@ export function taskToRow(task: Task): TaskRow {
     status: task.status,
     tags: task.tags,
     color: task.color,
+    grid_layout: task.gridLayout,
   }
+}
+
+/** jsonb comes back as `unknown`, and a hand-edited or half-written row shouldn't crash a load —
+ *  anything that isn't four finite numbers is treated as "never placed". */
+function toGridLayout(value: unknown): TaskGridLayout | null {
+  if (typeof value !== 'object' || value === null) {
+    return null
+  }
+  const { x, y, w, h } = value as Record<string, unknown>
+  if (![x, y, w, h].every((n) => typeof n === 'number' && Number.isFinite(n))) {
+    return null
+  }
+  return { x: x as number, y: y as number, w: w as number, h: h as number }
 }
 
 function isTaskStatus(value: string | null): value is TaskStatus {

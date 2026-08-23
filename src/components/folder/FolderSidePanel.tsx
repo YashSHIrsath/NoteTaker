@@ -16,12 +16,8 @@ export interface FolderSidePanelProps {
   onSelectFolder: (folderId: string) => void
   onCreateFolder: () => void
   className?: string
-  /** 'sidebar' (default): a full-height column, docked to the right on desktop. 'sheet': a
-   *  floating card sized to its own content instead of forcing full viewport height — used on
-   *  mobile, where a full-height right-docked panel leaves most of it empty. It sits above the
-   *  bottom bar and borrows its glass, so it reads as the bar opening up rather than as a
-   *  separate surface sliding over it. */
-  variant?: 'sidebar' | 'sheet'
+  /** 'sidebar' is the desktop column; the compact variants are bounded floating panels. */
+  variant?: 'sidebar' | 'sheet' | 'popover'
 }
 
 export function FolderSidePanel({
@@ -37,17 +33,19 @@ export function FolderSidePanel({
   const [locationOpen, setLocationOpen] = useState(false)
   const { folders: allFolders } = useFolders()
   const isSheet = variant === 'sheet'
+  const isFloating = isSheet || variant === 'popover'
 
   return (
     <aside
       className={cn(
         'flex flex-col',
-        isSheet
+        isFloating
           ? [
-              // Rounded on every corner and bordered all round: it floats clear of the screen
-              // edge now, so a top-only treatment would leave three raw edges.
-              'max-h-[60vh] w-full overflow-y-auto rounded-3xl',
-              // The bottom bar's own glass, so the two read as one piece of material.
+              // Bound the floating panel to the visual viewport so both its list and location
+              // control remain reachable on a short screen.
+              'max-h-[min(60dvh,30rem)] w-full overflow-hidden',
+              isSheet ? 'rounded-3xl' : 'rounded-2xl',
+              // Shares the app's floating-surface treatment in either compact presentation.
               'border border-[var(--color-border)]/70 bg-[var(--color-surface)]/80 backdrop-blur-xl',
               'shadow-[var(--shadow-lg)]',
               'supports-[backdrop-filter:blur(0px)]:bg-[var(--color-surface)]/70',
@@ -61,7 +59,7 @@ export function FolderSidePanel({
           <span className="h-1 w-9 rounded-full bg-[var(--color-border-strong)]" aria-hidden />
         </div>
       ) : null}
-      <div className={cn('flex min-h-0 flex-col', isSheet ? 'shrink-0' : 'flex-1')}>
+      <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex items-center justify-between gap-2 px-3 py-3">
           <h2 className="inline-flex items-center rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
             Folders
@@ -72,7 +70,7 @@ export function FolderSidePanel({
           </Button>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-3">
           {folders.length === 0 ? (
             <p className="px-2.5 text-sm text-[var(--color-text-muted)]">No folders</p>
           ) : (

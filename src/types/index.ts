@@ -20,6 +20,14 @@ export type TaskStatus = 'pending' | 'ongoing' | 'complete'
  * A note/workspace that belongs to a folder via folderId.
  * It is not a folder, has no child folders, and is not a navigation container.
  */
+/** A card's place on the resizable grid: column, row, and size in grid units. */
+export interface TaskGridLayout {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
 export interface Task {
   id: string
   title: string
@@ -30,6 +38,12 @@ export interface Task {
   /** Pinned tasks surface in a dedicated section at the top of their folder's task list. */
   isPinned: boolean
   sortOrder: number
+  /**
+   * Saved position and size on the resizable grid. Null until the card is actually dragged or
+   * resized — an unplaced card falls back to flow order (sortOrder) at the default size, which is
+   * also what every card looked like before the grid existed.
+   */
+  gridLayout: TaskGridLayout | null
   /** ISO timestamp. Null when the task has no due date. */
   dueAt: string | null
   /** Minutes before dueAt to send the reminder email. Null means "at the due time". */

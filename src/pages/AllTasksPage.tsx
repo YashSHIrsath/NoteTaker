@@ -3,19 +3,20 @@ import { ClipboardList, Pin, Plus } from 'lucide-react'
 import type { Task } from '../types'
 import { TagFilterMenu } from '../components/folder/TagFilterMenu'
 import { AllTaskTile } from '../components/task/AllTaskTile'
+import { TaskGridCanvas } from '../components/task/TaskGridCanvas'
 import { NewTaskDialog } from '../components/task/NewTaskDialog'
 import { TaskCard } from '../components/task/TaskCard'
 import { TaskEditorDialog } from '../components/task/TaskEditorDialog'
 import { Button } from '../components/ui/Button'
 import { useAuth } from '../hooks/useAuth'
 import { useFolders } from '../hooks/useFolders'
-import { useTileGrid } from '../hooks/useTileGrid'
 import {
   COLLAPSIBLE_TITLE_CLASS,
   FLOATING_HEADER_CLASS,
   useFloatingHeader,
 } from '../hooks/useFloatingHeader'
 import { getRootCategoryForFolder, scatterCategoryForId } from '../lib/folderColor'
+import { taskColorStyle } from '../lib/taskColor'
 import { focusTaskTitle } from '../lib/focusTaskTitle'
 import { readViewStyle } from '../lib/viewStyle'
 import { cn } from '../lib/cn'
@@ -33,7 +34,6 @@ export function AllTasksPage() {
   const [newTaskOpen, setNewTaskOpen] = useState(false)
   // Same floating top bar as the folder view, so the two pages' headers line up.
   const { headerRef, contentRef, condensed } = useFloatingHeader()
-  const tileGrid = useTileGrid()
 
   const allTagsInScope = Array.from(new Set(tasks.flatMap((task) => task.tags))).sort()
   const visibleTasks = activeTag ? tasks.filter((task) => task.tags.includes(activeTag)) : tasks
@@ -44,8 +44,11 @@ export function AllTasksPage() {
 
   const renderTaskGrid = (taskList: Task[]) =>
     viewStyle === 'clipboard' ? (
-      <div className={tileGrid.className} style={tileGrid.style}>
-        {taskList.map((task) => (
+      <TaskGridCanvas
+        tasks={taskList}
+        handleColor={(task) => taskColorStyle(task.color, scatterCategoryForId(task.id)).ink}
+      >
+        {(task) => (
           <AllTaskTile
             key={task.id}
             taskId={task.id}
@@ -53,26 +56,23 @@ export function AllTasksPage() {
             folderLabel={folderNameFor(task.folderId)}
             onOpen={() => setOpenTaskId(task.id)}
           />
-        ))}
-      </div>
+        )}
+      </TaskGridCanvas>
     ) : (
-      // The same grid the tiles use, so "tiles per row" means the same thing in both styles; a
-      // masonry column layout could never honour a column count the user picked.
-      <div className={tileGrid.className} style={tileGrid.style}>
-        {taskList.map((task) => (
-          <div key={task.id}>
-            <TaskCard
+      // The same canvas the tiles use, so a card keeps its place and size whichever style is on.
+      <TaskGridCanvas tasks={taskList}>
+        {(task) => (
+          <TaskCard
               taskId={task.id}
               title={task.title}
               // This page mixes folders, so a card takes the color of its own folder's root
               // rather than one page-wide category.
               category={getRootCategoryForFolder(folders, task.folderId)}
               folderLabel={folderNameFor(task.folderId)}
-              onOpen={() => setOpenTaskId(task.id)}
-            />
-          </div>
-        ))}
-      </div>
+            onOpen={() => setOpenTaskId(task.id)}
+          />
+        )}
+      </TaskGridCanvas>
     )
 
   return (

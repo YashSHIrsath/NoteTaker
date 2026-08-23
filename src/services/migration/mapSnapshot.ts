@@ -34,6 +34,7 @@ export function mapSnapshotToUuidNotes(snapshot: AppSnapshot, maps: IdMaps): Map
     status: task.status,
     tags: task.tags,
     color: task.color,
+    gridLayout: task.gridLayout,
   }))
 
   const subtasks = snapshot.subtasks.map((subtask) => ({

@@ -32,6 +32,7 @@ const tasks: Task[] = [
     status: null,
     tags: [],
     color: null,
+    gridLayout: null,
     sortOrder: 0,
   },
 ]

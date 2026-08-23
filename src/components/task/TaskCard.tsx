@@ -1,19 +1,10 @@
-import {
-  useLayoutEffect,
-  useRef,
-  useState,
-  type DragEvent,
-  type KeyboardEvent,
-  type MouseEvent,
-  type PointerEvent as ReactPointerEvent,
-} from 'react'
-import { CalendarClock, FileText, Pin } from 'lucide-react'
+import { useLayoutEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
+import { CalendarClock, FileText, FolderInput, Pin } from 'lucide-react'
 import type { Attachment } from '../../types'
 import { cn } from '../../lib/cn'
 import { formatDueDate, isOverdue } from '../../lib/dueDate'
 import { nextTaskStatus } from '../../lib/taskStatus'
 import { useFolders } from '../../hooks/useFolders'
-import { useItemDnd } from '../../context/ItemDndContext'
 import { StarButton } from '../common/StarButton'
 import { PinButton } from '../common/PinButton'
 import { RowDeleteButton } from '../common/RowDeleteButton'
@@ -26,12 +17,10 @@ import { AttachmentTypeIcon, attachmentSortRank } from '../attachment/Attachment
 import { TaskContentPreview } from './TaskContentPreview'
 import { TaskTagsPill } from './TaskTagsPill'
 import { TaskStatusBadge } from './TaskStatusBadge'
+import { MoveTaskDialog } from './MoveTaskDialog'
 
-const DRAG_TYPE = 'text/plain'
 /** Chips that fit a card's width; the rest become a "+N" counter rather than being clipped. */
 const ATTACHMENT_CHIP_LIMIT = 2
-/** Hold before a touch on the card body becomes a drag rather than a tap or a scroll. */
-const TOUCH_HOLD_MS = 320
 
 export interface TaskCardProps {
   taskId: string
@@ -58,14 +47,11 @@ export function TaskCard({
     toggleTaskPinned,
     updateTaskStatus,
     getAttachmentsForTask,
-    reorderSiblingTasks,
-    moveTaskToFolder,
   } = useFolders()
   const { requestTaskDelete, dialog } = useDeleteTask()
-  const { dragging, dropHint, getDragging, beginDrag, updateDropHint, endDrag, startPointerDrag, isPointerDragging } =
-    useItemDnd()
   const [isOverflowing, setIsOverflowing] = useState(false)
   const [previewAttachment, setPreviewAttachment] = useState<Attachment | null>(null)
+  const [moveOpen, setMoveOpen] = useState(false)
   const bodyRef = useRef<HTMLDivElement>(null)
 
   const task = getTask(taskId)
@@ -132,88 +118,17 @@ export function TaskCard({
     }
   }
 
-  const isDragging = dragging?.kind === 'task' && dragging.itemId === taskId
-  const hint = dropHint?.kind === 'task' && dropHint.itemId === taskId ? dropHint.position : null
-
-  const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (folderId === null) {
-      return
-    }
-    // A hold on one of the card's own controls (pin, star, delete, an attachment chip) belongs to
-    // that control, not to a card drag. The card body itself is a role="button" div, not a
-    // <button>, so it still starts one.
-    if ((event.target as HTMLElement).closest('button, a, input, textarea')) {
-      return
-    }
-    startPointerDrag(
-      event,
-      { kind: 'task', itemId: taskId, groupId: folderId },
-      { reorder: reorderSiblingTasks, moveToZone: (zoneId) => moveTaskToFolder(taskId, zoneId) },
-      { holdMs: TOUCH_HOLD_MS },
-    )
-  }
-
-  const handleDragStart = (event: DragEvent<HTMLDivElement>) => {
-    event.dataTransfer.effectAllowed = 'move'
-    event.dataTransfer.setData(DRAG_TYPE, taskId)
-    beginDrag({ kind: 'task', itemId: taskId, groupId: folderId })
-  }
-
-  const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
-    const session = getDragging()
-    if (!session || session.kind !== 'task' || session.itemId === taskId || session.groupId !== folderId) {
-      return
-    }
-    event.preventDefault()
-    const rect = event.currentTarget.getBoundingClientRect()
-    updateDropHint({
-      kind: 'task',
-      itemId: taskId,
-      position: event.clientY < rect.top + rect.height / 2 ? 'before' : 'after',
-    })
-  }
-
-  const handleDrop = (event: DragEvent<HTMLDivElement>) => {
-    const session = getDragging()
-    if (!session || session.kind !== 'task' || session.itemId === taskId || session.groupId !== folderId) {
-      // Not a same-folder reorder — don't preventDefault or endDrag here, so the event keeps
-      // bubbling to an ancestor drop zone (e.g. a Kanban column) that knows how to handle it.
-      // The dragged card's own onDragEnd is the real cleanup net for the drag session either way.
-      return
-    }
-    event.preventDefault()
-    const rect = event.currentTarget.getBoundingClientRect()
-    const position = event.clientY < rect.top + rect.height / 2 ? 'before' : 'after'
-    reorderSiblingTasks(session.itemId, taskId, position)
-    endDrag()
-  }
-
   return (
     <div
-      draggable={folderId !== null}
-      onDragStart={handleDragStart}
-      onDragOver={handleDragOver}
-      onDrop={handleDrop}
-      onDragEnd={() => endDrag()}
-      onPointerDown={handlePointerDown}
-      data-dnd-item={taskId}
-      data-dnd-kind="task"
-      data-dnd-group={folderId ?? ''}
-      className={cn(
-        // A card that arrives — created, or re-mounted into another section/column by pinning —
-        // fades up into place instead of appearing from nowhere.
-        'anim-item-in h-full rounded-2xl border-y-2 border-transparent',
-        hint === 'before' && 'border-t-[var(--color-accent)]',
-        hint === 'after' && 'border-b-[var(--color-accent)]',
-        isDragging && 'opacity-60 ring-2 ring-[var(--color-accent)]',
-      )}
+      // A card that arrives — created, or re-mounted into another section/column by pinning —
+      // fades up into place instead of appearing from nowhere.
+      className="anim-item-in h-full rounded-2xl"
     >
       <div
         className={cn(
-          // One fixed height, like the clipboard tiles: these sit in a real grid now, and a grid
-          // row is as tall as its tallest cell — so variable heights left gaps under the short
-          // cards. Content clips inside instead.
-          'relative flex h-[248px] flex-col overflow-hidden rounded-2xl border transition-shadow sm:h-[268px]',
+          // Fills the grid cell rather than setting its own height: the canvas owns the size now,
+          // and a fixed height would let a resize move the cell's edges without the card following.
+          'relative flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border transition-shadow',
           pinned
             ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft-hover)] shadow-[0_0_0_1px_var(--color-accent-soft),var(--shadow-md)] hover:shadow-[0_0_0_1px_var(--color-accent-soft),var(--shadow-lg)]'
             : showColor
@@ -239,12 +154,7 @@ export function TaskCard({
         <div
           role="button"
           tabIndex={0}
-          onClick={() => {
-            if (isPointerDragging()) {
-              return
-            }
-            onOpen()
-          }}
+          onClick={onOpen}
           onKeyDown={handleKeyDown}
           className="relative flex flex-1 flex-col gap-2 rounded-t-2xl p-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/20 focus-visible:ring-inset sm:gap-2.5 sm:p-3.5"
         >
@@ -402,6 +312,21 @@ export function TaskCard({
             <span />
           )}
           <div className="flex shrink-0 items-center gap-0.5">
+            {/* Dragging a card now places it on the canvas, so this is how a note changes folder. */}
+            {folderId ? (
+              <button
+                type="button"
+                aria-label={`Move ${title} to another folder`}
+                title="Move to folder"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  setMoveOpen(true)
+                }}
+                className="anim-press inline-flex h-7 w-7 items-center justify-center rounded-full text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-hover)] hover:text-[var(--color-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/20"
+              >
+                <FolderInput className="h-3.5 w-3.5" aria-hidden />
+              </button>
+            ) : null}
             <PinButton pinned={pinned} compact onToggle={() => toggleTaskPinned(taskId)} />
             <StarButton important={important} compact onToggle={() => toggleTaskImportant(taskId)} />
             <RowDeleteButton compact label={`Delete ${title}`} onClick={() => requestTaskDelete(taskId)} />
@@ -409,6 +334,7 @@ export function TaskCard({
         </div>
       </div>
 
+      <MoveTaskDialog open={moveOpen} taskId={taskId} onClose={() => setMoveOpen(false)} />
       {dialog}
       <AttachmentPreviewDialog attachment={previewAttachment} onClose={() => setPreviewAttachment(null)} />
     </div>

@@ -115,6 +115,7 @@ export function runMapperChecks(): void {
     status: null,
     tags: [],
         color: null,
+        grid_layout: null,
     sort_order: 1,
   })
   assert(task.folderId === folder.id, 'folder_id maps to folderId')
@@ -158,6 +159,7 @@ export function runMapperChecks(): void {
         status: null,
         tags: [],
         color: null,
+        grid_layout: null,
         sort_order: 1,
       },
     ],

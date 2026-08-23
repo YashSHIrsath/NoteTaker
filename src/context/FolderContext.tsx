@@ -16,9 +16,10 @@ import {
   nextFolderSortOrder,
   reorderSiblingFolders as applySiblingReorder,
 } from '../lib/folders'
-import type { Attachment, Folder, FolderNode, Subtask, Task, TaskColor, TaskStatus } from '../types'
+import type { Attachment, Folder, FolderNode, Subtask, Task, TaskColor, TaskGridLayout, TaskStatus } from '../types'
 import { getTaskById, getTasksByFolder, nextTaskSortOrder, reorderSiblingTasks as applyTaskReorder } from '../lib/tasks'
 import { getSubtasksByTask } from '../lib/subtasks'
+import { sameLayout } from '../lib/taskGrid'
 import { getAttachmentsByTask } from '../lib/attachments'
 import {
   beginExclusiveAction,
@@ -73,6 +74,9 @@ interface FolderContextValue {
   /** `immediate` skips the typing debounce — for a discrete edit (ticking a checklist item from a
    *  card) where there is no next keystroke to wait for. */
   updateTaskContent: (taskId: string, content: string, options?: { immediate?: boolean }) => void
+  /** Writes new grid positions/sizes for a set of cards in one go — a drag moves neighbours too,
+   *  so this takes the whole changed set rather than one card at a time. */
+  updateTaskLayouts: (entries: Array<{ taskId: string; layout: TaskGridLayout }>) => void
   updateTaskTitle: (taskId: string, title: string) => void
   deleteTask: (taskId: string) => Promise<{ folderId: string; deletedTaskIds: string[] }>
   toggleTaskImportant: (taskId: string) => void
@@ -588,6 +592,7 @@ export function FolderProvider({ children }: { children: ReactNode }) {
         status: null,
         tags: [],
         color: null,
+        gridLayout: null,
         sortOrder: nextTaskSortOrder(tasksRef.current, folderId),
       }
       try {
@@ -655,6 +660,33 @@ export function FolderProvider({ children }: { children: ReactNode }) {
       scheduleContentPersist()
     },
     [applyNotes, persistNotes, scheduleContentPersist],
+  )
+
+  const updateTaskLayouts = useCallback(
+    (entries: Array<{ taskId: string; layout: TaskGridLayout }>) => {
+      if (entries.length === 0) {
+        return
+      }
+      const byId = new Map(entries.map((entry) => [entry.taskId, entry.layout]))
+      let changed = false
+      const tasks = tasksRef.current.map((task) => {
+        const layout = byId.get(task.id)
+        if (!layout || sameLayout(task.gridLayout, layout)) {
+          return task
+        }
+        changed = true
+        return { ...task, gridLayout: layout }
+      })
+      // A drag that ends where it started, or a re-render handing back the layout it was given,
+      // would otherwise write and save on every pointer-up.
+      if (!changed) {
+        return
+      }
+      applyNotes({ folders: foldersRef.current, tasks, subtasks: subtasksRef.current })
+      // Discrete, like every other non-typing action here: the gesture is over when this runs.
+      void persistNotes().catch(() => undefined)
+    },
+    [applyNotes, persistNotes],
   )
 
   const updateTaskTitle = useCallback(
@@ -1114,6 +1146,7 @@ export function FolderProvider({ children }: { children: ReactNode }) {
       reorderSiblingTasks,
       moveTaskToFolder,
       updateTaskContent,
+      updateTaskLayouts,
       updateTaskTitle,
       deleteTask,
       toggleTaskImportant,
@@ -1171,6 +1204,7 @@ export function FolderProvider({ children }: { children: ReactNode }) {
       reorderSiblingTasks,
       moveTaskToFolder,
       updateTaskContent,
+      updateTaskLayouts,
       updateTaskTitle,
       deleteTask,
       toggleTaskImportant,
