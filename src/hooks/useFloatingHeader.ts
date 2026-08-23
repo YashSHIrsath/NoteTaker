@@ -6,7 +6,9 @@ import { useIsCompact } from './useMediaQuery'
  *  every page's top bar lines up with the others. */
 export const FLOATING_HEADER_CLASS = [
   // top-3 rather than top-2: at top-2 the card almost touched the app header's search bar.
-  'absolute inset-x-3 top-3 z-20 rounded-2xl border border-[var(--color-border)]/60',
+  // inset-x matches the pages' own px-4/sm:px-6 gutter — at inset-x-3 the card overhung the cards
+  // it labels by a few pixels on each side, which is the kind of misalignment you can't unsee.
+  'absolute inset-x-4 top-3 z-20 rounded-2xl border border-[var(--color-border)]/60',
   'bg-[var(--color-surface)]/70 px-3 py-2.5 shadow-[var(--shadow-md)] backdrop-blur-md',
   'sm:inset-x-6 sm:top-4',
   'shrink-0 lg:static lg:rounded-none lg:border-0 lg:bg-transparent lg:px-6 lg:pt-5 lg:pb-4 lg:shadow-none lg:backdrop-blur-none',

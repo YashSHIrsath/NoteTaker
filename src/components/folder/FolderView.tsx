@@ -334,7 +334,8 @@ export function FolderView({
               type="button"
               aria-label="Close folders"
               className={cn(
-                'absolute inset-0 bg-black/40 transition-opacity',
+                'absolute inset-0 bg-black/40 transition-opacity duration-[var(--motion-slow)]',
+                '[transition-timing-function:var(--motion-ease)] motion-reduce:transition-none',
                 foldersPanelOpen ? 'opacity-100' : 'opacity-0',
               )}
               onClick={() => setFoldersPanelOpen(false)}
@@ -348,8 +349,20 @@ export function FolderView({
               onCreateFolder={() => setFolderDialogOpen(true)}
               variant="sheet"
               className={cn(
-                'absolute inset-x-0 bottom-0 z-10 shadow-lg transition-transform duration-200 ease-out',
-                foldersPanelOpen ? 'translate-y-0' : 'translate-y-full',
+                // Stops above the bottom bar rather than sliding under it — at bottom-0 the bar
+                // (z-40, and floating over everything) covered the sheet's own header and its
+                // "know where you are" row, which is what you most wanted to reach.
+                'absolute bottom-[calc(var(--bottom-nav-inset)+0.5rem)] z-10',
+                // The bar's gutter and width cap, so the two line up edge to edge.
+                'inset-x-3 mx-auto max-w-md',
+                // Grown from its bottom edge — i.e. out of the bar sitting right below it —
+                // rather than slid up from off-screen, on the overshooting curve so it settles
+                // with a small bounce.
+                'origin-bottom transition-[transform,opacity] duration-[var(--motion-slow)]',
+                '[transition-timing-function:var(--motion-spring)] motion-reduce:transition-none',
+                foldersPanelOpen
+                  ? 'translate-y-0 scale-100 opacity-100'
+                  : 'pointer-events-none translate-y-4 scale-95 opacity-0',
               )}
             />
           </div>

@@ -9,6 +9,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { useTheme } from '../../hooks/useTheme'
 import { useToggleFeedback } from '../../hooks/useToggleFeedback'
 import { cn } from '../../lib/cn'
+import { originFromElement } from '../../lib/themeReveal'
 
 export interface HeaderProps {
   className?: string
@@ -53,7 +54,10 @@ export function Header({ className }: HeaderProps) {
       className={cn(
         // min-h rather than h: the status-bar inset is added as padding, and a fixed height would
         // squash the row's contents into the strip instead of sitting below it.
-        'flex min-h-12 shrink-0 items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-2 pb-1.5 sm:min-h-14 sm:gap-4 sm:px-4 sm:pb-0',
+        // The horizontal gutter is the pages' own (px-4 sm:px-6): the header sits directly above
+        // their content, and any difference shows up as the logo and the cards below starting on
+        // two different lines.
+        'flex min-h-12 shrink-0 items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4 pb-1.5 sm:min-h-14 sm:gap-4 sm:px-6 sm:pb-0',
         'pt-[env(safe-area-inset-top)]',
         className,
       )}
@@ -80,7 +84,7 @@ export function Header({ className }: HeaderProps) {
       <div className="ml-auto flex shrink-0 items-center gap-0.5">
         <IconButton
           label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-          onClick={toggleTheme}
+          onClick={(event) => toggleTheme(originFromElement(event.currentTarget))}
         >
           {theme === 'dark' ? (
             <Sun className={cn('h-5 w-5', themePopping && 'anim-pop')} />

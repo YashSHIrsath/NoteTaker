@@ -1,6 +1,11 @@
 import type { KeyboardEvent, Ref } from 'react'
 import { Search } from 'lucide-react'
+import { useMediaQuery } from '../../hooks/useMediaQuery'
 import { cn } from '../../lib/cn'
+
+/** Below `sm` the long hint doesn't fit and truncated mid-word ("Search or run a com"), which
+ *  reads as a bug rather than as a hint. Swapped for the short one rather than clipped. */
+const NARROW_QUERY = '(max-width: 639px)'
 
 export interface SearchInputProps {
   value: string
@@ -19,6 +24,8 @@ export function SearchInput({
   inputRef,
   id = 'global-search-input',
 }: SearchInputProps) {
+  const narrow = useMediaQuery(NARROW_QUERY)
+
   return (
     <label className="relative block min-w-0 flex-1">
       <span className="absolute -left-[9999px] h-px w-px overflow-hidden">Search notes</span>
@@ -31,7 +38,7 @@ export function SearchInput({
         id={id}
         type="search"
         value={value}
-        placeholder="Search or run a command..."
+        placeholder={narrow ? 'Search' : 'Search or run a command...'}
         autoComplete="off"
         onChange={(event) => onChange(event.target.value)}
         onFocus={onFocus}

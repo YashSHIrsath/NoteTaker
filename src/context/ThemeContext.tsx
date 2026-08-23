@@ -1,4 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { flushSync } from 'react-dom'
+import { revealThemeChange, type RevealOrigin } from '../lib/themeReveal'
 
 type Theme = 'light' | 'dark'
 
@@ -15,7 +17,9 @@ function getInitialTheme(): Theme {
 
 interface ThemeContextValue {
   theme: Theme
-  toggleTheme: () => void
+  /** `origin` is where the reveal circle grows from — pass the toggle's own position so the new
+   *  theme looks like it spreads out of the control that was pressed. Defaults to screen centre. */
+  toggleTheme: (origin?: RevealOrigin) => void
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null)
@@ -46,12 +50,17 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     }
   }, [theme])
 
-  const toggleTheme = () => {
-    setTheme((current) => {
-      const next: Theme = current === 'dark' ? 'light' : 'dark'
-      window.localStorage.setItem(STORAGE_KEY, next)
-      return next
-    })
+  const toggleTheme = (origin?: RevealOrigin) => {
+    const next: Theme = theme === 'dark' ? 'light' : 'dark'
+    window.localStorage.setItem(STORAGE_KEY, next)
+    revealThemeChange(() => {
+      // Both, and in this order: the attribute is what the CSS variables hang off, and it has to
+      // be visibly changed *inside* the transition callback. flushSync then commits the React
+      // tree in the same beat, so components that branch on the theme (the toggle's own icon)
+      // land in the snapshot the reveal uncovers rather than popping in afterwards.
+      document.documentElement.dataset.theme = next
+      flushSync(() => setTheme(next))
+    }, origin)
   }
 
   return <ThemeContext.Provider value={{ theme, toggleTheme }}>{children}</ThemeContext.Provider>

@@ -17,8 +17,10 @@ export interface FolderSidePanelProps {
   onCreateFolder: () => void
   className?: string
   /** 'sidebar' (default): a full-height column, docked to the right on desktop. 'sheet': a
-   *  bottom sheet sized to its own content instead of forcing full viewport height — used on
-   *  mobile, where a full-height right-docked panel leaves most of it empty. */
+   *  floating card sized to its own content instead of forcing full viewport height — used on
+   *  mobile, where a full-height right-docked panel leaves most of it empty. It sits above the
+   *  bottom bar and borrows its glass, so it reads as the bar opening up rather than as a
+   *  separate surface sliding over it. */
   variant?: 'sidebar' | 'sheet'
 }
 
@@ -39,10 +41,18 @@ export function FolderSidePanel({
   return (
     <aside
       className={cn(
-        'flex flex-col bg-[var(--color-surface-muted)]',
+        'flex flex-col',
         isSheet
-          ? 'max-h-[75vh] w-full overflow-y-auto rounded-t-2xl border-t border-[var(--color-border)]'
-          : 'h-full w-[240px] shrink-0 border-l border-[var(--color-border)]',
+          ? [
+              // Rounded on every corner and bordered all round: it floats clear of the screen
+              // edge now, so a top-only treatment would leave three raw edges.
+              'max-h-[60vh] w-full overflow-y-auto rounded-3xl',
+              // The bottom bar's own glass, so the two read as one piece of material.
+              'border border-[var(--color-border)]/70 bg-[var(--color-surface)]/80 backdrop-blur-xl',
+              'shadow-[var(--shadow-lg)]',
+              'supports-[backdrop-filter:blur(0px)]:bg-[var(--color-surface)]/70',
+            ].join(' ')
+          : 'h-full w-[240px] shrink-0 border-l border-[var(--color-border)] bg-[var(--color-surface-muted)]',
         className,
       )}
     >

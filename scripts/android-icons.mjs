@@ -21,7 +21,7 @@ const RES = 'android/app/src/main/res'
 const BRAND = '#8b85f0'
 const INK = '#1a1a18'
 
-/** The mark, in its own coordinate space: x 54..266, y 28..152. */
+/** The mark, in its own coordinate space: x 54..238, y 28..152. */
 const BARS = [
   [54, 28, 28, 47],
   [54, 84, 28, 68],
@@ -31,9 +31,17 @@ const BARS = [
   [171, 122, 28, 30],
   [210, 28, 28, 124],
 ]
-const LOGO_W = 212
-const LOGO_CX = 160
-const LOGO_CY = 90
+/**
+ * Derived from BARS rather than written by hand: the mark's real extent is x 54..238, and the
+ * hand-written constants had drifted from it, so every target rendered 14 units left of centre.
+ */
+const X0 = Math.min(...BARS.map(([x]) => x))
+const X1 = Math.max(...BARS.map(([x, , w]) => x + w))
+const Y0 = Math.min(...BARS.map(([, y]) => y))
+const Y1 = Math.max(...BARS.map(([, y, , h]) => y + h))
+const LOGO_W = X1 - X0
+const LOGO_CX = (X0 + X1) / 2
+const LOGO_CY = (Y0 + Y1) / 2
 
 /** `frac` is the share of the canvas width the mark spans; it is always centred. */
 function logoSvg({ size, frac, backdrop }) {

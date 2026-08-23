@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useTheme } from '../hooks/useTheme'
+import { originFromElement } from '../lib/themeReveal'
 import { ProjectLogo } from '../components/brand/ProjectLogo'
 import { cn } from '../lib/cn'
 
@@ -101,7 +102,7 @@ export function LandingPage() {
             </span>
             <button
               type="button"
-              onClick={toggleTheme}
+              onClick={(event) => toggleTheme(originFromElement(event.currentTarget))}
               aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
               className="anim-press inline-flex h-9 w-9 items-center justify-center rounded-full text-white/80 transition-colors hover:bg-white/15 hover:text-white"
             >

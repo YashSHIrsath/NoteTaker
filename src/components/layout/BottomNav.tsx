@@ -1,5 +1,5 @@
 import { ClipboardList, Folder, ListTree, Star } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { useLayoutEffect, useRef, type ReactNode } from 'react'
 import type { SidebarNavId } from '../../types'
 import { useAuth } from '../../hooks/useAuth'
 import {
@@ -65,17 +65,41 @@ export function BottomNav({ activeNav, profileActive = false, onSelectNav, onOpe
   // Tap a tab or drag the blob — both come through here (see useDragIndicator).
   const indicator = useDragIndicator(ITEMS.length, activeIndex, selectIndex)
 
+  // The bar is fixed, so it takes no space in the layout and anything that has to sit clear of it
+  // (the folders sheet) needs its height. Measured rather than declared: the height follows the
+  // font metrics and the avatar, and a hard-coded guess drifts the moment either changes. Written
+  // straight to the root as a CSS variable so it costs no re-render — see --bottom-nav-h.
+  const barRef = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    const bar = barRef.current
+    if (!bar) {
+      return
+    }
+    const apply = () => {
+      document.documentElement.style.setProperty('--bottom-nav-h', `${bar.offsetHeight}px`)
+    }
+    apply()
+    const observer = new ResizeObserver(apply)
+    observer.observe(bar)
+    return () => {
+      observer.disconnect()
+      document.documentElement.style.removeProperty('--bottom-nav-h')
+    }
+  }, [])
+
   return (
     <nav
       aria-label="Primary"
       className={cn(
         'pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center lg:hidden',
-        // Clear of the iOS home indicator / Android gesture bar.
-        'px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]',
+        // Clear of the iOS home indicator / Android gesture bar. The token, not the literal, so
+        // the folders sheet stacks on exactly the same number.
+        'px-3 pb-[var(--bottom-nav-safe)]',
       )}
     >
       {/* touch-none so dragging the blob sideways doesn't scroll the page under it. */}
       <div
+        ref={barRef}
         onPointerDown={indicator.onPointerDown}
         className={cn(
           'pointer-events-auto relative flex w-full max-w-md touch-none items-center overflow-hidden rounded-full p-1',
