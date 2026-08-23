@@ -46,6 +46,7 @@ export function AllTasksPage() {
     viewStyle === 'clipboard' ? (
       <TaskGridCanvas
         tasks={taskList}
+        className="mt-3"
         handleColor={(task) => taskColorStyle(task.color, scatterCategoryForId(task.id)).ink}
       >
         {(task) => (
@@ -60,7 +61,7 @@ export function AllTasksPage() {
       </TaskGridCanvas>
     ) : (
       // The same canvas the tiles use, so a card keeps its place and size whichever style is on.
-      <TaskGridCanvas tasks={taskList}>
+      <TaskGridCanvas tasks={taskList} className="mt-3">
         {(task) => (
           <TaskCard
               taskId={task.id}
@@ -83,29 +84,24 @@ export function AllTasksPage() {
         <div
           className={cn(
             COLLAPSIBLE_TITLE_CLASS,
-            condensed ? 'max-h-0 opacity-0' : 'mb-2 max-h-12 opacity-100',
+            condensed ? 'max-h-0 opacity-0' : 'mb-2 max-h-16 opacity-100',
           )}
         >
           <div className="flex min-w-0 items-center gap-3">
             <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent-soft)] text-[var(--color-accent)] sm:h-9 sm:w-9">
               <ClipboardList className="h-3.5 w-3.5 sm:h-4 sm:w-4" aria-hidden />
             </span>
-            <h1
-              className="truncate text-[18px] font-semibold tracking-tight text-[var(--color-text)] sm:text-[22px]"
-              style={{ fontFamily: 'var(--font-display)' }}
-            >
-              Tasks
-            </h1>
-          </div>
-        </div>
-
-        {/* The row that survives scrolling: sort on the left, the primary action on the right. */}
-        <div className="flex items-center justify-between gap-2">
-          {allTagsInScope.length > 0 ? (
-            <TagFilterMenu tags={allTagsInScope} activeTag={activeTag} onSelect={setActiveTag} />
-          ) : (
-            <span />
-          )}
+            <div className="min-w-0 flex-1">
+              <h1
+                className="truncate text-[18px] font-semibold tracking-tight text-[var(--color-text)] sm:text-[22px]"
+                style={{ fontFamily: 'var(--font-display)' }}
+              >
+                Tasks
+              </h1>
+              <p className="mt-0.5 truncate text-[11.5px] text-[var(--color-text-muted)] sm:text-[12.5px]">
+                Plan, prioritise, and keep your work moving.
+              </p>
+            </div>
           <Button
             variant="primary"
             size="sm"
@@ -115,6 +111,10 @@ export function AllTasksPage() {
             <Plus className="h-4 w-4" aria-hidden />
             New Task
           </Button>
+          {allTagsInScope.length > 0 ? (
+            <TagFilterMenu tags={allTagsInScope} activeTag={activeTag} onSelect={setActiveTag} />
+          ) : null}
+          </div>
         </div>
       </div>
 

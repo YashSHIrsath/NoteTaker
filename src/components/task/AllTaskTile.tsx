@@ -119,7 +119,7 @@ export function AllTaskTile({ taskId, category, folderLabel, onOpen }: AllTaskTi
 
   return (
     <Fragment>
-    <div className="h-full rounded-2xl">
+    <div className="h-full rounded-2xl" data-task-id={taskId}>
     <div
       role="button"
       tabIndex={0}

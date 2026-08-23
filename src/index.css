@@ -505,6 +505,23 @@ body {
   animation: anim-dialog-out var(--motion-fast) var(--motion-ease) forwards;
 }
 
+/* A note first glides out, then the state update removes it from the current page. Keeping this
+   on the card content (not react-grid-layout's transformed cell) preserves its grid position
+   during the animation. */
+@keyframes anim-task-exit {
+  to {
+    opacity: 0;
+    transform: translate3d(-18px, 8px, 0) scale(0.97);
+  }
+}
+
+.anim-task-exit {
+  pointer-events: none;
+  transform-origin: center;
+  will-change: opacity, transform;
+  animation: anim-task-exit var(--motion-base) var(--motion-ease) forwards;
+}
+
 /* While a touch drag is live: no scrolling, no text selection, no long-press callout — the
    gesture belongs to the drag until the finger lifts. */
 body.dnd-touch-active {
@@ -536,6 +553,10 @@ body.dnd-touch-active {
   .anim-overlay-out,
   .anim-dialog-in,
   .anim-dialog-out {
+    animation: none;
+  }
+
+  .anim-task-exit {
     animation: none;
   }
 

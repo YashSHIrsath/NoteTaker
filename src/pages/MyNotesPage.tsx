@@ -21,7 +21,7 @@ export function MyNotesPage() {
   const { headerRef, contentRef, condensed } = useFloatingHeader()
 
   const newFolderButton = (
-    <Button variant="subtle" size="sm" onClick={() => setCreateOpen(true)}>
+    <Button variant="subtle" size="sm" className="h-8 shrink-0 sm:h-9" onClick={() => setCreateOpen(true)}>
       <Plus className="h-4 w-4" aria-hidden />
       New Folder
     </Button>
@@ -42,22 +42,20 @@ export function MyNotesPage() {
             <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent-soft)] text-[var(--color-accent)] sm:h-9 sm:w-9">
               <Folder className="h-3.5 w-3.5 sm:h-4 sm:w-4" aria-hidden />
             </span>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <h1
                 className="truncate text-[17px] font-semibold tracking-tight text-[var(--color-text)] sm:text-[20px]"
                 style={{ fontFamily: 'var(--font-display)' }}
               >
                 Notes
               </h1>
-              <p className="text-[11.5px] text-[var(--color-text-muted)] sm:text-[12.5px]">
-                {rootFolders.length} {rootFolders.length === 1 ? 'folder' : 'folders'}
+              <p className="mt-0.5 truncate text-[11.5px] text-[var(--color-text-muted)] sm:text-[12.5px]">
+                Keep your folders, ideas, and documents together.
               </p>
             </div>
+            {newFolderButton}
           </div>
         </div>
-
-        {/* The row that survives scrolling. */}
-        <div className="flex items-center justify-end gap-3">{newFolderButton}</div>
       </div>
 
       <div

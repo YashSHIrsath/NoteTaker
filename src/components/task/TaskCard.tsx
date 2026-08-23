@@ -123,6 +123,7 @@ export function TaskCard({
       // A card that arrives — created, or re-mounted into another section/column by pinning —
       // fades up into place instead of appearing from nowhere.
       className="anim-item-in h-full rounded-2xl"
+      data-task-id={taskId}
     >
       <div
         className={cn(

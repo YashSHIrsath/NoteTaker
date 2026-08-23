@@ -17,6 +17,7 @@ import { categoryVar, getRootCategoryForFolder, scatterCategoryForId } from '../
 import { taskColorStyle } from '../lib/taskColor'
 import { readViewStyle } from '../lib/viewStyle'
 import { cn } from '../lib/cn'
+import { performWithTaskExit } from '../lib/taskExitAnimation'
 import {
   COLLAPSIBLE_TITLE_CLASS,
   FLOATING_HEADER_CLASS,
@@ -59,6 +60,10 @@ export function ImportantPage() {
     ? importantTasks.filter((task) => task.tags.includes(activeTag))
     : importantTasks
 
+  const removeTaskFromImportant = (taskId: string) => {
+    void performWithTaskExit(taskId, () => toggleTaskImportant(taskId))
+  }
+
   if (isEmpty) {
     return (
       <EmptyState
@@ -76,25 +81,25 @@ export function ImportantPage() {
         <div
           className={cn(
             COLLAPSIBLE_TITLE_CLASS,
-            condensed ? 'max-h-0 opacity-0' : 'mb-2 max-h-12 opacity-100',
+            condensed ? 'max-h-0 opacity-0' : 'mb-2 max-h-16 opacity-100',
           )}
         >
           <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
             <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--cat-rose-soft)] text-[var(--cat-rose)] sm:h-9 sm:w-9">
               <Star className="h-3.5 w-3.5 sm:h-4 sm:w-4" aria-hidden />
             </span>
-            <h1
-              className="truncate text-[17px] font-semibold tracking-tight text-[var(--color-text)] sm:text-[20px]"
-              style={{ fontFamily: 'var(--font-display)' }}
-            >
-              Important
-            </h1>
-          </div>
-        </div>
-
-        {/* The row that survives scrolling. */}
-        <div className="flex items-center gap-2">
-          <div className="inline-flex w-full shrink-0 items-center gap-0.5 rounded-full border border-[var(--color-border)] bg-[var(--color-hover)] p-1 lg:w-auto">
+            <div className="min-w-0 flex-1">
+              <h1
+                className="truncate text-[17px] font-semibold tracking-tight text-[var(--color-text)] sm:text-[20px]"
+                style={{ fontFamily: 'var(--font-display)' }}
+              >
+                Important
+              </h1>
+              <p className="mt-0.5 truncate text-[11.5px] text-[var(--color-text-muted)] sm:text-[12.5px]">
+                Your starred folders and tasks, all in one place.
+              </p>
+            </div>
+            <div className="inline-flex shrink-0 items-center gap-0.5 rounded-full border border-[var(--color-border)] bg-[var(--color-hover)] p-1">
             {FILTERS.map((item) => {
               const count =
                 item.key === 'folders'
@@ -121,6 +126,7 @@ export function ImportantPage() {
                 </button>
               )
             })}
+          </div>
           </div>
         </div>
       </div>
@@ -244,7 +250,7 @@ export function ImportantPage() {
                 const category = getRootCategoryForFolder(folders, task.folderId)
                 const folderTrail = folderPathLabel(folders, task.folderId)
                 return (
-                  <div key={task.id} className={CARD_BASE}>
+                  <div key={task.id} className={CARD_BASE} data-task-id={task.id}>
                     <button
                       type="button"
                       onClick={() =>
@@ -289,7 +295,7 @@ export function ImportantPage() {
                     <div className={CARD_ACTIONS}>
                       <StarButton
                         important={task.isImportant}
-                        onToggle={() => toggleTaskImportant(task.id)}
+                        onToggle={() => removeTaskFromImportant(task.id)}
                       />
                       <RowDeleteButton
                         label={`Delete ${task.title}`}

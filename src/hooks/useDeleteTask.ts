@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useFolders } from './useFolders'
 import { useDeleteConfirmation } from './useDeleteConfirmation'
 import { taskDeleteCopy } from '../services/deletion/deleteCopy'
+import { performWithTaskExit } from '../lib/taskExitAnimation'
 
 export function useDeleteTask() {
   const { requestDelete, dialog } = useDeleteConfirmation()
@@ -21,7 +22,7 @@ export function useDeleteTask() {
         title: copy.title,
         description: copy.description,
         onConfirm: async () => {
-          const result = await deleteTask(taskId)
+          const result = await performWithTaskExit(taskId, () => deleteTask(taskId))
           if (location.pathname === `/task/${taskId}`) {
             navigate(`/folder/${result.folderId}`, { replace: true })
           }
