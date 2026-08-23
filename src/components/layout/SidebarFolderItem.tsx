@@ -50,7 +50,7 @@ export function SidebarFolderItem({
         type="button"
         onClick={onClick}
         className={cn(
-          'flex min-w-0 flex-1 items-center gap-2 rounded-lg px-1 py-1.5 text-left text-[13px]',
+          'flex min-w-0 flex-1 items-center gap-2 overflow-hidden rounded-lg px-1.5 py-1.5 text-left text-[13px]',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-accent)]/25',
         )}
       >
@@ -75,7 +75,7 @@ export function SidebarFolderItem({
         )}
         <span
           className={cn(
-            'truncate',
+            'min-w-0 flex-1 truncate',
             active
               ? 'font-semibold text-[var(--color-accent-ink)]'
               : 'text-[var(--color-text)]',

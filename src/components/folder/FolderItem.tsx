@@ -33,7 +33,7 @@ export function FolderItem({
         type="button"
         onClick={onClick}
         className={cn(
-          'anim-press flex min-w-0 flex-1 items-center gap-2.5 rounded-full px-2.5 py-2 text-left text-sm',
+          'anim-press flex min-w-0 flex-1 items-center gap-2.5 overflow-hidden rounded-full px-2.5 py-1.5 text-left text-sm',
           'text-[var(--color-text)] transition-colors',
           'hover:bg-[var(--color-hover)]',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/20',
@@ -46,10 +46,12 @@ export function FolderItem({
         >
           <Folder className="h-3.5 w-3.5" style={{ color: categoryVar(category) }} aria-hidden />
         </span>
-        <span className="truncate">{name}</span>
+        <span className="min-w-0 flex-1 truncate">{name}</span>
       </button>
       <StarButton
         important={important}
+        compact
+        className="shrink-0"
         onToggle={() => toggleFolderImportant(folderId)}
       />
       <FolderActions folderId={folderId} folderName={name} />
@@ -61,7 +63,12 @@ export function FolderItem({
   }
 
   return (
-    <SortableFolderRow folderId={folderId} parentId={parentId}>
+    <SortableFolderRow
+      folderId={folderId}
+      parentId={parentId}
+      compact
+      revealHandleOnHover
+    >
       {content}
     </SortableFolderRow>
   )

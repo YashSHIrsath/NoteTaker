@@ -74,7 +74,7 @@ export function FolderSidePanel({
           {folders.length === 0 ? (
             <p className="px-2.5 text-sm text-[var(--color-text-muted)]">No folders</p>
           ) : (
-            <ul className="space-y-0.5">
+            <ul className="space-y-0">
               {folders.map((folder) => (
                 <li key={folder.id}>
                   <FolderItem

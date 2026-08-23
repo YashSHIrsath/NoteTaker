@@ -128,12 +128,12 @@ export function TaskCard({
         className={cn(
           // Fills the grid cell rather than setting its own height: the canvas owns the size now,
           // and a fixed height would let a resize move the cell's edges without the card following.
-          'relative flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border transition-shadow',
+          'relative flex h-full min-h-0 flex-col overflow-hidden rounded-[22px] border transition-all duration-200 ease-out',
           pinned
-            ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft-hover)] shadow-[0_0_0_1px_var(--color-accent-soft),var(--shadow-md)] hover:shadow-[0_0_0_1px_var(--color-accent-soft),var(--shadow-lg)]'
+            ? 'border-[var(--color-accent)]/70 bg-[var(--color-accent-soft-hover)] shadow-[0_0_0_1px_rgba(139,133,240,0.14),0_16px_30px_rgba(0,0,0,0.14)] hover:shadow-[0_0_0_1px_rgba(139,133,240,0.18),0_20px_34px_rgba(0,0,0,0.18)]'
             : showColor
-              ? 'border-transparent shadow-[var(--shadow-sm)] hover:shadow-[var(--shadow-md)]'
-              : 'border-[var(--color-border-strong)] bg-[var(--color-surface-raised)] shadow-[0_0_0_1px_var(--color-border-strong),var(--shadow-sm)] hover:shadow-[0_0_0_1px_var(--color-border-strong),var(--shadow-md)]',
+              ? 'border-white/10 shadow-[0_12px_28px_rgba(0,0,0,0.18)] hover:shadow-[0_16px_32px_rgba(0,0,0,0.2)]'
+              : 'border-[var(--color-border-strong)]/80 bg-[var(--color-surface-raised)] shadow-[0_0_0_1px_rgba(82,88,100,0.08),0_12px_26px_rgba(0,0,0,0.12)] hover:shadow-[0_0_0_1px_rgba(82,88,100,0.12),0_16px_30px_rgba(0,0,0,0.16)]',
         )}
         style={showColor ? { background: colors.card } : undefined}
       >

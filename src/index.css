@@ -281,6 +281,40 @@ body {
   --bottom-nav-inset: calc(var(--bottom-nav-h) + var(--bottom-nav-safe));
 }
 
+/* Browsers otherwise paint their own bright, wide scrollbar gutter over the dark app surface.
+   Keep every scroll container (both sidebars and the task canvas included) visually quiet, with
+   a narrow thumb that is still easy to grab. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-strong) var(--color-surface-muted);
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-corner {
+  background: var(--color-surface-muted);
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong);
+  border: 3px solid var(--color-surface-muted);
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted);
+}
+
+*::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 /* A row/card arriving: new task, new folder, or an existing card re-mounting somewhere else —
    pinning in board view moves a card to another column, which is a mount there, so the same
    animation covers "it moved" without a hand-rolled FLIP. */

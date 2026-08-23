@@ -59,7 +59,8 @@
 
    The resizer stays inside the card's rounded corner. The previous outside quarter-arc was
    visually detached, overlapped the next tile, and was easily clipped at the viewport edge.
-   Three small diagonal dots make the action familiar without competing with the card content.
+   The visible cue follows the card's own rounded lower-right corner, rather than drawing a
+   diagonal slash across it.
    Colour comes from --task-grid-handle, which each coloured view supplies per card. */
 .task-grid-canvas {
   --grid-handle-size: 16px;
@@ -73,11 +74,12 @@
   height: var(--grid-handle-hit);
   padding: 0;
   box-sizing: border-box;
-  background: none;
+  background: transparent;
+  background-image: none;
   box-shadow: none;
   border: 0;
   color: var(--task-grid-handle, var(--color-border-strong));
-  opacity: 0.5;
+  opacity: 0.72;
   cursor: nwse-resize;
   touch-action: none;
   transform: none;
@@ -95,20 +97,19 @@
   bottom: calc(var(--grid-handle-inset) - (var(--grid-handle-hit) - var(--grid-handle-size)) / 2);
 }
 
-/* React-resizable's stock grey wedge lives in ::after. Replace it with an aligned, diagonal
-   three-dot grip while retaining its larger touch target on the handle element. */
+/* React-resizable's stock wedge is diagonal and clashes with a rounded card. Replace it with a
+   small rounded corner that echoes the card's own curve, while the larger element remains the
+   touch target. */
 .task-grid-canvas .react-grid-item > .react-resizable-handle::after {
   content: '';
   position: absolute;
-  right: calc((var(--grid-handle-hit) - var(--grid-handle-size)) / 2 + 1px);
-  bottom: calc((var(--grid-handle-hit) - var(--grid-handle-size)) / 2 + 1px);
-  width: 3px;
-  height: 3px;
-  border-radius: 999px;
-  background: currentColor;
-  box-shadow:
-    5px -5px currentColor,
-    10px -10px currentColor;
+  right: calc((var(--grid-handle-hit) - var(--grid-handle-size)) / 2 + 2px);
+  bottom: calc((var(--grid-handle-hit) - var(--grid-handle-size)) / 2 + 2px);
+  width: 11px;
+  height: 11px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  border-radius: 0 0 8px 0;
 }
 
 /* Avoid the library's second pseudo-element, which draws its default corner wedge. */

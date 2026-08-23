@@ -80,7 +80,7 @@ export function SidebarSection({
           type="button"
           onClick={onSelect}
           className={cn(
-            'flex min-w-0 flex-1 items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-[13.5px]',
+            'flex min-w-0 flex-1 items-center gap-2.5 overflow-hidden rounded-xl px-3 py-2.5 text-left text-[13.5px]',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-accent)]/25',
           )}
         >
@@ -94,7 +94,7 @@ export function SidebarSection({
           </span>
           <span
             className={cn(
-              'truncate',
+              'min-w-0 flex-1 truncate',
               active
                 ? 'font-semibold text-[var(--color-accent-ink)]'
                 : 'font-medium text-[var(--color-text)]',
@@ -130,17 +130,7 @@ export function SidebarSection({
       </div>
 
       {expandable && expanded && children ? (
-        // The rail is an inset absolute line rather than a border on the container: a border runs
-        // the full height including the gap under the last child, which left a stub hanging below
-        // the list.
-        // 1.375rem is the parent row's icon centre: px-3 of padding plus half of a 20px glyph.
-        // The rail hanging a few pixels to the left of it was the kind of near-miss that reads as
-        // sloppy rather than as a deliberate offset.
-        <div className="relative mt-1 space-y-0.5 py-0.5 pl-[2.125rem]">
-          <span
-            aria-hidden
-            className="absolute bottom-1.5 left-[1.375rem] top-1.5 w-px bg-[var(--color-border)]"
-          />
+        <div className="mt-1 space-y-0.5 py-1 pl-1">
           {children}
         </div>
       ) : null}

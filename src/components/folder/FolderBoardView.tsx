@@ -87,10 +87,10 @@ function BoardColumn({
       // rely on, so the pointer path hit-tests for the zone under the finger instead.
       data-dnd-zone={folder.id}
       className={cn(
-        'anim-item-in flex flex-col rounded-2xl border bg-[var(--color-surface-muted)] transition-colors',
+        'anim-item-in flex flex-col rounded-[24px] border bg-[var(--color-surface-muted)] transition-all duration-200 ease-out',
         dropActive || dropZoneId === folder.id
-          ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)]'
-          : 'border-[var(--color-border)]',
+          ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] shadow-[0_0_0_1px_rgba(139,133,240,0.18),0_18px_36px_rgba(0,0,0,0.22)]'
+          : 'border-[var(--color-border)] shadow-[0_8px_22px_rgba(0,0,0,0.12)]',
       )}
     >
       {navigable ? (

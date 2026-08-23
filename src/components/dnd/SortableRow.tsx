@@ -94,18 +94,25 @@ export function SortableRow({
       data-dnd-kind={kind}
       data-dnd-group={groupId ?? ''}
       className={cn(
-        // A row that has just been created (or dropped into a new parent) fades up into place.
-        'anim-item-in border-y-2 border-transparent',
+        'anim-item-in relative overflow-hidden rounded-2xl border border-transparent transition-all duration-200 ease-out',
         revealHandleOnHover && 'group',
-        hint === 'before' && 'border-t-[var(--color-accent)]',
-        hint === 'after' && 'border-b-[var(--color-accent)]',
-        isDragging && 'rounded-xl bg-[var(--color-hover)] opacity-60 ring-1 ring-[var(--color-accent)]',
+        hint === 'before' &&
+          'before:absolute before:left-3 before:right-3 before:top-0 before:h-[3px] before:rounded-full before:bg-[var(--color-accent)] before:shadow-[0_0_0_1px_rgba(139,133,240,0.2)] before:content-[""]',
+        hint === 'after' &&
+          'after:absolute after:left-3 after:right-3 after:bottom-0 after:h-[3px] after:rounded-full after:bg-[var(--color-accent)] after:shadow-[0_0_0_1px_rgba(139,133,240,0.2)] after:content-[""]',
+        isDragging &&
+          'scale-[0.995] border-[var(--color-accent)]/60 bg-[var(--color-accent-soft)] shadow-[0_10px_25px_rgba(0,0,0,0.18)] opacity-80',
         className,
       )}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
-      <div className="flex w-full items-center gap-0.5">
+      <div
+        className={cn(
+          'flex w-full items-center py-0.5',
+          revealHandleOnHover ? 'gap-0' : 'gap-0.5',
+        )}
+      >
         <span
           role="button"
           tabIndex={0}
@@ -118,20 +125,23 @@ export function SortableRow({
             startPointerDrag(event, { kind, itemId, groupId }, { reorder: onReorder })
           }
           className={cn(
-            'inline-flex shrink-0 cursor-grab touch-none select-none items-center justify-center rounded-full text-[var(--color-text-muted)]',
+            'inline-flex shrink-0 cursor-grab touch-none select-none items-center justify-center rounded-full border border-transparent bg-transparent text-[var(--color-text-muted)] shadow-none transition-all duration-150',
             'active:cursor-grabbing',
-            compact ? 'h-6 w-5' : 'h-7 w-6',
-            // Still occupies its slot when hidden — fading it rather than removing it keeps every
-            // row's label on the same left edge whether or not the pointer is over it.
-            revealHandleOnHover &&
-              'opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100',
-            'hover:bg-[var(--color-hover)] hover:text-[var(--color-text)]',
+            compact ? 'h-6' : 'h-7',
+            revealHandleOnHover
+              ? 'w-0 overflow-hidden opacity-0 group-hover:w-5 group-focus-within:w-5 group-hover:opacity-100 group-focus-within:opacity-100 group-hover:shadow-[0_0_0_1px_rgba(0,0,0,0.04)] group-focus-within:shadow-[0_0_0_1px_rgba(0,0,0,0.04)] focus-visible:opacity-100'
+              : compact
+                ? 'w-5'
+                : 'w-6',
+            'hover:border-[var(--color-border)] hover:bg-[var(--color-hover)] hover:text-[var(--color-text)] hover:shadow-[0_0_0_1px_rgba(0,0,0,0.04)]',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/20',
           )}
         >
           <GripVertical className={cn(compact ? 'h-3.5 w-3.5' : 'h-4 w-4')} aria-hidden />
         </span>
-        {children}
+        {/* Folder rows supply a label button plus star/menu controls as sibling children. This
+            wrapper must itself be a row; a plain block made each sibling start a new line. */}
+        <div className="flex min-w-0 flex-1 items-center gap-0.5">{children}</div>
       </div>
     </div>
   )
