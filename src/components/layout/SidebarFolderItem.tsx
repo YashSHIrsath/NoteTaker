@@ -15,6 +15,15 @@ export interface SidebarFolderItemProps {
   onClick?: () => void
 }
 
+/**
+ * A folder nested under the sidebar's Notes row. Deliberately a size down from SidebarSection —
+ * smaller type, tighter row, rounded-lg against the parent's rounded-xl — so the nesting is
+ * legible from the rows themselves and not only from the rail beside them.
+ *
+ * The grip only appears on hover here: three permanent columns of grip dots down the sidebar was
+ * the single noisiest thing in it, and reordering folders is something you go looking for rather
+ * than something the list needs to advertise at rest.
+ */
 export function SidebarFolderItem({
   folderId,
   parentId,
@@ -31,17 +40,18 @@ export function SidebarFolderItem({
       folderId={folderId}
       parentId={parentId}
       compact
-      className={cn(active && 'rounded-full bg-[var(--color-accent-soft)]')}
+      revealHandleOnHover
+      className={cn(
+        'rounded-lg transition-colors',
+        active ? 'bg-[var(--color-accent-soft)]' : 'hover:bg-[var(--color-hover)]',
+      )}
     >
       <button
         type="button"
         onClick={onClick}
         className={cn(
-          'flex min-w-0 flex-1 items-center gap-2 rounded-full px-1.5 py-1.5 text-left text-sm transition-colors',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/20',
-          active
-            ? 'font-semibold text-[var(--color-accent-ink)]'
-            : 'text-[var(--color-text)] hover:bg-[var(--color-hover)]',
+          'flex min-w-0 flex-1 items-center gap-2 rounded-lg px-1 py-1.5 text-left text-[13px]',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-accent)]/25',
         )}
       >
         {/* The chip's own soft background would be invisible against an active row using the
@@ -50,25 +60,34 @@ export function SidebarFolderItem({
             tints the glyph itself, instead of trying to layer two colored boxes. */}
         {active ? (
           <Folder
-            className="h-3.5 w-3.5 shrink-0"
+            className="h-4 w-4 shrink-0"
             style={{ color: categoryVar(category) }}
             aria-hidden
           />
         ) : (
           <span
-            className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
+            className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md"
             style={{ background: categoryVar(category, 'soft') }}
             aria-hidden
           >
             <Folder className="h-3 w-3" style={{ color: categoryVar(category) }} aria-hidden />
           </span>
         )}
-        <span className="truncate">{label}</span>
+        <span
+          className={cn(
+            'truncate',
+            active
+              ? 'font-semibold text-[var(--color-accent-ink)]'
+              : 'text-[var(--color-text)]',
+          )}
+        >
+          {label}
+        </span>
       </button>
       <StarButton
         important={important}
         compact
-        className="mr-1"
+        className="mr-0.5"
         onToggle={() => toggleFolderImportant(folderId)}
       />
     </SortableFolderRow>

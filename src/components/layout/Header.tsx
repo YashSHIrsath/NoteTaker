@@ -1,5 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
-import { MoreHorizontal, Moon, Star, Sun, LogOut } from 'lucide-react'
+import { Moon, Star, Sun, LogOut } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { IconButton } from '../ui/IconButton'
 import { ProjectLogo } from '../brand/ProjectLogo'
@@ -19,31 +18,7 @@ export function Header({ className }: HeaderProps) {
   const { signOut } = useAuth()
   const { theme, toggleTheme } = useTheme()
   const navigate = useNavigate()
-  const [moreOpen, setMoreOpen] = useState(false)
   const themePopping = useToggleFeedback(theme === 'dark')
-  const moreRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!moreOpen) {
-      return
-    }
-    const onPointerDown = (event: PointerEvent) => {
-      if (moreRef.current && !moreRef.current.contains(event.target as Node)) {
-        setMoreOpen(false)
-      }
-    }
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setMoreOpen(false)
-      }
-    }
-    window.addEventListener('pointerdown', onPointerDown)
-    window.addEventListener('keydown', onKeyDown)
-    return () => {
-      window.removeEventListener('pointerdown', onPointerDown)
-      window.removeEventListener('keydown', onKeyDown)
-    }
-  }, [moreOpen])
 
   const handleSignOut = () => {
     void signOut().catch(() => undefined)
@@ -93,9 +68,7 @@ export function Header({ className }: HeaderProps) {
           )}
         </IconButton>
 
-        {/* Secondary actions stay inline on larger screens; on mobile they collapse into the
-            "More" menu below so the app name and search never get squeezed out. */}
-        <IconButton label="Important" onClick={() => navigate('/important')} className="hidden sm:inline-flex">
+        <IconButton label="Important" onClick={() => navigate('/important')} className="hidden lg:inline-flex">
           <Star className="h-5 w-5" />
         </IconButton>
         {import.meta.env.DEV ? (
@@ -103,50 +76,15 @@ export function Header({ className }: HeaderProps) {
             <DevMigrateNotesButton />
           </div>
         ) : null}
-        <IconButton label="Sign out" onClick={handleSignOut} className="hidden sm:inline-flex">
+
+        {/* From lg, sign out lives in the sidebar's account row, beside the face and name it
+            signs out of. Below lg there's no sidebar, so it sits here — as the button itself. It
+            used to be one item inside a "More" menu, which is a menu's worth of clicks for a
+            single action; Important, the only other entry, is already the bottom bar's Starred tab
+            at these widths and the sidebar's own row above them. */}
+        <IconButton label="Sign out" onClick={handleSignOut} className="lg:hidden">
           <LogOut className="h-5 w-5" />
         </IconButton>
-
-        <div ref={moreRef} className="relative sm:hidden">
-          <IconButton
-            label="More actions"
-            aria-expanded={moreOpen}
-            onClick={() => setMoreOpen((open) => !open)}
-          >
-            <MoreHorizontal className="h-5 w-5" />
-          </IconButton>
-          {moreOpen ? (
-            <div
-              role="menu"
-              className="absolute right-0 z-30 mt-1 min-w-[10rem] rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] py-1 shadow-[var(--shadow-md)]"
-            >
-              <button
-                type="button"
-                role="menuitem"
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[var(--color-text)] hover:bg-[var(--color-hover)]"
-                onClick={() => {
-                  setMoreOpen(false)
-                  navigate('/important')
-                }}
-              >
-                <Star className="h-4 w-4" aria-hidden />
-                Important
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-[var(--color-text)] hover:bg-[var(--color-hover)]"
-                onClick={() => {
-                  setMoreOpen(false)
-                  handleSignOut()
-                }}
-              >
-                <LogOut className="h-4 w-4" aria-hidden />
-                Sign out
-              </button>
-            </div>
-          ) : null}
-        </div>
       </div>
     </header>
   )

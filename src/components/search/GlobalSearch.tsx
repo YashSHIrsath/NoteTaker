@@ -205,9 +205,14 @@ export function GlobalSearch({ className }: GlobalSearchProps) {
       {showPanel ? (
         <div
           className={cn(
-            'fixed inset-x-3 top-[calc(3rem+env(safe-area-inset-top))] z-50 max-h-[70vh] overflow-y-auto rounded-2xl border border-[var(--color-border)] sm:top-[calc(3.5rem+env(safe-area-inset-top))]',
-            'bg-[var(--color-surface)] shadow-lg',
-            'sm:absolute sm:inset-x-auto sm:top-auto sm:right-0 sm:left-auto sm:mt-1 sm:w-[min(100%,24rem)]',
+            // Below sm the field lives in a cramped header, so the panel breaks out and pins to
+            // the viewport instead — the results need more room than the input has.
+            'fixed inset-x-3 top-[calc(3rem+env(safe-area-inset-top))] z-50 max-h-[70vh] overflow-y-auto',
+            'rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg',
+            // From sm it hangs off the field and spans exactly the field's width. It used to be a
+            // fixed 24rem pinned to the field's right edge, which on a wide header left the panel
+            // floating under the middle of an input it was supposed to belong to.
+            'sm:absolute sm:inset-x-0 sm:top-full sm:mt-1',
           )}
         >
           <CommandActionList actions={filteredActions} />

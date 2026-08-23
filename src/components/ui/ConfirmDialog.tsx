@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef } from 'react'
 import { Button } from './Button'
+import { Spinner } from './Spinner'
 import { useDialogFocus } from '../../hooks/useDialogFocus'
 
 export interface ConfirmDialogProps {
@@ -70,7 +71,14 @@ export function ConfirmDialog({
             Cancel
           </Button>
           <Button size="sm" variant="danger" onClick={onConfirm} disabled={loading}>
-            {loading ? 'Deleting…' : confirmLabel}
+            {loading ? (
+              <>
+                <Spinner />
+                Deleting…
+              </>
+            ) : (
+              confirmLabel
+            )}
           </Button>
         </div>
       </div>

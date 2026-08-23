@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { cn } from '../../lib/cn'
 
 export interface SpreadsheetTableProps {
@@ -51,7 +52,14 @@ export function SpreadsheetTable({ headers, rows }: SpreadsheetTableProps) {
   )
 }
 
-export function PreviewStatus({ children, className }: { children: string; className?: string }) {
+export function PreviewStatus({
+  children,
+  className,
+}: {
+  /** ReactNode, not string: a wait shows a spinner beside the words, not just the words. */
+  children: ReactNode
+  className?: string
+}) {
   return (
     <p className={cn('p-4 text-sm text-[var(--color-text-muted)]', className)}>{children}</p>
   )

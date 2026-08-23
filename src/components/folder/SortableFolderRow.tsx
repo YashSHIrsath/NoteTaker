@@ -7,6 +7,8 @@ export interface SortableFolderRowProps {
   parentId: string | null
   compact?: boolean
   className?: string
+  /** See SortableRow: hides the grip until the row is hovered/focused. */
+  revealHandleOnHover?: boolean
   children: ReactNode
 }
 
@@ -15,6 +17,7 @@ export function SortableFolderRow({
   parentId,
   compact = false,
   className,
+  revealHandleOnHover = false,
   children,
 }: SortableFolderRowProps) {
   const { reorderSiblingFolders } = useFolders()
@@ -26,6 +29,7 @@ export function SortableFolderRow({
       groupId={parentId}
       compact={compact}
       className={className}
+      revealHandleOnHover={revealHandleOnHover}
       dragLabel="Drag to reorder folder"
       onReorder={reorderSiblingFolders}
     >

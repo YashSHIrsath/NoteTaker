@@ -66,6 +66,12 @@ export function revealThemeChange(apply: () => void, origin?: RevealOrigin): voi
   // either one fading underneath the circle would muddy the edge we're animating.
   root.dataset.themeRevealing = ''
 
+  // Published before the transition starts, not after: index.css uses these to clip the incoming
+  // snapshot to a zero-radius circle from its very first frame, which is what stops the new theme
+  // flashing full-screen in the gap before the animation below is attached.
+  root.style.setProperty('--theme-reveal-x', `${from.x}px`)
+  root.style.setProperty('--theme-reveal-y', `${from.y}px`)
+
   const start = (document as unknown as { startViewTransition: StartViewTransition })
     .startViewTransition
 
@@ -86,6 +92,10 @@ export function revealThemeChange(apply: () => void, origin?: RevealOrigin): voi
           easing: 'cubic-bezier(0.32, 0.72, 0, 1)',
           // The old theme stays put underneath; only the incoming one is clipped.
           pseudoElement: '::view-transition-new(root)',
+          // Holds the full circle at the end. Without it the animation stops filling and the
+          // clip-path falls back to the CSS base — circle(0) — blanking the new theme for the
+          // frame between the animation finishing and the transition tearing the snapshot down.
+          fill: 'forwards',
         },
       )
     })
@@ -95,6 +105,8 @@ export function revealThemeChange(apply: () => void, origin?: RevealOrigin): voi
     .catch(() => undefined)
     .finally(() => {
       delete root.dataset.themeRevealing
+      root.style.removeProperty('--theme-reveal-x')
+      root.style.removeProperty('--theme-reveal-y')
     })
 }
 

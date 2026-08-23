@@ -1,5 +1,6 @@
-import { ClipboardList, Folder, ListTree, PanelLeftClose, PanelLeftOpen, Star } from 'lucide-react'
+import { ClipboardList, Folder, ListTree, LogOut, PanelLeftClose, PanelLeftOpen, Star } from 'lucide-react'
 import { ProjectLogo } from '../brand/ProjectLogo'
+import { IconButton } from '../ui/IconButton'
 import { SidebarSection } from './SidebarSection'
 import { SidebarFolderItem } from './SidebarFolderItem'
 import type { Folder as FolderRecord, SidebarNavId } from '../../types'
@@ -36,10 +37,14 @@ export function Sidebar({
   onToggleCollapsed,
   className,
 }: SidebarProps) {
-  const { user } = useAuth()
+  const { user, signOut } = useAuth()
   const metadata = (user?.user_metadata ?? {}) as { full_name?: string; avatar_url?: string }
   const displayName = metadata.full_name?.trim() || user?.email || 'Signed in'
   const initial = (metadata.full_name?.trim() || user?.email || 'Y').charAt(0).toUpperCase()
+
+  const handleSignOut = () => {
+    void signOut().catch(() => undefined)
+  }
 
   return (
     <aside
@@ -49,9 +54,12 @@ export function Sidebar({
         className,
       )}
     >
+      {/* Brand row, then a rule. Without the rule the wordmark sat directly on top of the first
+          nav item with nothing between them, so the whole column read as one undifferentiated
+          stack — which is most of why it felt cramped. */}
       <div
         className={cn(
-          'flex items-center gap-2 px-3 pb-4 pt-4',
+          'flex items-center gap-2.5 px-3 pb-3.5 pt-4',
           collapsed && 'flex-col gap-3',
         )}
       >
@@ -62,7 +70,7 @@ export function Sidebar({
           )}
         >
           <span
-            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent-soft)] text-[var(--color-accent)] shadow-[var(--shadow-sm)]"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[var(--color-accent-soft)] text-[var(--color-accent)] shadow-[var(--shadow-sm)]"
             aria-hidden
           >
             <ProjectLogo className="h-3.5 w-[19px]" />
@@ -77,15 +85,20 @@ export function Sidebar({
           ) : null}
         </div>
         {onToggleCollapsed ? (
+          // Given a border and a fill of its own: as a bare glyph pushed against the sidebar's
+          // right edge it read as part of the frame rather than as something clickable, and it was
+          // the one control in here with no hit area you could see before you found it.
           <button
             type="button"
             aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            aria-expanded={!collapsed}
             title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             onClick={onToggleCollapsed}
             className={cn(
-              'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[var(--color-text-muted)] transition-colors',
-              'hover:bg-[var(--color-hover)] hover:text-[var(--color-text)]',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/20',
+              'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors',
+              'border border-[var(--color-border)] bg-[var(--color-surface-muted)] text-[var(--color-text-muted)]',
+              'hover:border-[var(--color-border-strong)] hover:bg-[var(--color-hover)] hover:text-[var(--color-text)]',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/25',
             )}
           >
             {collapsed ? (
@@ -97,8 +110,10 @@ export function Sidebar({
         ) : null}
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-2 pb-3" aria-label="Main">
-        <div className="space-y-0.5">
+      <div className="mx-3 border-t border-[var(--color-border)]" />
+
+      <nav className="flex-1 overflow-y-auto px-2.5 pb-3 pt-3" aria-label="Main">
+        <div className="space-y-1">
           <SidebarSection
             icon={<ListTree className="h-4 w-4" aria-hidden />}
             label="Tree"
@@ -149,43 +164,69 @@ export function Sidebar({
         </div>
       </nav>
 
-      <div className="px-2 pb-3">
-        <button
-          type="button"
-          onClick={onOpenProfile}
-          aria-current={profileActive ? 'page' : undefined}
+      {/* A bordered footer rather than a pill floating at the bottom of the nav's scroll area: the
+          account and its sign out are a different kind of thing from the navigation above them,
+          and the rule is what says so. It also gives the sidebar a bottom edge on a tall screen,
+          where the nav list ends far above the fold. */}
+      <div className="border-t border-[var(--color-border)] px-2.5 py-3">
+        {/* One pill holding two controls, not one button holding another — a button inside a
+            button is invalid and the inner one never gets its own clicks. */}
+        <div
           className={cn(
-            'flex w-full items-center gap-2.5 rounded-full p-2 text-left transition-colors',
-            'hover:bg-[var(--color-hover)]',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/20',
+            'flex items-center rounded-xl p-1 transition-colors',
             profileActive ? 'bg-[var(--color-accent-soft)]' : 'bg-[var(--color-surface-muted)]',
-            collapsed && 'justify-center',
+            // Collapsed there's no room beside the avatar, so sign out drops underneath it.
+            collapsed ? 'flex-col gap-1' : 'gap-1',
           )}
         >
-          {metadata.avatar_url ? (
-            <img
-              src={metadata.avatar_url}
-              alt=""
-              className="h-7 w-7 shrink-0 rounded-full object-cover"
-            />
-          ) : (
-            <span
-              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold text-white"
-              style={{ background: 'linear-gradient(135deg, var(--cat-rose), var(--color-accent))' }}
-              aria-hidden
-            >
-              {initial}
-            </span>
-          )}
-          {!collapsed ? (
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-[12.5px] font-medium text-[var(--color-text)]">
-                {displayName}
+          <button
+            type="button"
+            onClick={onOpenProfile}
+            aria-current={profileActive ? 'page' : undefined}
+            title={collapsed ? displayName : undefined}
+            className={cn(
+              'flex min-w-0 items-center gap-2.5 rounded-lg p-1 text-left transition-colors',
+              'hover:bg-[var(--color-hover)]',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/20',
+              collapsed ? 'justify-center' : 'flex-1',
+            )}
+          >
+            {metadata.avatar_url ? (
+              <img
+                src={metadata.avatar_url}
+                alt=""
+                className="h-7 w-7 shrink-0 rounded-full object-cover"
+              />
+            ) : (
+              <span
+                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold text-white"
+                style={{ background: 'linear-gradient(135deg, var(--cat-rose), var(--color-accent))' }}
+                aria-hidden
+              >
+                {initial}
+              </span>
+            )}
+            {!collapsed ? (
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[12.5px] font-medium text-[var(--color-text)]">
+                  {displayName}
+                </div>
+                <div className="text-[11px] text-[var(--color-text-muted)]">Personal workspace</div>
               </div>
-              <div className="text-[11px] text-[var(--color-text-muted)]">Personal workspace</div>
-            </div>
-          ) : null}
-        </button>
+            ) : null}
+          </button>
+
+          {/* Danger colour on hover, not at rest: it sits one thumb's width from the profile
+              button, so it has to identify itself as the destructive one before it's clicked —
+              without turning the resting sidebar into a warning. */}
+          <IconButton
+            label="Sign out"
+            onClick={handleSignOut}
+            className="h-8 w-8 shrink-0 rounded-lg hover:bg-[var(--color-danger)]/10 hover:text-[var(--color-danger)]"
+          >
+            <LogOut className="h-4 w-4" />
+          </IconButton>
+        </div>
       </div>
     </aside>
   )

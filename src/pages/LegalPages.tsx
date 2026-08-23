@@ -9,7 +9,7 @@ import { ProjectLogo } from '../components/brand/ProjectLogo'
  * no sharing, no backups, no in-app account deletion). If a behaviour changes, these change with
  * it; nothing here is boilerplate copied from a template.
  */
-const CONTACT_EMAIL = 'shirsathyash666@gmail.com'
+const CONTACT_EMAIL = 'supportmindstack@gmail.com'
 const LAST_UPDATED = '23 August 2026'
 
 export function PrivacyPage() {

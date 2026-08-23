@@ -1,20 +1,13 @@
 import { Navigate, Outlet } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
+import { LoadingSplash } from '../components/common/LoadingSplash'
 import { IS_NATIVE } from '../lib/platform'
-
-function AuthSplash({ label }: { label: string }) {
-  return (
-    <div className="flex h-full items-center justify-center bg-[var(--color-surface)] text-sm text-[var(--color-text-muted)]">
-      {label}
-    </div>
-  )
-}
 
 export function RequireAuth() {
   const { loading, session } = useAuth()
 
   if (loading) {
-    return <AuthSplash label="Loading…" />
+    return <LoadingSplash label="Signing you in" />
   }
 
   if (!session) {
@@ -31,7 +24,7 @@ export function GuestOnly() {
   const { loading, session } = useAuth()
 
   if (loading) {
-    return <AuthSplash label="Loading…" />
+    return <LoadingSplash label="Signing you in" />
   }
 
   if (session) {

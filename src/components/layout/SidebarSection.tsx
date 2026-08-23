@@ -1,9 +1,6 @@
 import type { ReactNode } from 'react'
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import { ChevronRight } from 'lucide-react'
 import { cn } from '../../lib/cn'
-
-const rowClassName =
-  'flex min-w-0 flex-1 items-center gap-2.5 rounded-full px-2 py-1.5 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/20'
 
 export interface SidebarSectionProps {
   icon: ReactNode
@@ -17,6 +14,20 @@ export interface SidebarSectionProps {
   children?: ReactNode
 }
 
+/**
+ * One row of the sidebar's navigation.
+ *
+ * Two things about the shape are deliberate. The disclosure chevron sits at the row's *right*,
+ * inside the row, rather than in a gutter to its left — a left-hand chevron meant every
+ * non-expandable row had to reserve an empty 28px spacer to keep the icons aligned, so the whole
+ * list read as indented from nothing. And the row is a container with two buttons in it rather
+ * than one button: "go to Notes" and "show Notes' folders" are separate actions, and a button
+ * inside a button is invalid markup whose inner half never gets its own clicks.
+ *
+ * The active row is marked three ways — tinted fill, accent glyph and label, and a bar on the
+ * leading edge — because fill alone is easy to lose against a tinted folder chip sitting on the
+ * same row.
+ */
 export function SidebarSection({
   icon,
   label,
@@ -36,9 +47,10 @@ export function SidebarSection({
         aria-label={label}
         onClick={onSelect}
         className={cn(
-          'flex h-10 w-full items-center justify-center rounded-full transition-colors',
+          'flex h-11 w-full items-center justify-center rounded-xl transition-colors',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/20',
           active
-            ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent-ink)]'
+            ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)] ring-1 ring-inset ring-[var(--color-accent)]/25'
             : 'text-[var(--color-text-muted)] hover:bg-[var(--color-hover)] hover:text-[var(--color-text)]',
         )}
       >
@@ -49,7 +61,49 @@ export function SidebarSection({
 
   return (
     <div>
-      <div className="flex items-center gap-0.5">
+      <div
+        className={cn(
+          'relative flex items-center gap-0.5 rounded-xl transition-colors',
+          active
+            ? 'bg-[var(--color-accent-soft)] ring-1 ring-inset ring-[var(--color-accent)]/20'
+            : 'hover:bg-[var(--color-hover)]',
+        )}
+      >
+        {active ? (
+          <span
+            aria-hidden
+            className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-[var(--color-accent)]"
+          />
+        ) : null}
+
+        <button
+          type="button"
+          onClick={onSelect}
+          className={cn(
+            'flex min-w-0 flex-1 items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-[13.5px]',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-accent)]/25',
+          )}
+        >
+          <span
+            className={cn(
+              'inline-flex h-5 w-5 shrink-0 items-center justify-center transition-colors',
+              active ? 'text-[var(--color-accent)]' : 'text-[var(--color-text-muted)]',
+            )}
+          >
+            {icon}
+          </span>
+          <span
+            className={cn(
+              'truncate',
+              active
+                ? 'font-semibold text-[var(--color-accent-ink)]'
+                : 'font-medium text-[var(--color-text)]',
+            )}
+          >
+            {label}
+          </span>
+        </button>
+
         {expandable ? (
           <button
             type="button"
@@ -57,39 +111,36 @@ export function SidebarSection({
             aria-expanded={expanded}
             onClick={onToggleExpand}
             className={cn(
-              'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full',
-              'text-[var(--color-text-muted)] transition-colors',
-              'hover:bg-[var(--color-hover)] hover:text-[var(--color-text)]',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/20',
+              'mr-1.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-lg transition-colors',
+              'text-[var(--color-text-muted)] hover:bg-[var(--color-border)] hover:text-[var(--color-text)]',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/25',
             )}
           >
-            {expanded ? (
-              <ChevronDown className="h-4 w-4" aria-hidden />
-            ) : (
-              <ChevronRight className="h-4 w-4" aria-hidden />
-            )}
+            {/* One rotating chevron rather than two icons: the turn is the animation, and there's
+                no frame where the glyph swaps out from under the pointer. */}
+            <ChevronRight
+              className={cn(
+                'h-3.5 w-3.5 transition-transform duration-150 motion-reduce:transition-none',
+                expanded && 'rotate-90',
+              )}
+              aria-hidden
+            />
           </button>
-        ) : (
-          <span className="inline-flex h-7 w-7 shrink-0" aria-hidden />
-        )}
-
-        <button
-          type="button"
-          onClick={onSelect}
-          className={cn(
-            rowClassName,
-            active
-              ? 'bg-[var(--color-accent-soft)] font-semibold text-[var(--color-accent-ink)]'
-              : 'text-[var(--color-text)] hover:bg-[var(--color-hover)]',
-          )}
-        >
-          <span className={cn('shrink-0', active ? 'text-[var(--color-accent-ink)]' : 'text-[var(--color-text-muted)]')}>{icon}</span>
-          <span className="truncate">{label}</span>
-        </button>
+        ) : null}
       </div>
 
       {expandable && expanded && children ? (
-        <div className="ml-[1.75rem] mt-0.5 space-y-0.5 border-l border-[var(--color-border)] pl-2">
+        // The rail is an inset absolute line rather than a border on the container: a border runs
+        // the full height including the gap under the last child, which left a stub hanging below
+        // the list.
+        // 1.375rem is the parent row's icon centre: px-3 of padding plus half of a 20px glyph.
+        // The rail hanging a few pixels to the left of it was the kind of near-miss that reads as
+        // sloppy rather than as a deliberate offset.
+        <div className="relative mt-1 space-y-0.5 py-0.5 pl-[2.125rem]">
+          <span
+            aria-hidden
+            className="absolute bottom-1.5 left-[1.375rem] top-1.5 w-px bg-[var(--color-border)]"
+          />
           {children}
         </div>
       ) : null}

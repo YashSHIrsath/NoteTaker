@@ -1,7 +1,8 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { AtSign, Check, Eye, EyeOff, KeyRound, Loader2, MailCheck, User } from 'lucide-react'
+import { AtSign, Check, Eye, EyeOff, KeyRound, MailCheck, User } from 'lucide-react'
 import { Button } from '../components/ui/Button'
+import { Spinner } from '../components/ui/Spinner'
 import { toAuthErrorMessage } from '../lib/authErrors'
 import { useAuth } from '../hooks/useAuth'
 import { ProjectLogo } from '../components/brand/ProjectLogo'
@@ -273,7 +274,7 @@ function SubmitButton({
       className="mt-1 w-full justify-center rounded-xl py-2.5 text-sm font-semibold"
       disabled={busy || disabled}
     >
-      {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
+      {busy ? <Spinner /> : null}
       {children}
     </Button>
   )

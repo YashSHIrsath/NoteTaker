@@ -195,12 +195,12 @@
    (--level is in em), shrinks them proportionally for free. Headings are then capped further so
    an h1 in a task's notes doesn't blow out the card's fixed preview height on its own. */
 .task-blocknote-preview .bn-default-styles {
-  font-size: 13px;
+  font-size: 14.5px;
 }
 
 @media (max-width: 640px) {
   .task-blocknote-preview .bn-default-styles {
-    font-size: 12px;
+    font-size: 13.5px;
   }
 }
 
@@ -230,4 +230,153 @@
 .task-blocknote-preview [data-text-alignment='justify'] {
   text-align: left !important;
   justify-content: flex-start !important;
+}
+
+/* Uploading a file into the editor: BlockNote drops in a div whose whole content is the literal
+   text "Loading..." — plain, left-aligned, in whatever the surrounding font happens to be. The
+   text is set from script (textContent), so it can't be replaced from CSS; what it can be given
+   is a shape and a moving part, so the block reads as busy rather than as a stray word. The
+   sweeping bar is the app's own accent, matching the loader used everywhere else. */
+.task-blocknote .bn-file-loading-preview {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.875rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.75rem;
+  background-color: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+}
+
+.task-blocknote .bn-file-loading-preview::after {
+  content: '';
+  position: absolute;
+  inset-inline-start: 0;
+  bottom: 0;
+  width: 35%;
+  height: 2px;
+  border-radius: 999px;
+  background-color: var(--color-accent);
+  animation: anim-upload-sweep 1.2s var(--motion-ease) infinite;
+}
+
+@keyframes anim-upload-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(calc(100% / 0.35));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .task-blocknote .bn-file-loading-preview::after {
+    animation: none;
+    width: 100%;
+  }
+}
+
+/* ------------------------------------------------------- interactive previews
+
+   A card's note preview is inert as a whole — its wrapper carries `pointer-events: none` so a
+   click anywhere on the card opens the note. These two are the exceptions, because they do
+   something of their own: ticking a line off and folding a section away are things you want to do
+   while looking at the card, not reasons to open it. See TaskContentPreview, which re-enables the
+   boxes and attaches the handlers (the serialized HTML arrives with neither). */
+.task-blocknote-preview .bn-toggle-button {
+  pointer-events: auto;
+}
+
+/* The target is the box's whole column, not the 13px control inside it. A tick box you have to
+   hit exactly is a tick box you stop using — and since everything around it passes clicks through
+   to the card, a near miss didn't do nothing, it opened the note. Padding grows the hit area and
+   the matching negative margin cancels it, so the box doesn't move.
+
+   The input itself stays inert on purpose: with one clickable element per row every click resolves
+   to the same place, and the browser never flips the box behind our back (which would double up
+   with the handler doing it). Keyboard use still goes through the input's own change event. */
+.task-blocknote-preview [data-content-type='checkListItem'] > div:has(> input) {
+  pointer-events: auto;
+  cursor: pointer;
+  padding: 4px;
+  margin: -4px;
+}
+
+.task-blocknote-preview [data-content-type='checkListItem'] > div > input {
+  pointer-events: none;
+}
+
+/* BlockNote sizes the tick box 12x24 — a squarish control in a box as tall as the editor's 24px
+   line — and leaves the row on the flex container's default `align-items: stretch`. At the
+   editor's 16px type those line up; the preview runs smaller (14.5px, 13.5px on a phone), so the
+   24px column overshot the shorter text line beside it and every item sat visibly low.
+
+   Fixed by making both sides centre against each other instead of pinning either to a fixed
+   height: the box shrinks to the input, and `center` lines it up with the text whatever the
+   inherited line-height turns out to be. A wrapped item centres across both its lines rather than
+   against the first, which is a fair trade in a preview that truncates anyway. */
+.task-blocknote-preview [data-content-type='checkListItem'] {
+  align-items: center;
+}
+
+.task-blocknote-preview [data-content-type='checkListItem'] > div:has(> input) {
+  display: flex;
+  align-items: center;
+  height: auto;
+}
+
+/* 16px square is the size a tick box is normally drawn at. BlockNote's own 12x24 isn't even
+   square, and shrunk into a preview it read as a speck beside its own label — it now sits in
+   proportion to the body type rather than being dwarfed by it. accent-color makes a ticked box the
+   app's purple instead of the browser's default blue. */
+.task-blocknote-preview [data-content-type='checkListItem'] > div > input {
+  width: 16px;
+  height: 16px;
+  margin: 0 8px 0 0;
+  accent-color: var(--color-accent);
+}
+
+/* The editor's tick box has the same problem as the preview's and for the same reason (BlockNote's
+   12x24), just less glaring at full size. Squared off and grown to match. The 24px row height is
+   left alone deliberately — that's what sets a checklist's line rhythm, and changing it would
+   reflow every note. */
+.task-blocknote .bn-editor [data-content-type='checkListItem'] > div > input {
+  width: 17px;
+  height: 17px;
+  margin-left: 2px;
+  margin-right: 8px;
+  accent-color: var(--color-accent);
+}
+
+/* ------------------------------------------------------------ toggle arrow
+
+   BlockNote fills the disclosure arrow's <button> with --bn-colors-hovered-background (#efefef in
+   light) on :hover. That's fine with a mouse and wrong on a phone: touch browsers leave :hover
+   applied to whatever you last tapped until you tap something else, so folding a section painted a
+   grey box around the arrow and left it there — which reads as a border nobody asked for.
+
+   Previews drop the fill in every state; the arrow is small, it sits on a coloured card, and a box
+   behind it is noise. Hovering tints the arrow itself instead. */
+.task-blocknote-preview .bn-toggle-button,
+.task-blocknote-preview .bn-toggle-button:hover {
+  background: none;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+}
+
+.task-blocknote-preview .bn-toggle-button:hover {
+  color: var(--color-accent);
+}
+
+/* The editor keeps the fill, because there it's a real affordance in a real gutter — but only
+   where a pointer exists to take it away again. */
+@media (hover: none) {
+  .task-blocknote .bn-toggle-button:hover,
+  .task-blocknote .bn-toggle-add-block-button:hover {
+    background-color: transparent;
+  }
 }

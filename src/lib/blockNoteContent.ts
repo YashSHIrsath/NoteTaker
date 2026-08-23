@@ -155,6 +155,35 @@ export function findBlockAttachmentId(content: string, blockId: string): string 
   return attachmentIdFromUrl(url)
 }
 
+/**
+ * Flips a checklist item's `checked` prop in stored content, addressed by the block id the DOM
+ * carries — for read-only renderings (a folder-grid card) that show the document without a live
+ * editor to call `updateBlock` on.
+ *
+ * Returns null when the tick can't be recorded: a legacy plain-text note (whose blocks are
+ * synthesized on read and have no stable ids), an id that no longer exists, or a block that is no
+ * longer a checklist item. Callers must treat null as "not saved" rather than assuming success —
+ * a checkbox that appears to tick and then silently forgets is worse than one that doesn't move.
+ */
+export function setBlockChecked(content: string, blockId: string, checked: boolean): string | null {
+  if (!isBlockNoteContent(content)) {
+    return null
+  }
+
+  let changed = false
+  const walk = (list: StoredBlock[]): StoredBlock[] =>
+    list.map((block) => {
+      if (block.id === blockId && block.type === 'checkListItem') {
+        changed = true
+        return { ...block, props: { ...block.props, checked } }
+      }
+      return block.children ? { ...block, children: walk(block.children) } : block
+    })
+
+  const next = walk(JSON.parse(content) as StoredBlock[])
+  return changed ? JSON.stringify(next) : null
+}
+
 /** Every attachment id still referenced by a block in the document. Deleting an attachment's
  * block from the text doesn't delete the underlying attachment record, so an "all attachments
  * for this task" bar needs this filter or it keeps showing ones no longer in the note. */

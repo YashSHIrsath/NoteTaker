@@ -36,6 +36,8 @@ import { NotesDeletionService } from '../services/deletion/notesDeletionService'
 import { ItemDndProvider } from './ItemDndContext'
 import { useAuth } from './AuthContext'
 import { Button } from '../components/ui/Button'
+import { Spinner } from '../components/ui/Spinner'
+import { LoadingSplash } from '../components/common/LoadingSplash'
 
 interface FolderContextValue {
   folders: Folder[]
@@ -68,7 +70,9 @@ interface FolderContextValue {
     position: 'before' | 'after',
   ) => void
   moveTaskToFolder: (taskId: string, targetFolderId: string) => void
-  updateTaskContent: (taskId: string, content: string) => void
+  /** `immediate` skips the typing debounce — for a discrete edit (ticking a checklist item from a
+   *  card) where there is no next keystroke to wait for. */
+  updateTaskContent: (taskId: string, content: string, options?: { immediate?: boolean }) => void
   updateTaskTitle: (taskId: string, title: string) => void
   deleteTask: (taskId: string) => Promise<{ folderId: string; deletedTaskIds: string[] }>
   toggleTaskImportant: (taskId: string) => void
@@ -396,6 +400,30 @@ export function FolderProvider({ children }: { children: ReactNode }) {
     }
   }, [ready, uiState, userId])
 
+  // A pending typing save must not die with the page. Both events fire on a reload, a tab close
+  // and a phone backgrounding the browser, and pagehide is the one that still fires on iOS, where
+  // beforeunload does not. Only flushes when a save is actually pending, so this costs nothing on
+  // an ordinary navigation.
+  useEffect(() => {
+    const flush = () => {
+      if (contentTimerRef.current === null) {
+        return
+      }
+      void persistNotes().catch(() => undefined)
+    }
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        flush()
+      }
+    }
+    window.addEventListener('pagehide', flush)
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      window.removeEventListener('pagehide', flush)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [persistNotes])
+
   const retryPersist = useCallback(async () => {
     const pending = pendingRetryRef.current
     if (!pending) {
@@ -610,15 +638,23 @@ export function FolderProvider({ children }: { children: ReactNode }) {
   )
 
   const updateTaskContent = useCallback(
-    (taskId: string, content: string) => {
+    (taskId: string, content: string, options?: { immediate?: boolean }) => {
       applyNotes({
         folders: foldersRef.current,
         tasks: tasksRef.current.map((task) => (task.id === taskId ? { ...task, content } : task)),
         subtasks: subtasksRef.current,
       })
+      // The debounce here exists for typing — it's waiting for the next keystroke. A discrete
+      // edit has no next keystroke, so it saves the way every other discrete action in this file
+      // does: right now. Ticking a checklist item from a card and reloading a moment later was
+      // otherwise a race against the timer, and the reload usually won.
+      if (options?.immediate) {
+        void persistNotes().catch(() => undefined)
+        return
+      }
       scheduleContentPersist()
     },
-    [applyNotes, scheduleContentPersist],
+    [applyNotes, persistNotes, scheduleContentPersist],
   )
 
   const updateTaskTitle = useCallback(
@@ -1175,19 +1211,11 @@ export function FolderProvider({ children }: { children: ReactNode }) {
   )
 
   if (!userId) {
-    return (
-      <div className="flex h-full items-center justify-center bg-[var(--color-surface)] text-sm text-[var(--color-text-muted)]">
-        Loading…
-      </div>
-    )
+    return <LoadingSplash label="Signing you in" />
   }
 
   if (!ready && !loadError) {
-    return (
-      <div className="flex h-full items-center justify-center bg-[var(--color-surface)] text-sm text-[var(--color-text-muted)]">
-        Loading…
-      </div>
-    )
+    return <LoadingSplash label="Opening your notes" />
   }
 
   if (loadError) {
@@ -1221,7 +1249,8 @@ export function FolderProvider({ children }: { children: ReactNode }) {
             ) : null}
           </div>
         ) : isBusy || isUploadingAttachment || removingAttachmentId ? (
-          <div className="absolute inset-x-0 top-0 z-50 border-b border-[var(--color-border)] bg-[var(--color-surface-muted)] px-4 py-2 text-sm text-[var(--color-text-muted)]">
+          <div className="absolute inset-x-0 top-0 z-50 flex items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface-muted)] px-4 py-2 text-sm text-[var(--color-text-muted)]">
+            <Spinner />
             Saving…
           </div>
         ) : null}

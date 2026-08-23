@@ -11,6 +11,10 @@ export interface SortableRowProps {
   groupId: string | null
   compact?: boolean
   className?: string
+  /** Keeps the grip out of sight until the row is hovered or something inside it is focused. For
+   *  dense, always-on lists (the sidebar) where a permanent column of grip dots is noise; leave it
+   *  off where the row is the primary place reordering is done and the affordance should be visible. */
+  revealHandleOnHover?: boolean
   dragLabel: string
   onReorder: (draggedId: string, targetId: string, position: DropPosition) => void
   children: ReactNode
@@ -30,6 +34,7 @@ export function SortableRow({
   groupId,
   compact = false,
   className,
+  revealHandleOnHover = false,
   dragLabel,
   onReorder,
   children,
@@ -91,6 +96,7 @@ export function SortableRow({
       className={cn(
         // A row that has just been created (or dropped into a new parent) fades up into place.
         'anim-item-in border-y-2 border-transparent',
+        revealHandleOnHover && 'group',
         hint === 'before' && 'border-t-[var(--color-accent)]',
         hint === 'after' && 'border-b-[var(--color-accent)]',
         isDragging && 'rounded-xl bg-[var(--color-hover)] opacity-60 ring-1 ring-[var(--color-accent)]',
@@ -115,6 +121,10 @@ export function SortableRow({
             'inline-flex shrink-0 cursor-grab touch-none select-none items-center justify-center rounded-full text-[var(--color-text-muted)]',
             'active:cursor-grabbing',
             compact ? 'h-6 w-5' : 'h-7 w-6',
+            // Still occupies its slot when hidden — fading it rather than removing it keeps every
+            // row's label on the same left edge whether or not the pointer is over it.
+            revealHandleOnHover &&
+              'opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100',
             'hover:bg-[var(--color-hover)] hover:text-[var(--color-text)]',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/20',
           )}

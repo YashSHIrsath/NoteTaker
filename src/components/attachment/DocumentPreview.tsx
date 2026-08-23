@@ -3,6 +3,7 @@ import mammoth from 'mammoth'
 import { useFolders } from '../../hooks/useFolders'
 import type { Attachment } from '../../types'
 import { PreviewStatus } from './SpreadsheetTable'
+import { Spinner } from '../ui/Spinner'
 
 export interface DocumentPreviewProps {
   attachment: Attachment
@@ -69,7 +70,14 @@ export function DocumentPreview({ attachment }: DocumentPreviewProps) {
   }
 
   if (!html) {
-    return <PreviewStatus>Loading preview…</PreviewStatus>
+    return (
+      <PreviewStatus>
+        <span className="inline-flex items-center gap-2">
+          <Spinner />
+          Loading preview…
+        </span>
+      </PreviewStatus>
+    )
   }
 
   return (
