@@ -1,7 +1,13 @@
 import { Link } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
-import type { ReactNode } from 'react'
-import { ProjectLogo } from '../components/brand/ProjectLogo'
+import {
+  StaticPage,
+  DocA as A,
+  DocB as B,
+  DocH as H,
+  DocLI as LI,
+  DocP as P,
+  DocUL as UL,
+} from '../components/layout/StaticPage'
 
 /**
  * Both documents describe only what the app and its Supabase project actually do today — the
@@ -14,7 +20,7 @@ const LAST_UPDATED = '23 August 2026'
 
 export function PrivacyPage() {
   return (
-    <LegalScreen title="Privacy" updated={LAST_UPDATED}>
+    <StaticPage title="Privacy" updated={LAST_UPDATED}>
       <P>
         Mindstack is a personal note-taking app run by one person. This page describes exactly what it
         stores, where it lives, and who can see it.
@@ -104,13 +110,13 @@ export function PrivacyPage() {
       <P>
         Questions, or a deletion request: <A href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</A>.
       </P>
-    </LegalScreen>
+    </StaticPage>
   )
 }
 
 export function TermsPage() {
   return (
-    <LegalScreen title="Terms of use" updated={LAST_UPDATED}>
+    <StaticPage title="Terms of use" updated={LAST_UPDATED}>
       <P>
         Mindstack is a free personal project. Using it means accepting the terms below. They&rsquo;re
         short because the service is small.
@@ -175,98 +181,6 @@ export function TermsPage() {
       <P>
         Anything about these terms: <A href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</A>.
       </P>
-    </LegalScreen>
-  )
-}
-
-function LegalScreen({
-  title,
-  updated,
-  children,
-}: {
-  title: string
-  updated: string
-  children: ReactNode
-}) {
-  return (
-    <div className="min-h-full overflow-y-auto bg-[var(--color-surface)] text-[var(--color-text)]">
-      <header className="sticky top-0 z-20 border-b border-[var(--color-border)] bg-[var(--color-surface)]/80 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-2xl items-center gap-3 px-4 py-3 sm:px-6">
-          <Link
-            to="/welcome"
-            className="anim-press inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[13px] font-semibold text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-hover)] hover:text-[var(--color-text)]"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
-            <ProjectLogo className="h-3.5 w-[19px] text-[var(--color-accent)]" />
-            Mindstack
-          </Link>
-          <span className="ml-auto text-[13px] text-[var(--color-text-muted)]">Updated {updated}</span>
-        </div>
-      </header>
-
-      <main className="mx-auto max-w-2xl px-4 py-10 sm:px-6 sm:py-14">
-        <h1
-          className="text-[30px] font-semibold tracking-tight sm:text-[38px]"
-          style={{ fontFamily: 'var(--font-display)' }}
-        >
-          {title}
-        </h1>
-        <div className="mt-6">{children}</div>
-
-        <p className="mt-10 border-t border-[var(--color-border)] pt-5 text-[13px] text-[var(--color-text-muted)]">
-          <Link to="/privacy" className="hover:text-[var(--color-text)] hover:underline">
-            Privacy
-          </Link>
-          <span className="px-2">·</span>
-          <Link to="/terms" className="hover:text-[var(--color-text)] hover:underline">
-            Terms
-          </Link>
-          <span className="px-2">·</span>
-          <Link to="/welcome" className="hover:text-[var(--color-text)] hover:underline">
-            Home
-          </Link>
-        </p>
-      </main>
-    </div>
-  )
-}
-
-function H({ children }: { children: ReactNode }) {
-  return (
-    <h2
-      className="mt-8 text-[17px] font-semibold tracking-tight"
-      style={{ fontFamily: 'var(--font-display)' }}
-    >
-      {children}
-    </h2>
-  )
-}
-
-function P({ children }: { children: ReactNode }) {
-  return <p className="mt-3 text-[14.5px] leading-relaxed text-[var(--color-text-muted)]">{children}</p>
-}
-
-function UL({ children }: { children: ReactNode }) {
-  return <ul className="mt-3 space-y-2">{children}</ul>
-}
-
-function LI({ children }: { children: ReactNode }) {
-  return (
-    <li className="relative pl-4 text-[14.5px] leading-relaxed text-[var(--color-text-muted)]">
-      <span className="absolute left-0 top-[0.6em] h-1 w-1 rounded-full bg-[var(--color-accent)]" aria-hidden />
-      {children}
-    </li>
-  )
-}
-
-function B({ children }: { children: ReactNode }) {
-  return <strong className="font-semibold text-[var(--color-text)]">{children}</strong>
-}
-
-function A({ href, children }: { href: string; children: ReactNode }) {
-  return (
-    <a href={href} className="text-[var(--color-accent)] hover:underline">
-      {children}
-    </a>
+    </StaticPage>
   )
 }

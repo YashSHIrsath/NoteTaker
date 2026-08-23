@@ -1,76 +1,117 @@
-name: iOS Build and Artifact
+name: iOS Build
 
+# The counterpart to android.yml, and it works the same way: the native project is generated
+# here from capacitor.config.ts and the web build rather than committed, and the result lands as
+# a downloadable artifact.
+#
+# One difference that isn't a bug: this produces an *unsigned* build. Putting an app on a real
+# iPhone needs an Apple signing identity, and there is none in this repo — see the archive step.
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]
+    branches: [main]
+    tags: ['v*']
+    paths-ignore:
+      - '**/*.md'
+      - '.gitignore'
+      - 'vercel.json'
+      - 'supabase/**'
 
 jobs:
-  build:
-    name: Build iOS
+  ios:
     runs-on: macos-latest
+    # Same reason as the Android job: the Supabase values are environment secrets, and a job only
+    # receives those if it names the environment.
+    environment: Production
     env:
       WORKSPACE: ios/App/App.xcworkspace
       SCHEME: App
       ARCHIVE_PATH: ${{ github.workspace }}/build/App.xcarchive
-      EXPORT_PATH: ${{ github.workspace }}/build
-      # Map your Vite env secrets here (replace these names with your actual secret keys)
-      VITE_API_URL: ${{ secrets.VITE_API_URL }}
-      VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      # Node 18 is what this job used to pin, and it's why the build died before it ever reached
+      # Xcode: Vite 8 bundles with rolldown, which imports styleText from node:util — added in
+      # Node 20.12. vite's own engines field says ^20.19 || >=22.12, so 22 it is, matching
+      # android.yml.
+      - uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 22
+          cache: npm
 
-      - name: Install dependencies
-        run: npm ci
+      - run: npm ci
 
+      # Fail here rather than shipping a build that can't connect: these are inlined at build
+      # time, so an empty value is invisible until the app runs on a phone.
+      - name: Check Supabase config is present
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: |
+          test -n "$VITE_SUPABASE_URL" || { echo "::error::VITE_SUPABASE_URL is empty. Add it as an Actions secret (repository, or in the environment this job names)."; exit 1; }
+          test -n "$VITE_SUPABASE_ANON_KEY" || { echo "::error::VITE_SUPABASE_ANON_KEY is empty. Add it as an Actions secret (repository, or in the environment this job names)."; exit 1; }
+          echo "Supabase config present (URL is ${#VITE_SUPABASE_URL} chars, key is ${#VITE_SUPABASE_ANON_KEY} chars)."
+
+      # build:native, not build — the native modes differ, and this is the script the APK job
+      # uses too. Same three VITE_* values as the Vercel and Android builds.
       - name: Build web assets
-        run: npm run build
+        run: npm run build:native
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          # Without this the app's own origin (capacitor://localhost) ends up in confirmation
+          # emails, which is not a link anyone can open.
+          VITE_PUBLIC_APP_URL: ${{ secrets.VITE_PUBLIC_APP_URL }}
 
-      - name: Sync Capacitor iOS
-        run: npx cap sync ios
-
-      - name: Install CocoaPods
+      # cap add is what creates ios/App/App.xcworkspace — the old version of this job ran
+      # `cap sync ios` against a directory that has never existed in this repo. sync also runs
+      # pod install, so there's no separate CocoaPods step.
+      #
+      # The launcher icon is Capacitor's template default here; android.yml brands its own via
+      # npm run android:icons, and there's no iOS equivalent script yet.
+      - name: Generate iOS project
         run: |
-          cd ios/App || exit 1
-          pod install --repo-update
+          npx cap add ios
+          npx cap sync ios
 
-      - name: Archive Xcode project
+      # Unsigned, deliberately. An archive for a device needs a certificate and a provisioning
+      # profile, and this repo has neither, so asking xcodebuild to sign fails outright. Building
+      # with signing off proves the app compiles and produces a .app to re-sign locally.
+      #
+      # To get an installable build instead: add the distribution certificate (.p12) and profile
+      # as secrets, import them into a temporary keychain, drop the CODE_SIGNING_* overrides
+      # below, and export with an exportOptions.plist naming your team and method.
+      - name: Archive (unsigned)
         run: |
-          set -e
+          set -euo pipefail
           mkdir -p build
-          xcodebuild -workspace "$WORKSPACE" -scheme "$SCHEME" -configuration Release -archivePath "$ARCHIVE_PATH" archive
+          xcodebuild archive \
+            -workspace "$WORKSPACE" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$ARCHIVE_PATH" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_ENTITLEMENTS=""
 
-      - name: Create exportOptions.plist
+      # xcodebuild -exportArchive refuses to export without signing, so the IPA is assembled by
+      # hand: an IPA is just a zip with the .app inside Payload/. This one installs nowhere as-is
+      # — it's for signing yourself (Sideloadly, AltStore, or resigning in Xcode).
+      - name: Package unsigned IPA
         run: |
-          cat > exportOptions.plist <<'EOF'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>method</key>
-            <string>ad-hoc</string>
-            <key>signingStyle</key>
-            <string>automatic</string>
-          </dict>
-          </plist>
-          EOF
+          set -euo pipefail
+          APP_PATH="$(find "$ARCHIVE_PATH/Products/Applications" -maxdepth 1 -name '*.app' | head -1)"
+          test -n "$APP_PATH" || { echo "::error::No .app in the archive — the build produced nothing to package."; exit 1; }
+          mkdir -p build/Payload
+          cp -R "$APP_PATH" build/Payload/
+          (cd build && zip -qry Mindstack-unsigned.ipa Payload)
+          rm -rf build/Payload
+          ls -lh build/Mindstack-unsigned.ipa
 
-      - name: Export IPA
-        run: |
-          set -e
-          xcodebuild -exportArchive -archivePath "$ARCHIVE_PATH" -exportOptionsPlist exportOptions.plist -exportPath "$EXPORT_PATH" || echo "Export may require code signing configuration"
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: iOS-artifacts
-          path: |
-            build/*.ipa
-            build/*.xcarchive
+          name: mindstack-ios-unsigned
+          path: build/Mindstack-unsigned.ipa
+          if-no-files-found: error

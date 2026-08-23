@@ -88,13 +88,19 @@ export function LandingPage() {
         />
 
         <div className="relative mx-auto max-w-6xl px-5 sm:px-8">
-          <nav className="flex items-center gap-3 py-6">
+          {/* Every control here is shrink-0 and nowrap, and the brand is the one thing allowed to
+              give way (min-w-0 + truncate). Without that the desktop metrics — a 24px wordmark
+              beside two full-padding pills — needed more room than a phone has, so flex wrapped
+              the labels themselves and "Sign in" broke across two lines. The mobile step-downs
+              below mean it never gets that far. */}
+          <nav className="flex items-center gap-1.5 py-5 sm:gap-3 sm:py-6">
             {/* On the accent field the mark inherits white from the nav, so no light/dark variant
-                of the asset is needed. */}
-            <span className="mr-auto flex items-center gap-2.5">
+                of the asset is needed. The wordmark drops out below the width where it fits whole:
+                the mark alone still names the app, where a clipped "Mindsta…" just looks broken. */}
+            <span className="mr-auto flex items-center gap-2 sm:gap-2.5">
               <ProjectLogo className="h-5 w-[27px] text-white" />
               <span
-                className="text-[22px] font-extrabold tracking-tight sm:text-[24px]"
+                className="hidden whitespace-nowrap text-[19px] font-extrabold tracking-tight min-[400px]:inline sm:text-[24px]"
                 style={{ fontFamily: 'var(--font-display)' }}
               >
                 Mindstack
@@ -104,27 +110,30 @@ export function LandingPage() {
               type="button"
               onClick={(event) => toggleTheme(originFromElement(event.currentTarget))}
               aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-              className="anim-press inline-flex h-9 w-9 items-center justify-center rounded-full text-white/80 transition-colors hover:bg-white/15 hover:text-white"
+              className="anim-press inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white/80 transition-colors hover:bg-white/15 hover:text-white sm:h-9 sm:w-9"
             >
               {theme === 'dark' ? <Sun className="h-4 w-4" aria-hidden /> : <Moon className="h-4 w-4" aria-hidden />}
             </button>
             <Link
               to="/get-app"
-              className="anim-press rounded-full px-3.5 py-2 text-[14px] font-semibold text-white/90 transition-colors hover:bg-white/15 hover:text-white"
+              className="anim-press hidden shrink-0 whitespace-nowrap rounded-full px-3.5 py-2 text-[14px] font-semibold text-white/90 transition-colors hover:bg-white/15 hover:text-white sm:inline-flex"
             >
               Get app
             </Link>
             <Link
               to="/login"
-              className="anim-press rounded-full px-3.5 py-2 text-[14px] font-semibold text-white/90 transition-colors hover:bg-white/15 hover:text-white"
+              className="anim-press shrink-0 whitespace-nowrap rounded-full px-2.5 py-1.5 text-[13px] font-semibold text-white/90 transition-colors hover:bg-white/15 hover:text-white sm:px-3.5 sm:py-2 sm:text-[14px]"
             >
               Sign in
             </Link>
             <Link
               to="/signup"
-              className="anim-press rounded-full bg-white px-4 py-2 text-[14px] font-bold text-[var(--color-accent)] transition-transform hover:scale-[1.02]"
+              className="anim-press shrink-0 whitespace-nowrap rounded-full bg-white px-3 py-1.5 text-[13px] font-bold text-[var(--color-accent)] transition-transform hover:scale-[1.02] sm:px-4 sm:py-2 sm:text-[14px]"
             >
-              Create account
+              {/* Both entry points stay on a phone; the primary one just takes the label that
+                  fits beside them. The hero CTA below spells it out in full. */}
+              <span className="sm:hidden">Sign up</span>
+              <span className="hidden sm:inline">Create account</span>
             </Link>
           </nav>
 
