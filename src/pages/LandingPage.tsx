@@ -109,6 +109,12 @@ export function LandingPage() {
               {theme === 'dark' ? <Sun className="h-4 w-4" aria-hidden /> : <Moon className="h-4 w-4" aria-hidden />}
             </button>
             <Link
+              to="/get-app"
+              className="anim-press rounded-full px-3.5 py-2 text-[14px] font-semibold text-white/90 transition-colors hover:bg-white/15 hover:text-white"
+            >
+              Get app
+            </Link>
+            <Link
               to="/login"
               className="anim-press rounded-full px-3.5 py-2 text-[14px] font-semibold text-white/90 transition-colors hover:bg-white/15 hover:text-white"
             >

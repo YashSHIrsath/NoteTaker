@@ -6,6 +6,7 @@ import { AuthenticatedApp } from './pages/AuthenticatedApp'
 import { GuestOnly, RequireAuth } from './pages/AuthGate'
 import { LoginPage, SignupPage } from './pages/AuthPages'
 import { LandingPage } from './pages/LandingPage'
+import { GetAppPage } from './pages/GetAppPage'
 import { PrivacyPage, TermsPage } from './pages/LegalPages'
 import { TreePage } from './pages/TreePage'
 import { MyNotesPage } from './pages/MyNotesPage'
@@ -42,6 +43,7 @@ function App() {
                 <Route path="/terms" element={<TermsPage />} />
                 <Route element={<GuestOnly />}>
                   <Route path="/welcome" element={<LandingPage />} />
+                  <Route path="/get-app" element={<GetAppPage />} />
                 </Route>
               </>
             )}
