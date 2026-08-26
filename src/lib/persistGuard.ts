@@ -4,11 +4,17 @@ export function cloneSnapshot(snapshot: AppSnapshot): AppSnapshot {
   return structuredClone(snapshot)
 }
 
-export function notesFingerprint(snapshot: Pick<AppSnapshot, 'folders' | 'tasks' | 'subtasks'>): string {
+export function notesFingerprint(
+  snapshot: Pick<AppSnapshot, 'folders' | 'tasks' | 'subtasks' | 'tags'>,
+): string {
   return JSON.stringify({
     folders: snapshot.folders,
     tasks: snapshot.tasks,
     subtasks: snapshot.subtasks,
+    // The catalogue is in here because a tag can change without any task changing: making one
+    // ahead of time, renaming it, or deleting one nothing carries. Left out, those saves would be
+    // skipped as no-ops and the tag would be gone on the next reload.
+    tags: snapshot.tags,
   })
 }
 
@@ -52,6 +58,7 @@ export function snapshotFromParts(
   folders: AppSnapshot['folders'],
   tasks: AppSnapshot['tasks'],
   subtasks: AppSnapshot['subtasks'],
+  tags: AppSnapshot['tags'],
   uiState: UiState,
 ): AppSnapshot {
   return {
@@ -59,6 +66,7 @@ export function snapshotFromParts(
     folders,
     tasks,
     subtasks,
+    tags,
     uiState,
   }
 }

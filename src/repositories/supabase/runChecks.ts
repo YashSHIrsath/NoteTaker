@@ -165,7 +165,9 @@ export function runMapperChecks(): void {
     ],
     [],
     emptyUi,
+    null,
   )
+
   assert(snapshot.tasks[0]?.folderId === folder.id, 'snapshot keeps task.folderId')
 
   const layers = layersByParent([

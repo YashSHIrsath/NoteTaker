@@ -26,6 +26,7 @@ const emptyUi = {
 function sampleSnapshot(): AppSnapshot {
   return {
     version: 4,
+    tags: [],
     folders: [
       { id: 'programming', name: 'Programming', parentId: null, isImportant: true, sortOrder: 3 },
       { id: 'laravel', name: 'Laravel', parentId: 'programming', isImportant: false, sortOrder: 0 },
@@ -44,7 +45,7 @@ function sampleSnapshot(): AppSnapshot {
         status: null,
         tags: [],
         color: null,
-        gridLayout: null,
+        gridLayouts: null,
         sortOrder: 7,
       },
     ],

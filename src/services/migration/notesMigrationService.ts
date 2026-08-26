@@ -43,6 +43,7 @@ export class NotesLocalToSupabaseMigration {
         folders: [],
         tasks: [],
         subtasks: [],
+        tags: [],
         uiState: {
           myNotesSidebarExpanded: true,
           expandedFolderIds: [],

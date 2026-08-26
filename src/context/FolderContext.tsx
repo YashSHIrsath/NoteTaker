@@ -16,10 +16,21 @@ import {
   nextFolderSortOrder,
   reorderSiblingFolders as applySiblingReorder,
 } from '../lib/folders'
-import type { Attachment, Folder, FolderNode, Subtask, Task, TaskColor, TaskGridLayout, TaskStatus } from '../types'
+import type {
+  Attachment,
+  Folder,
+  FolderNode,
+  Subtask,
+  Tag,
+  Task,
+  TaskColor,
+  TaskGridPlacement,
+  TaskGridScope,
+  TaskStatus,
+} from '../types'
 import { getTaskById, getTasksByFolder, nextTaskSortOrder, reorderSiblingTasks as applyTaskReorder } from '../lib/tasks'
 import { getSubtasksByTask } from '../lib/subtasks'
-import { sameLayout } from '../lib/taskGrid'
+import { PLACEMENT_VERSION, placementForScope, samePlacement } from '../lib/taskGrid'
 import { getAttachmentsByTask } from '../lib/attachments'
 import {
   beginExclusiveAction,
@@ -76,7 +87,15 @@ interface FolderContextValue {
   updateTaskContent: (taskId: string, content: string, options?: { immediate?: boolean }) => void
   /** Writes new grid positions/sizes for a set of cards in one go — a drag moves neighbours too,
    *  so this takes the whole changed set rather than one card at a time. */
-  updateTaskLayouts: (entries: Array<{ taskId: string; layout: TaskGridLayout }>) => void
+  /**
+   * `scope` is the listing the gesture happened in; only that listing's arrangement changes, and
+   * within it only the fields given — a drag writes an order and leaves the size alone, a resize
+   * writes a size and leaves the order alone.
+   */
+  updateTaskLayouts: (
+    scope: TaskGridScope,
+    entries: Array<{ taskId: string; placement: Partial<TaskGridPlacement> }>,
+  ) => void
   updateTaskTitle: (taskId: string, title: string) => void
   deleteTask: (taskId: string) => Promise<{ folderId: string; deletedTaskIds: string[] }>
   toggleTaskImportant: (taskId: string) => void
@@ -84,6 +103,10 @@ interface FolderContextValue {
   updateTaskReminder: (taskId: string, dueAt: string | null, remindBeforeMinutes: number | null) => void
   updateTaskStatus: (taskId: string, status: TaskStatus) => void
   updateTaskTags: (taskId: string, tags: string[]) => void
+  /** Every tag this account has, name-sorted — what the tag picker offers instead of retyping. */
+  tags: Tag[]
+  /** Removes a tag from the catalogue and from every task that carries it. */
+  deleteTag: (tagId: string) => void
   updateTaskColor: (taskId: string, color: TaskColor | null) => void
   getSubtasksForTask: (taskId: string) => Subtask[]
   createSubtask: (
@@ -158,6 +181,7 @@ export function FolderProvider({ children }: { children: ReactNode }) {
   const [folders, setFolders] = useState<Folder[]>([])
   const [tasks, setTasks] = useState<Task[]>([])
   const [subtasks, setSubtasks] = useState<Subtask[]>([])
+  const [tags, setTags] = useState<Tag[]>([])
   const [uiState, setUiState] = useState<UiState>(EMPTY_UI_STATE)
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [expandedAttachmentIds, setExpandedAttachmentIds] = useState<string[]>([])
@@ -173,9 +197,10 @@ export function FolderProvider({ children }: { children: ReactNode }) {
   const foldersRef = useRef(folders)
   const tasksRef = useRef(tasks)
   const subtasksRef = useRef(subtasks)
+  const tagsRef = useRef(tags)
   const uiStateRef = useRef(uiState)
   const userIdRef = useRef(userId)
-  const lastConfirmedRef = useRef(snapshotFromParts([], [], [], EMPTY_UI_STATE))
+  const lastConfirmedRef = useRef(snapshotFromParts([], [], [], [], EMPTY_UI_STATE))
   const pendingRetryRef = useRef<ReturnType<typeof cloneSnapshot> | null>(null)
   const persistInflightRef = useRef<Promise<void> | null>(null)
   const persistAgainRef = useRef(false)
@@ -184,17 +209,27 @@ export function FolderProvider({ children }: { children: ReactNode }) {
   foldersRef.current = folders
   tasksRef.current = tasks
   subtasksRef.current = subtasks
+  tagsRef.current = tags
   uiStateRef.current = uiState
   userIdRef.current = userId
 
-  const applyNotes = useCallback((next: { folders: Folder[]; tasks: Task[]; subtasks: Subtask[] }) => {
-    foldersRef.current = next.folders
-    tasksRef.current = next.tasks
-    subtasksRef.current = next.subtasks
-    setFolders(next.folders)
-    setTasks(next.tasks)
-    setSubtasks(next.subtasks)
-  }, [])
+  const applyNotes = useCallback(
+    (next: { folders: Folder[]; tasks: Task[]; subtasks: Subtask[]; tags?: Tag[] }) => {
+      foldersRef.current = next.folders
+      tasksRef.current = next.tasks
+      subtasksRef.current = next.subtasks
+      setFolders(next.folders)
+      setTasks(next.tasks)
+      setSubtasks(next.subtasks)
+      // Optional: most edits don't touch the catalogue, and every caller that doesn't should not
+      // have to pass the current one back in just to leave it alone.
+      if (next.tags) {
+        tagsRef.current = next.tags
+        setTags(next.tags)
+      }
+    },
+    [],
+  )
 
   const persistNotes = useCallback(async () => {
     if (contentTimerRef.current !== null) {
@@ -210,6 +245,7 @@ export function FolderProvider({ children }: { children: ReactNode }) {
           folders: foldersRef.current,
           tasks: tasksRef.current,
           subtasks: subtasksRef.current,
+          tags: tagsRef.current,
         }) === notesFingerprint(lastConfirmedRef.current)
       ) {
         return
@@ -233,6 +269,7 @@ export function FolderProvider({ children }: { children: ReactNode }) {
             foldersRef.current,
             tasksRef.current,
             subtasksRef.current,
+            tagsRef.current,
             uiStateRef.current,
           )
           if (notesFingerprint(attempted) === notesFingerprint(lastConfirmedRef.current)) {
@@ -307,11 +344,11 @@ export function FolderProvider({ children }: { children: ReactNode }) {
       setCanRetry(false)
       setSaveStatus('idle')
       pendingRetryRef.current = null
-      applyNotes({ folders: [], tasks: [], subtasks: [] })
+      applyNotes({ folders: [], tasks: [], subtasks: [], tags: [] })
       setAttachments([])
       setExpandedAttachmentIds([])
       setUiState(EMPTY_UI_STATE)
-      lastConfirmedRef.current = snapshotFromParts([], [], [], EMPTY_UI_STATE)
+      lastConfirmedRef.current = snapshotFromParts([], [], [], [], EMPTY_UI_STATE)
       attachmentRepository.clearCache()
       return
     }
@@ -542,6 +579,7 @@ export function FolderProvider({ children }: { children: ReactNode }) {
           next.folders,
           next.tasks,
           next.subtasks,
+          tagsRef.current,
           uiStateRef.current,
         )
         return result
@@ -592,7 +630,7 @@ export function FolderProvider({ children }: { children: ReactNode }) {
         status: null,
         tags: [],
         color: null,
-        gridLayout: null,
+        gridLayouts: null,
         sortOrder: nextTaskSortOrder(tasksRef.current, folderId),
       }
       try {
@@ -663,19 +701,29 @@ export function FolderProvider({ children }: { children: ReactNode }) {
   )
 
   const updateTaskLayouts = useCallback(
-    (entries: Array<{ taskId: string; layout: TaskGridLayout }>) => {
+    (scope: TaskGridScope, entries: Array<{ taskId: string; placement: Partial<TaskGridPlacement> }>) => {
       if (entries.length === 0) {
         return
       }
-      const byId = new Map(entries.map((entry) => [entry.taskId, entry.layout]))
+      const byId = new Map(entries.map((entry) => [entry.taskId, entry.placement]))
       let changed = false
       const tasks = tasksRef.current.map((task) => {
-        const layout = byId.get(task.id)
-        if (!layout || sameLayout(task.gridLayout, layout)) {
+        const update = byId.get(task.id)
+        if (!update) {
+          return task
+        }
+        const current = placementForScope(task, scope)
+        // Stamped on every write, including the first one for a card that had no placement at
+        // all: an unstamped width reads as the old 24-column canvas and would be scaled up the
+        // next time it loaded, so a card resized once would come back five times too wide.
+        const next: TaskGridPlacement = { ...current, ...update, v: PLACEMENT_VERSION }
+        if (samePlacement(current, next)) {
           return task
         }
         changed = true
-        return { ...task, gridLayout: layout }
+        // Merged at both levels, never replaced: the other listings' arrangements live in the
+        // same column, and within this listing a drag must not discard a size (or the reverse).
+        return { ...task, gridLayouts: { ...task.gridLayouts, [scope]: next } }
       })
       // A drag that ends where it started, or a re-render handing back the layout it was given,
       // would otherwise write and save on every pointer-up.
@@ -721,6 +769,7 @@ export function FolderProvider({ children }: { children: ReactNode }) {
           next.folders,
           next.tasks,
           next.subtasks,
+          tagsRef.current,
           uiStateRef.current,
         )
         return result
@@ -810,16 +859,92 @@ export function FolderProvider({ children }: { children: ReactNode }) {
     [applyNotes, persistNotes],
   )
 
-  const updateTaskTags = useCallback(
-    (taskId: string, tags: string[]) => {
+  /**
+   * The tag catalogue, and the rules that keep it and the tasks agreeing.
+   *
+   * Tasks carry tag *names*, not ids — that is what every filter, pill and search in the app
+   * reads, and what the repository resolves against the join table when it saves. So the
+   * catalogue is authoritative about which tags exist, and a name on a task is a reference into
+   * it. Two consequences, both handled here: a name a task uses must exist in the catalogue
+   * (ensureTags), and a rename or delete has to sweep the tasks as well as the catalogue.
+   *
+   * Matching is case-insensitive on the way in and preserves the casing you first typed, so
+   * "job", "Job" and "JOB" are one tag rather than three — which is the entire point of a
+   * catalogue you pick from.
+   */
+  const findTagByName = useCallback((name: string): Tag | undefined => {
+    const key = name.trim().toLowerCase()
+    return tagsRef.current.find((tag) => tag.name.toLowerCase() === key)
+  }, [])
+
+  /** The catalogue with any of these names that isn't in it yet added. Returns the same array
+   *  when there is nothing to add, so callers can tell whether the catalogue actually moved. */
+  const withTags = useCallback((names: string[]): Tag[] => {
+    let next = tagsRef.current
+    for (const raw of names) {
+      const name = raw.trim()
+      if (!name) {
+        continue
+      }
+      const key = name.toLowerCase()
+      if (next.some((tag) => tag.name.toLowerCase() === key)) {
+        continue
+      }
+      next = [...next, { id: crypto.randomUUID(), name }]
+    }
+    return next
+  }, [])
+
+  const deleteTag = useCallback(
+    (tagId: string) => {
+      const current = tagsRef.current.find((tag) => tag.id === tagId)
+      if (!current) {
+        return
+      }
       applyNotes({
         folders: foldersRef.current,
-        tasks: tasksRef.current.map((task) => (task.id === taskId ? { ...task, tags } : task)),
+        tasks: tasksRef.current.map((task) =>
+          task.tags.includes(current.name)
+            ? { ...task, tags: task.tags.filter((tag) => tag !== current.name) }
+            : task,
+        ),
         subtasks: subtasksRef.current,
+        tags: tagsRef.current.filter((tag) => tag.id !== tagId),
       })
       void persistNotes().catch(() => undefined)
     },
     [applyNotes, persistNotes],
+  )
+
+  const updateTaskTags = useCallback(
+    (taskId: string, names: string[]) => {
+      // Deduped against the catalogue's own casing, so picking "Job" and typing "job" into the
+      // same note is one tag on it, not two chips that look like a bug.
+      const resolved: string[] = []
+      for (const raw of names) {
+        const name = raw.trim()
+        if (!name) {
+          continue
+        }
+        const canonical = findTagByName(name)?.name ?? name
+        if (!resolved.includes(canonical)) {
+          resolved.push(canonical)
+        }
+      }
+      const nextTags = withTags(resolved)
+      applyNotes({
+        folders: foldersRef.current,
+        tasks: tasksRef.current.map((task) =>
+          task.id === taskId ? { ...task, tags: resolved } : task,
+        ),
+        subtasks: subtasksRef.current,
+        // Only when it actually changed: passing the same array every time would still be
+        // correct, but this keeps "did the catalogue move" honest for anything watching it.
+        tags: nextTags === tagsRef.current ? undefined : nextTags,
+      })
+      void persistNotes().catch(() => undefined)
+    },
+    [applyNotes, findTagByName, persistNotes, withTags],
   )
 
   const updateTaskColor = useCallback(
@@ -907,6 +1032,7 @@ export function FolderProvider({ children }: { children: ReactNode }) {
           next.folders,
           next.tasks,
           next.subtasks,
+          tagsRef.current,
           uiStateRef.current,
         )
       } catch (error: unknown) {
@@ -1154,6 +1280,8 @@ export function FolderProvider({ children }: { children: ReactNode }) {
       updateTaskReminder,
       updateTaskStatus,
       updateTaskTags,
+      tags,
+      deleteTag,
       updateTaskColor,
       getSubtasksForTask,
       createSubtask,
@@ -1212,6 +1340,8 @@ export function FolderProvider({ children }: { children: ReactNode }) {
       updateTaskReminder,
       updateTaskStatus,
       updateTaskTags,
+      tags,
+      deleteTag,
       updateTaskColor,
       getSubtasksForTask,
       createSubtask,

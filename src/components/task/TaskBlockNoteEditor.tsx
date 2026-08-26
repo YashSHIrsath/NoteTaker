@@ -34,6 +34,11 @@ export interface TaskBlockNoteEditorProps {
   showBlockHandles?: boolean
   /** Inline pictures shown as a name chip instead of the picture itself. */
   collapseImages?: boolean
+  /**
+   * Reading mode: the note can be scrolled and its checklist ticked off, and nothing else about
+   * it can be changed. See the checkbox note in the effect below for why ticking still works.
+   */
+  readOnly?: boolean
 }
 
 const CONTENT_FLUSH_DELAY_MS = 300
@@ -46,6 +51,7 @@ export function TaskBlockNoteEditor({
   onContentChange,
   showBlockHandles = false,
   collapseImages = false,
+  readOnly = false,
 }: TaskBlockNoteEditorProps) {
   const {
     getAttachmentsForTask,
@@ -245,6 +251,57 @@ export function TaskBlockNoteEditor({
     }
   }, [editor, flushContent])
 
+  /**
+   * Ticking a box is still allowed while reading.
+   *
+   * BlockNote ties the checkbox to the editor's editability twice over: its node view sets
+   * `input.disabled = !editor.isEditable` when it renders, and its own change handler opens with
+   * an `isEditable` guard. So a read-only note gets a greyed-out checklist you cannot use, which
+   * is the one thing this mode is supposed to keep.
+   *
+   * Both are undone here. The disabled attribute is cleared as blocks render — a MutationObserver
+   * rather than a single pass, because every toggle re-renders that node view and it comes back
+   * disabled — and the change is applied through the editor API, which goes straight to a
+   * transaction and carries no editability guard of its own. Nothing else about the note is
+   * reachable: ProseMirror is not contenteditable, so there is no caret, no typing and no menus.
+   */
+  useEffect(() => {
+    const wrapper = editorWrapperRef.current
+    if (!readOnly || !wrapper) {
+      return
+    }
+    const enable = () => {
+      for (const box of wrapper.querySelectorAll<HTMLInputElement>('input[type="checkbox"][disabled]')) {
+        box.disabled = false
+      }
+    }
+    enable()
+    const observer = new MutationObserver(enable)
+    observer.observe(wrapper, { childList: true, subtree: true, attributes: true, attributeFilter: ['disabled'] })
+
+    const onChange = (event: Event) => {
+      const box = event.target as HTMLElement | null
+      if (!(box instanceof HTMLInputElement) || box.type !== 'checkbox') {
+        return
+      }
+      const blockId = box.closest<HTMLElement>('[data-id]')?.getAttribute('data-id')
+      if (!blockId) {
+        return
+      }
+      const block = editor.getBlock(blockId)
+      if (!block || block.type !== 'checkListItem') {
+        return
+      }
+      editor.updateBlock(block, { props: { checked: box.checked } })
+    }
+    wrapper.addEventListener('change', onChange)
+
+    return () => {
+      observer.disconnect()
+      wrapper.removeEventListener('change', onChange)
+    }
+  }, [editor, readOnly])
+
   // Closing the dialog unmounts this before an in-flight timer fires, so the last edits have
   // to be handed over synchronously here or they're lost.
   useEffect(() => () => flushContent(), [flushContent])
@@ -285,7 +342,8 @@ export function TaskBlockNoteEditor({
     <div
       className={cn(
         'task-blocknote',
-        showBlockHandles ? null : 'task-blocknote-flush',
+        readOnly ? 'task-blocknote-reading' : null,
+        showBlockHandles && !readOnly ? null : 'task-blocknote-flush',
         collapseImages ? 'task-blocknote-images-collapsed' : null,
       )}
     >
@@ -293,8 +351,13 @@ export function TaskBlockNoteEditor({
         {/* sideMenu={false} disables BlockNote's *default* side menu; TaskBlockSideMenu renders the
             same one with the block-move control matched to the input device — and only when the
             gutter controls are switched on. Everything else (the "/" menu included) is untouched. */}
-        <BlockNoteView editor={editor} theme={theme === 'dark' ? 'dark' : 'light'} sideMenu={false}>
-          {handlesMounted ? <TaskBlockSideMenu /> : null}
+        <BlockNoteView
+          editor={editor}
+          editable={!readOnly}
+          theme={theme === 'dark' ? 'dark' : 'light'}
+          sideMenu={false}
+        >
+          {handlesMounted && !readOnly ? <TaskBlockSideMenu /> : null}
         </BlockNoteView>
       </div>
 

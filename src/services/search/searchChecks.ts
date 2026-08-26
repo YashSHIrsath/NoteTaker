@@ -32,7 +32,7 @@ export function runSearchChecks(): void {
       status: null,
       tags: [],
       color: null,
-      gridLayout: null,
+      gridLayouts: null,
       sortOrder: 0,
     },
   ]

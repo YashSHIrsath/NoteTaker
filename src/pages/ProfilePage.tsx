@@ -9,6 +9,7 @@ import {
   FileText,
   Folder,
   LogOut,
+  Monitor,
   Sparkles,
   User as UserIcon,
 } from 'lucide-react'
@@ -18,7 +19,7 @@ import { Spinner } from '../components/ui/Spinner'
 import { useAuth } from '../hooks/useAuth'
 import { useCountUp } from '../hooks/useCountUp'
 import { useFolders } from '../hooks/useFolders'
-import { useMaxTilesPerRow } from '../hooks/useTileGrid'
+import { useTileBand } from '../hooks/useTileGrid'
 import { toAuthErrorMessage } from '../lib/authErrors'
 import { cn } from '../lib/cn'
 import {
@@ -227,8 +228,15 @@ export function ProfilePage() {
   const [viewStyleSaving, setViewStyleSaving] = useState(false)
   const [tilesSaving, setTilesSaving] = useState(false)
   const viewStyle = readViewStyle(user?.user_metadata as Record<string, unknown> | undefined)
-  const tilesPerRow = readTilesPerRow(user?.user_metadata as Record<string, unknown> | undefined)
-  const maxTilesPerRow = useMaxTilesPerRow()
+  // Everything on this card is about the screen you are reading it on. The band decides both
+  // which stored choice is shown and which one a press writes, so opening this page on a phone
+  // and on a desktop configures two different things — which is the point.
+  const tileBand = useTileBand()
+  const maxTilesPerRow = tileBand.max
+  const tilesPerRow = readTilesPerRow(
+    user?.user_metadata as Record<string, unknown> | undefined,
+    tileBand.id,
+  )
   const effectivePerRow = tilesPerRow === 'auto' ? maxTilesPerRow : Math.min(tilesPerRow, maxTilesPerRow)
 
   const changeTilesPerRow = async (next: TilesPerRow) => {
@@ -237,7 +245,7 @@ export function ProfilePage() {
     }
     setTilesSaving(true)
     try {
-      await updateProfile({ tilesPerRow: next })
+      await updateProfile({ tilesPerRow: next, tilesPerRowBand: tileBand.id })
     } catch {
       /* the profile card's own error banner covers a failed save */
     } finally {
@@ -556,9 +564,18 @@ export function ProfilePage() {
           </CardTitle>
           <p className="mt-3 text-[12.5px] leading-relaxed text-[var(--color-text-muted)]">
             How small a card is allowed to get on the grid. At 2, a card can never be narrower than
-            half the width; at 4, never narrower than a quarter. It's a floor, not a fixed size —
+            half the width; at 3, never narrower than a third. It's a floor, not a fixed size —
             any card can still be pulled wider, right up to the full width, and dragged wherever you
             want it. Auto uses as many as this screen can fit and still leave a card readable.
+          </p>
+
+          {/* Which screen this is setting. The counts differ enough between a phone and a desktop
+              that one number for the account was never really one choice — it was a desktop
+              choice being clamped on the phone. */}
+          <p className="mt-2.5 inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-hover)] px-2.5 py-1 text-[11.5px] font-medium text-[var(--color-text-muted)]">
+            <Monitor className="h-3 w-3 shrink-0" aria-hidden />
+            Setting {tileBand.label.toLowerCase()} screens — up to {maxTilesPerRow}. Your other
+            screen sizes keep their own.
           </p>
 
           {/* A live miniature of the choice: how wide the smallest card can be. */}
@@ -619,10 +636,14 @@ export function ProfilePage() {
             })}
           </div>
 
+          {/* Only reachable from a choice made before this became per-screen: those still seed a
+              band nobody has set yet, and one of them can be higher than this band allows. Picking
+              anything here writes this screen's own value and the note goes for good. */}
           {typeof tilesPerRow === 'number' && tilesPerRow > maxTilesPerRow ? (
             <p className="mt-3 text-[12px] leading-relaxed text-[var(--color-text-muted)]">
-              Your saved {tilesPerRow} per row needs a wider screen, so this one is using{' '}
-              {maxTilesPerRow}. The choice is kept — it comes back on a display that can hold it.
+              You picked {tilesPerRow} per row before this setting was kept per screen size, so this
+              one is using {maxTilesPerRow}. Choose above to set it for {tileBand.label.toLowerCase()}{' '}
+              screens on their own.
             </p>
           ) : null}
         </Card>

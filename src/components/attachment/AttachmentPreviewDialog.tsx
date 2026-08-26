@@ -87,11 +87,20 @@ export function AttachmentPreviewDialog({ attachment, onClose }: AttachmentPrevi
         tabIndex={-1}
         className={cn(
           'relative flex h-full w-full flex-col overflow-hidden border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-lg)] outline-none',
-          'pt-[env(safe-area-inset-top)] sm:h-auto sm:max-w-3xl sm:rounded-xl sm:pt-0',
+          'pt-[env(safe-area-inset-top)] sm:max-w-3xl sm:rounded-xl sm:pt-0',
           // A PDF/spreadsheet viewer needs a tall scroll area to fill, but an image only needs
           // its own height — forcing 85vh on a portrait photo is what left a large empty gap
           // under it, so images size the panel to the picture instead.
-          attachment.isImage ? 'sm:max-h-[90vh]' : 'sm:h-[min(85vh,800px)]',
+          //
+          // Both branches set the height, and `sm:h-auto` lives here rather than on the line
+          // above for that reason: on the shared line it sat alongside the explicit height and
+          // both are `height` utilities at the same specificity, so which one won came down to
+          // the order Tailwind happened to emit them in — and it emits `h-auto` last. Every
+          // non-image preview was therefore `height: auto` from `sm` up, growing to fit its
+          // content: a PDF pushed the panel's own header and toolbar off the top of the screen,
+          // and the viewer, measuring a scroll area with no bounded height, could never fit a
+          // page to it. Phones never saw it because no `sm:` utility applied there.
+          attachment.isImage ? 'sm:h-auto sm:max-h-[90vh]' : 'sm:h-[min(85vh,800px)]',
         )}
       >
         <div className="flex shrink-0 items-center justify-between gap-2 border-b border-[var(--color-border)] px-3 py-1.5">
@@ -109,7 +118,10 @@ export function AttachmentPreviewDialog({ attachment, onClose }: AttachmentPrevi
             </IconButton>
           </div>
         </div>
-        <div className="relative min-h-0 flex-1 overflow-auto">
+        {/* The PDF viewer scrolls itself — it has a toolbar that has to stay put while the pages
+            move under it, and it needs to know how tall the visible area is to fit a page into
+            it. Everything else is a block of content the dialog scrolls for it. */}
+        <div className={cn('relative min-h-0 flex-1', attachment.isPdf ? 'overflow-hidden' : 'overflow-auto')}>
           <AttachmentPreviewBody attachment={attachment} />
         </div>
       </div>

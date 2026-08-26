@@ -1,7 +1,6 @@
-import { useState } from 'react'
-import { FileText, Folder, Star } from 'lucide-react'
+import { useState, type CSSProperties } from 'react'
+import { FileText, Folder } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { EmptyState } from '../components/common/EmptyState'
 import { StarButton } from '../components/common/StarButton'
 import { RowDeleteButton } from '../components/common/RowDeleteButton'
 import { FolderActions } from '../components/folder/FolderActions'
@@ -19,11 +18,7 @@ import { readViewStyle } from '../lib/viewStyle'
 import { usePageEnter } from '../hooks/usePageEnterDirection'
 import { cn } from '../lib/cn'
 import { performWithTaskExit } from '../lib/taskExitAnimation'
-import {
-  COLLAPSIBLE_TITLE_CLASS,
-  FLOATING_HEADER_CLASS,
-  useFloatingHeader,
-} from '../hooks/useFloatingHeader'
+import { useFloatingHeader } from '../hooks/useFloatingHeader'
 
 const CARD_GRID = 'mt-2.5 grid grid-cols-1 gap-2.5 sm:grid-cols-2 sm:gap-3 xl:grid-cols-3'
 // Same width rule as the task tiles: rows only split into columns once each one has room.
@@ -33,13 +28,73 @@ const CARD_BASE =
   'anim-item-in group relative flex items-center gap-2.5 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-2.5 transition-all hover:border-[var(--color-border-strong)] hover:shadow-[var(--shadow-md)] sm:gap-3 sm:p-3'
 const CARD_ACTIONS = 'flex shrink-0 items-center gap-0.5 opacity-70 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100'
 
-const FILTERS = [
-  { key: 'all', label: 'All' },
-  { key: 'folders', label: 'Folders' },
+/**
+ * The two halves of this page, in the order the switch shows them.
+ *
+ * Order is not decoration here: it decides which way the panes travel. Moving to a tab further
+ * right slides the incoming pane in from the right, and back the other way for the left — the
+ * switch and the content agree about which direction you just went.
+ */
+const TABS = [
   { key: 'tasks', label: 'Tasks' },
+  { key: 'folders', label: 'Folders' },
 ] as const
 
-type ImportantFilter = (typeof FILTERS)[number]['key']
+type ImportantTab = (typeof TABS)[number]['key']
+
+/** How far a pane travels on the way in. Far enough to read as a direction, near enough that it
+ *  is the same content arriving rather than a different screen being pushed in. */
+const PANE_TRAVEL = 28
+
+/**
+ * The tag chips, in whichever row this breakpoint has room for them.
+ *
+ * One definition rendered in two places rather than two copies: on a phone it sits above the
+ * cards, because the floating switch has no width to spare; from lg it sits in the header band
+ * beside the switch, because that row is otherwise a single pill in an empty line.
+ */
+function TagFilter({
+  tags,
+  activeTag,
+  onSelect,
+  className,
+}: {
+  tags: string[]
+  activeTag: string | null
+  onSelect: (next: string | null) => void
+  className?: string
+}) {
+  return (
+    <div className={cn('flex flex-wrap items-center gap-1.5', className)}>
+      <span className="text-[12px] font-medium text-[var(--color-text-muted)]">Sort by tags:</span>
+      {tags.map((tag) => (
+        <button
+          key={tag}
+          type="button"
+          aria-pressed={activeTag === tag}
+          onClick={() => onSelect(activeTag === tag ? null : tag)}
+          className={cn(
+            'anim-press rounded-full border px-2.5 py-1 text-[12px] font-medium transition-colors',
+            activeTag === tag
+              ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
+              : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:bg-[var(--color-hover)] hover:text-[var(--color-text)]',
+          )}
+        >
+          {tag}
+        </button>
+      ))}
+      {activeTag ? (
+        <button
+          type="button"
+          onClick={() => onSelect(null)}
+          className="text-[12px] font-medium text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+        >
+          Clear
+        </button>
+      ) : null}
+    </div>
+  )
+}
 
 export function ImportantPage() {
   const navigate = useNavigate()
@@ -47,17 +102,17 @@ export function ImportantPage() {
   const { requestTaskDelete, dialog } = useDeleteTask()
   const { user } = useAuth()
   const viewStyle = readViewStyle(user?.user_metadata as Record<string, unknown> | undefined)
-  const [filter, setFilter] = useState<ImportantFilter>('all')
+  const [tab, setTab] = useState<ImportantTab>('tasks')
+  // Which way the next pane arrives from. Held in state rather than derived, because by the time
+  // the new pane renders the tab it came from is gone.
+  const [paneTravel, setPaneTravel] = useState(0)
   const [activeTag, setActiveTag] = useState<string | null>(null)
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
-  const { headerRef, contentRef, condensed } = useFloatingHeader()
+  const { headerRef, contentRef } = useFloatingHeader()
   // Which side this whole view slides in from — the side of the bar you came from.
   const pageEnter = usePageEnter()
   const importantFolders = getImportantFolders(folders)
   const importantTasks = getImportantTasks(tasks)
-  const isEmpty = importantFolders.length === 0 && importantTasks.length === 0
-  const showFolders = filter !== 'tasks'
-  const showTasks = filter !== 'folders'
   const allTagsInScope = Array.from(new Set(importantTasks.flatMap((task) => task.tags))).sort()
   const visibleImportantTasks = activeTag
     ? importantTasks.filter((task) => task.tags.includes(activeTag))
@@ -67,13 +122,15 @@ export function ImportantPage() {
     void performWithTaskExit(taskId, () => toggleTaskImportant(taskId))
   }
 
-  if (isEmpty) {
-    return (
-      <EmptyState
-        title="Important"
-        description="Star a folder or task to see it here."
-      />
-    )
+  const tabIndex = TABS.findIndex((item) => item.key === tab)
+
+  const selectTab = (next: ImportantTab) => {
+    if (next === tab) {
+      return
+    }
+    const forward = TABS.findIndex((item) => item.key === next) > tabIndex
+    setPaneTravel(forward ? PANE_TRAVEL : -PANE_TRAVEL)
+    setTab(next)
   }
 
   return (
@@ -83,50 +140,77 @@ export function ImportantPage() {
       className={cn('relative flex h-full min-h-0 flex-col', pageEnter.className)}
       style={pageEnter.style}
     >
-      <div ref={headerRef} className={FLOATING_HEADER_CLASS}>
-        {/* Full header at the top of the page, controls only once it's scrolled — a bar that
-            overlays the content shouldn't keep spending its height on a title you've read. */}
-        <div
-          className={cn(
-            COLLAPSIBLE_TITLE_CLASS,
-            condensed ? 'max-h-0 opacity-0' : 'mb-2 max-h-16 opacity-100',
-          )}
-        >
-          <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
-            <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--cat-rose-soft)] text-[var(--cat-rose)] sm:h-9 sm:w-9">
-              <Star className="h-3.5 w-3.5 sm:h-4 sm:w-4" aria-hidden />
-            </span>
-            <div className="min-w-0 flex-1">
-              <h1
-                className="truncate text-[17px] font-semibold tracking-tight text-[var(--color-text)] sm:text-[20px]"
-                style={{ fontFamily: 'var(--font-display)' }}
-              >
-                Important
-              </h1>
-              <p className="mt-0.5 truncate text-[11.5px] text-[var(--color-text-muted)] sm:text-[12.5px]">
-                Your starred folders and tasks, all in one place.
-              </p>
-            </div>
-            <div className="inline-flex shrink-0 items-center gap-0.5 rounded-full border border-[var(--color-border)] bg-[var(--color-hover)] p-1">
-            {FILTERS.map((item) => {
-              const count =
-                item.key === 'folders'
-                  ? importantFolders.length
-                  : item.key === 'tasks'
-                    ? importantTasks.length
-                    : importantFolders.length + importantTasks.length
-              const active = filter === item.key
+      {/* No title row, and therefore nothing that collapses on scroll. The switch was previously
+          inside the collapsing wrapper together with the heading, so scrolling took the only
+          control on the page away with the words and left a blank bar hovering over the cards —
+          the same mistake the Tasks page header carries a note about. A bar that overlays content
+          has to keep earning its height; a switch does, a read heading doesn't. */}
+      {/* The switch *is* the bar. The shared FLOATING_HEADER_CLASS is a full-width card sized for
+          a title, a subtitle and controls; with nothing in it but a 240px switch it was mostly
+          empty space with a border round it, and the switch's own pill inside made it two nested
+          rounded boxes saying one thing. Hugging its content is `w-fit` plus auto margins, which
+          centre a box between the two insets — the same rule that decides where the bottom bar
+          sits, rather than a transform. */}
+      <div
+        ref={headerRef}
+        className={cn(
+          'absolute inset-x-4 top-3 z-20 mx-auto w-fit shrink-0 sm:inset-x-6 sm:top-4',
+          // From lg this stops being a pill hovering over the content and becomes the page's
+          // header band — full width, on the surface, ruled off from the content below it, and
+          // carrying the tag filter alongside the switch.
+          //
+          // Floating suits a phone: the bar is the only thing on its layer, cards scroll under it,
+          // and centring it lets them pass either side. On a desktop the same pill was a lone
+          // control adrift at the top of an empty line, with the filter stranded a hundred pixels
+          // below it and nothing tying either to the page. Every other page here opens with a
+          // band; this one now does too.
+          'lg:static lg:mx-0 lg:w-auto lg:border-b lg:border-[var(--color-border)]',
+          'lg:bg-[var(--color-surface)] lg:px-6 lg:py-3',
+        )}
+      >
+        <div className="flex w-full items-center justify-center lg:justify-between lg:gap-4">
+          <div
+            role="tablist"
+            aria-label="Starred"
+            className={cn(
+              'relative inline-flex items-center rounded-full p-1',
+              // The floating-surface treatment the bar used to carry, now on the only thing left.
+              'border border-[var(--color-border)]/60 bg-[var(--color-surface)]/70 backdrop-blur-md',
+              'shadow-[var(--shadow-md)] supports-[backdrop-filter:blur(0px)]:bg-[var(--color-surface)]/80',
+              // And dropped again from lg, where it sits in the page rather than above it: a
+              // shadow and a blur with nothing passing underneath is a control pretending to
+              // hover. Plain track and border there, like the folder view's List/Board toggle.
+              'lg:border-[var(--color-border)] lg:bg-[var(--color-hover)] lg:shadow-none lg:backdrop-blur-none',
+            )}
+          >
+            {/* One pill that travels, rather than a background on whichever tab is active: with
+                two equal-width tabs `translateX(index * 100%)` is exact, and a single moving
+                element is what lets the switch itself show the direction the panes are about to
+                take. Same trick as the bottom bar's indicator. */}
+            <span
+              aria-hidden
+              className={cn(
+                'absolute inset-y-1 left-1 w-[calc((100%-0.5rem)/2)] rounded-full',
+                'bg-[var(--color-surface-raised)] shadow-[var(--shadow-sm)]',
+                'transition-transform duration-[320ms] [transition-timing-function:var(--motion-spring)]',
+                'motion-reduce:transition-none',
+              )}
+              style={{ transform: `translateX(${tabIndex * 100}%)` }}
+            />
+            {TABS.map((item) => {
+              const count = item.key === 'tasks' ? importantTasks.length : importantFolders.length
+              const active = tab === item.key
               return (
                 <button
                   key={item.key}
                   type="button"
-                  aria-pressed={active}
-                  onClick={() => setFilter(item.key)}
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => selectTab(item.key)}
                   className={cn(
-                    'anim-press flex-1 rounded-full px-2.5 py-1 text-[12.5px] font-semibold transition-[background-color,color,box-shadow,transform] duration-200 lg:flex-none',
-                    active
-                      ? 'bg-[var(--color-surface-raised)] text-[var(--color-text)] shadow-[var(--shadow-sm)]'
-                      : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]',
+                    'anim-press relative z-10 w-[104px] rounded-full px-3 py-1 text-[12.5px] font-semibold',
+                    'transition-colors duration-200 sm:w-[120px]',
+                    active ? 'text-[var(--color-text)]' : 'text-[var(--color-text-muted)]',
                   )}
                 >
                   {item.label}
@@ -135,22 +219,38 @@ export function ImportantPage() {
               )
             })}
           </div>
-          </div>
+
+          {/* Tags belong to the tasks half; a folder has none, so on that tab the row would be a
+              filter for something not on screen. */}
+          {tab === 'tasks' && allTagsInScope.length > 0 ? (
+            <TagFilter
+              tags={allTagsInScope}
+              activeTag={activeTag}
+              onSelect={setActiveTag}
+              className="hidden lg:flex"
+            />
+          ) : null}
         </div>
       </div>
 
       <div
         ref={contentRef}
-        className="min-h-0 flex-1 overflow-y-auto bg-[var(--color-surface-muted)] px-4 pb-28 sm:px-6 lg:pb-5"
+        className="min-h-0 flex-1 overflow-y-auto bg-[var(--color-surface-muted)] px-4 pb-28 sm:px-6 lg:pb-6"
       >
-        {showFolders ? (
-        <section className="mt-3 sm:mt-4 lg:mt-6">
-          <h2 className="inline-flex items-center rounded-full border border-[var(--color-border)] bg-[var(--color-hover)] px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)] sm:px-3 sm:py-1 sm:text-xs">
-            Folders
-          </h2>
+        {/* One pane at a time, remounted on every switch so its arrival animation replays.
+            `anim-page-enter` is the same slide the whole app uses when you move along the bottom
+            bar, pointed at whichever direction the switch just went — which is what makes the
+            two read as one gesture rather than a control and an unrelated redraw. */}
+        <div
+          key={tab}
+          className="anim-page-enter"
+          style={{ '--page-enter-x': `${paneTravel}px` } as CSSProperties}
+        >
+        {tab === 'folders' ? (
+        <section className="mt-3 sm:mt-4 lg:mt-4">
           {importantFolders.length === 0 ? (
             <p className="mt-2 px-2.5 text-sm text-[var(--color-text-muted)]">
-              No important folders
+              Nothing starred yet — star a folder to keep it here.
             </p>
           ) : (
             <div className={FOLDER_GRID}>
@@ -194,52 +294,30 @@ export function ImportantPage() {
             </div>
           )}
         </section>
-        ) : null}
+        ) : (
+        <section className="mt-3 sm:mt-4 lg:mt-4">
 
-        {showTasks ? (
-        <section className="mt-5 sm:mt-6 lg:mt-8">
-          <h2 className="inline-flex items-center rounded-full border border-[var(--color-border)] bg-[var(--color-hover)] px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)] sm:px-3 sm:py-1 sm:text-xs">
-            Tasks
-          </h2>
-
+          {/* Below lg only: from lg the same control lives in the header band, beside the switch,
+              where there is a row's worth of width going spare. */}
           {allTagsInScope.length > 0 ? (
-            <div className="mt-3 flex flex-wrap items-center gap-1.5">
-              <span className="text-[12px] font-medium text-[var(--color-text-muted)]">Sort by tags:</span>
-              {allTagsInScope.map((tag) => (
-                <button
-                  key={tag}
-                  type="button"
-                  aria-pressed={activeTag === tag}
-                  onClick={() => setActiveTag((current) => (current === tag ? null : tag))}
-                  className={cn(
-                    'anim-press rounded-full border px-2.5 py-1 text-[12px] font-medium transition-colors',
-                    activeTag === tag
-                      ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
-                      : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:bg-[var(--color-hover)] hover:text-[var(--color-text)]',
-                  )}
-                >
-                  {tag}
-                </button>
-              ))}
-              {activeTag ? (
-                <button
-                  type="button"
-                  onClick={() => setActiveTag(null)}
-                  className="text-[12px] font-medium text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
-                >
-                  Clear
-                </button>
-              ) : null}
-            </div>
+            <TagFilter
+              tags={allTagsInScope}
+              activeTag={activeTag}
+              onSelect={setActiveTag}
+              className="lg:hidden"
+            />
           ) : null}
 
           {visibleImportantTasks.length === 0 ? (
             <p className="mt-2 px-2.5 text-sm text-[var(--color-text-muted)]">
-              {activeTag ? `No important tasks tagged "${activeTag}"` : 'No important tasks'}
+              {activeTag
+                ? `No starred tasks tagged "${activeTag}"`
+                : 'Nothing starred yet — star a task to keep it here.'}
             </p>
           ) : viewStyle === 'clipboard' ? (
             <TaskGridCanvas
               tasks={visibleImportantTasks}
+              scope="important"
               className="mt-3"
               handleColor={(task) => taskColorStyle(task.color, scatterCategoryForId(task.id)).ink}
             >
@@ -316,7 +394,8 @@ export function ImportantPage() {
             </div>
           )}
         </section>
-        ) : null}
+        )}
+        </div>
       </div>
 
       {dialog}

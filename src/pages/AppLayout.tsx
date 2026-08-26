@@ -37,13 +37,13 @@ export function AppLayout() {
 
   const activeNav: SidebarNavId | undefined =
     location.pathname === '/'
-      ? 'tree'
-      : location.pathname === '/mynotes'
-        ? 'mynotes'
-        : location.pathname === '/tasks'
-          ? 'tasks'
-          : location.pathname === '/important'
-            ? 'important'
+      ? 'important'
+      : location.pathname === '/tree'
+        ? 'tree'
+        : location.pathname === '/mynotes'
+          ? 'mynotes'
+          : location.pathname === '/tasks'
+            ? 'tasks'
             : undefined
 
   const goTo = (path: string) => {
@@ -52,7 +52,7 @@ export function AppLayout() {
 
   const handleSelectNav = (id: SidebarNavId) => {
     if (id === 'tree') {
-      goTo('/')
+      goTo('/tree')
       return
     }
     if (id === 'mynotes') {
@@ -63,7 +63,7 @@ export function AppLayout() {
       goTo('/tasks')
       return
     }
-    goTo('/important')
+    goTo('/')
   }
 
   const toggleCollapsed = () => {

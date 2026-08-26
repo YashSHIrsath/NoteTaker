@@ -43,7 +43,15 @@ export function FolderSidePanel({
           ? [
               // Bound the floating panel to the visual viewport so both its list and location
               // control remain reachable on a short screen.
-              'max-h-[min(60dvh,30rem)] w-full overflow-hidden',
+              'max-h-[min(60dvh,30rem)] overflow-hidden',
+              // No width of its own as a sheet: the caller pins it between left and right insets,
+              // and `w-full` there is 100% of the *containing block* — the full-viewport overlay —
+              // not of the space between those insets. The two fight, width wins, and the sheet
+              // ends up viewport-wide but pushed right by the left inset, so it hung off the right
+              // edge of every screen narrower than the 28rem cap: 12px of it, taking the "New"
+              // button with it. The popover variant is placed by an anchor rather than by insets,
+              // so there `w-full` is what fills it.
+              isSheet ? '' : 'w-full',
               isSheet ? 'rounded-3xl' : 'rounded-2xl',
               // Shares the app's floating-surface treatment in either compact presentation.
               'border border-[var(--color-border)]/70 bg-[var(--color-surface)]/80 backdrop-blur-xl',

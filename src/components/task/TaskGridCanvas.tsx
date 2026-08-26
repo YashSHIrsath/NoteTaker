@@ -3,11 +3,19 @@ import { GridLayout, useContainerWidth, verticalCompactor, type LayoutItem } fro
 import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
 import './TaskGridCanvas.css'
-import type { Task } from '../../types'
+import type { Task, TaskGridScope } from '../../types'
 import { useFolders } from '../../hooks/useFolders'
 import { useCardsPerRow } from '../../hooks/useTileGrid'
 import { useArrivalSide } from '../../hooks/usePageEnterDirection'
-import { GRID_COLS, GRID_MARGIN, GRID_ROW_HEIGHT, buildGridLayout, minWidthFor, snapWidth } from '../../lib/taskGrid'
+import {
+  GRID_COLS,
+  GRID_MARGIN,
+  GRID_ROW_HEIGHT,
+  buildGridLayout,
+  minWidthFor,
+  orderFromLayout,
+  snapWidth,
+} from '../../lib/taskGrid'
 import { cn } from '../../lib/cn'
 
 /** Kept only as the value react-grid-layout falls back to; nothing is painted at it. */
@@ -23,6 +31,11 @@ const SQUEEZE = 0.12
 
 export interface TaskGridCanvasProps {
   tasks: Task[]
+  /**
+   * Which listing this canvas is. Arrangements are stored per listing, so a card sized here
+   * changes size here and nowhere else — see TaskGridScope.
+   */
+  scope: TaskGridScope
   /** Renders one card. The canvas owns the cell; this owns what's inside it. */
   children: (task: Task) => ReactNode
   /**
@@ -56,7 +69,7 @@ export interface TaskGridCanvasProps {
  * requirement rather than a preference. Reordering lives where it always did: a card's position
  * follows the order it was created in, and the ⋮-less move button sends it to another folder.
  */
-export function TaskGridCanvas({ tasks, children, handleColor, className }: TaskGridCanvasProps) {
+export function TaskGridCanvas({ tasks, scope, children, handleColor, className }: TaskGridCanvasProps) {
   const { updateTaskLayouts } = useFolders()
   const { width, containerRef, mounted } = useContainerWidth({
     // Measure before painting anything: the guessed width must never reach the screen, or its
@@ -114,7 +127,10 @@ export function TaskGridCanvas({ tasks, children, handleColor, className }: Task
   const mirrored = arriveFrom === 'left' && settled
   const mirrorX = Math.round(-width * SQUEEZE)
 
-  const layout = useMemo(() => buildGridLayout(tasks, cardsPerRow), [tasks, cardsPerRow])
+  const layout = useMemo(
+    () => buildGridLayout(tasks, cardsPerRow, scope),
+    [tasks, cardsPerRow, scope],
+  )
 
   /**
    * Saves on gesture end, not on every layout change. onLayoutChange also fires on mount and on
@@ -131,23 +147,39 @@ export function TaskGridCanvas({ tasks, children, handleColor, className }: Task
    * The width is snapped to a whole unit on the way in rather than on the way out, so what gets
    * stored is what will be rendered — no drift between the two.
    */
-  const persist = (resized: LayoutItem | null) => {
+  const persistResize = (resized: LayoutItem | null) => {
     if (!resized) {
       return
     }
-    updateTaskLayouts([
+    updateTaskLayouts(scope, [
       {
         taskId: resized.i,
-        // x and y are recorded but never read back — buildGridLayout places every card itself.
-        // Kept in the shape so the stored row stays self-describing rather than half-filled.
-        layout: {
-          x: resized.x,
-          y: resized.y,
+        placement: {
           w: snapWidth(resized.w, minWidthFor(cardsPerRow)),
           h: resized.h,
         },
       },
     ])
+  }
+
+  /**
+   * A drop is stored as an order, not as a position.
+   *
+   * Where the card landed is read off the settled layout in reading order — down the rows, then
+   * across — and every card in this listing gets its index written, because an order only means
+   * anything relative to the others. Nothing else about them is touched, so a card that has never
+   * been resized still takes its width from the "cards per row" setting.
+   *
+   * Storing (x, y) instead would freeze the arrangement to the width it was made at and let a
+   * drop leave holes behind it; an order goes back through the same first-fit packer as
+   * everything else, which is what keeps rows filled without stretching anyone.
+   */
+  const persistOrder = (settled: readonly LayoutItem[]) => {
+    const order = orderFromLayout(settled)
+    updateTaskLayouts(
+      scope,
+      [...order].map(([taskId, index]) => ({ taskId, placement: { order: index } })),
+    )
   }
 
   return (
@@ -178,19 +210,22 @@ export function TaskGridCanvas({ tasks, children, handleColor, className }: Task
           margin: GRID_MARGIN,
           containerPadding: [0, 0],
         }}
-        // Dragging is off, and it has to be: react-draggable binds `touchstart` on every grid
-        // item with { passive: false } and preventDefaults the touchmove that follows, so a
-        // finger that lands on a card can never scroll the page. Cards cover nearly all of it,
-        // which made the page unscrollable on a phone — a swipe was read as a drag, the card
-        // snapped back, and nothing moved. Resizing is unaffected: its handle is a 28px corner
-        // with its own listener, not the whole card.
-        dragConfig={{ enabled: false }}
+        // Dragging is on, but only from the grip — and `handle` is what makes that safe rather
+        // than a preference. react-draggable binds `touchstart` on every grid item with
+        // { passive: false } and preventDefaults it, which is what stops the page scrolling from
+        // there. With no handle that is the whole card, and cards cover nearly all of a phone
+        // screen: a swipe was read as a drag, the card snapped back, and the page didn't move.
+        // Its guard order is what rescues this — handleDragStart checks the handle selector and
+        // returns *before* the preventDefault — so a touch anywhere but the grip is never
+        // swallowed and still scrolls. Checked against the installed react-draggable, not assumed.
+        dragConfig={{ enabled: true, handle: '.task-grid-drag-handle', threshold: 4 }}
         // Bottom-right only. Handles on all four corners were tried and dropped: three of them
         // reach into the space the neighbouring card occupies, which is exactly where they are
         // hardest to see and easiest to hit by accident, and none of them could do anything the
         // bottom-right one couldn't.
         resizeConfig={{ enabled: true, handles: ['se'] }}
-        onResizeStop={(_layout, _oldItem, newItem) => persist(newItem)}
+        onResizeStop={(_layout, _oldItem, newItem) => persistResize(newItem)}
+        onDragStop={(settled) => persistOrder(settled)}
       >
         {tasks.map((task) => (
           // RGL positions this element, so the card inside must fill it rather than size itself —
@@ -203,6 +238,16 @@ export function TaskGridCanvas({ tasks, children, handleColor, className }: Task
             style={{ '--task-grid-handle': handleColor?.(task) } as CSSProperties}
           >
             {children(task)}
+            {/* The grip is the canvas's, not the card's: every view puts a different component in
+                here, and a card that could be moved in one listing and not another would be the
+                same card behaving two ways. Rendered after the card so it stacks above it without
+                needing a z-index fight. */}
+            <span
+              className="task-grid-drag-handle"
+              role="button"
+              aria-label={`Move ${task.title}`}
+              tabIndex={-1}
+            />
           </div>
         ))}
       </GridLayout>

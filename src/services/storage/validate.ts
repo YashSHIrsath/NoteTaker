@@ -1,4 +1,4 @@
-import type { Folder, Subtask, Task } from '../../types'
+import type { Folder, Subtask, Tag, Task } from '../../types'
 import { NOTES_STORAGE_VERSION, type AppSnapshot, type UiState } from './types'
 import { isTaskColor } from '../../lib/taskColor'
 
@@ -53,6 +53,13 @@ function isSubtask(value: unknown): value is Subtask {
   )
 }
 
+function isTag(value: unknown): value is Tag {
+  if (!isRecord(value)) {
+    return false
+  }
+  return typeof value.id === 'string' && typeof value.name === 'string'
+}
+
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === 'string')
 }
@@ -83,6 +90,11 @@ export function parseSnapshot(value: unknown): AppSnapshot | null {
   if (!Array.isArray(value.subtasks) || !value.subtasks.every(isSubtask)) {
     return null
   }
+  // Absent rather than invalid in a document written before the catalogue existed; the storage
+  // migration fills it in, and this stays lenient so a hand-edited file missing it still loads.
+  if (value.tags !== undefined && (!Array.isArray(value.tags) || !value.tags.every(isTag))) {
+    return null
+  }
   if (!isUiState(value.uiState)) {
     return null
   }
@@ -92,6 +104,7 @@ export function parseSnapshot(value: unknown): AppSnapshot | null {
     folders: value.folders,
     tasks: value.tasks,
     subtasks: value.subtasks,
+    tags: Array.isArray(value.tags) ? value.tags : [],
     uiState: {
       myNotesSidebarExpanded: value.uiState.myNotesSidebarExpanded,
       expandedFolderIds: value.uiState.expandedFolderIds,

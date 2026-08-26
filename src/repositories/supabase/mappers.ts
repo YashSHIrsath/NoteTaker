@@ -1,6 +1,17 @@
 import { NOTES_STORAGE_VERSION } from '../../services/storage/types'
-import type { Attachment, AttachmentType, Folder, Subtask, Task, TaskGridLayout, TaskStatus } from '../../types'
+import type {
+  Attachment,
+  AttachmentType,
+  Folder,
+  Subtask,
+  Tag,
+  Task,
+  TaskGridLayouts,
+  TaskGridPlacement,
+  TaskStatus,
+} from '../../types'
 import { isTaskColor } from '../../lib/taskColor'
+import { GRID_SCOPES } from '../../lib/taskGrid'
 import type { AppSnapshot, UiState } from '../types'
 
 export interface FolderRow {
@@ -25,6 +36,21 @@ export interface TaskRow {
   tags: string[]
   color: string | null
   grid_layout: unknown
+}
+
+export interface TagRow {
+  id: string
+  name: string
+}
+
+/** The join row. Nothing but its two ends — an association has no properties of its own. */
+export interface TaskTagRow {
+  task_id: string
+  tag_id: string
+}
+
+export function tagFromRow(row: TagRow): Tag {
+  return { id: row.id, name: row.name }
 }
 
 export interface SubtaskRow {
@@ -69,7 +95,7 @@ export function taskFromRow(row: TaskRow): Task {
     status: isTaskStatus(row.status) ? row.status : null,
     tags: Array.isArray(row.tags) ? row.tags : [],
     color: isTaskColor(row.color) ? row.color : null,
-    gridLayout: toGridLayout(row.grid_layout),
+    gridLayouts: toGridLayouts(row.grid_layout),
   }
 }
 
@@ -87,21 +113,54 @@ export function taskToRow(task: Task): TaskRow {
     status: task.status,
     tags: task.tags,
     color: task.color,
-    grid_layout: task.gridLayout,
+    grid_layout: task.gridLayouts,
   }
 }
 
-/** jsonb comes back as `unknown`, and a hand-edited or half-written row shouldn't crash a load —
- *  anything that isn't four finite numbers is treated as "never placed". */
-function toGridLayout(value: unknown): TaskGridLayout | null {
+/** jsonb comes back as `unknown`, and a hand-edited or half-written row shouldn't crash a load:
+ *  every field is read on its own and anything that isn't a finite number is simply absent. */
+function toPlacement(value: unknown): TaskGridPlacement | null {
   if (typeof value !== 'object' || value === null) {
     return null
   }
-  const { x, y, w, h } = value as Record<string, unknown>
-  if (![x, y, w, h].every((n) => typeof n === 'number' && Number.isFinite(n))) {
+  const source = value as Record<string, unknown>
+  const placement: TaskGridPlacement = {}
+  for (const key of ['v', 'w', 'h', 'order'] as const) {
+    const number = source[key]
+    if (typeof number === 'number' && Number.isFinite(number)) {
+      placement[key] = number
+    }
+  }
+  return Object.keys(placement).length > 0 ? placement : null
+}
+
+/**
+ * The stored arrangements, in either shape the column has held.
+ *
+ * Rows written before arrangements were split per listing hold a bare `{x,y,w,h}` — one size that
+ * was being shown in all three listings, so it becomes the starting point for all three here. The
+ * cards stay exactly as they were and only diverge once one of them is resized; reading the old
+ * shape as "no arrangement" would silently reset every card anyone had ever sized. The x and y in
+ * those rows are dropped rather than carried across: they were written but never read back, and
+ * placement has been the packer's job throughout.
+ */
+function toGridLayouts(value: unknown): TaskGridLayouts | null {
+  if (typeof value !== 'object' || value === null) {
     return null
   }
-  return { x: x as number, y: y as number, w: w as number, h: h as number }
+  const source = value as Record<string, unknown>
+  const legacy = toPlacement(source)
+  if (legacy) {
+    return { folder: legacy, tasks: legacy, important: legacy }
+  }
+  const layouts: TaskGridLayouts = {}
+  for (const scope of GRID_SCOPES) {
+    const placement = toPlacement(source[scope])
+    if (placement) {
+      layouts[scope] = placement
+    }
+  }
+  return Object.keys(layouts).length > 0 ? layouts : null
 }
 
 function isTaskStatus(value: string | null): value is TaskStatus {
@@ -168,19 +227,89 @@ export function attachmentToRow(
   }
 }
 
+/**
+ * Rows in, snapshot out — with each task's tags resolved from the join.
+ *
+ * `tagRows` is null when the catalogue tables aren't there yet (a database this migration hasn't
+ * been pushed to). In that case every task keeps the names in its own `tags` array, which is
+ * exactly what it had before, so the app runs unchanged until `npm run db:push`.
+ */
 export function snapshotFromRows(
   folderRows: FolderRow[],
   taskRows: TaskRow[],
   subtaskRows: SubtaskRow[],
   uiState: UiState,
+  catalogue: { tagRows: TagRow[]; taskTagRows: TaskTagRow[] } | null,
 ): AppSnapshot {
+  const tasks = taskRows.map(taskFromRow)
+
+  if (!catalogue) {
+    return {
+      version: NOTES_STORAGE_VERSION,
+      folders: folderRows.map(folderFromRow),
+      tasks,
+      subtasks: subtaskRows.map(subtaskFromRow),
+      tags: [],
+      uiState,
+    }
+  }
+
+  const nameById = new Map(catalogue.tagRows.map((row) => [row.id, row.name]))
+  const namesByTask = new Map<string, string[]>()
+  for (const link of catalogue.taskTagRows) {
+    const name = nameById.get(link.tag_id)
+    if (!name) {
+      continue
+    }
+    const names = namesByTask.get(link.task_id)
+    if (names) {
+      names.push(name)
+    } else {
+      namesByTask.set(link.task_id, [name])
+    }
+  }
+
   return {
     version: NOTES_STORAGE_VERSION,
     folders: folderRows.map(folderFromRow),
-    tasks: taskRows.map(taskFromRow),
+    // The join wins where there is one, and the task's own array is the fallback where there
+    // isn't. Both halves matter. Preferring the join stops a task last written by a client that
+    // predates the catalogue from dragging its stale array back over associations made since;
+    // falling back to the array is what carries a task whose links were never written — the
+    // one-time local-to-Supabase migration inserts tasks and their arrays but knows nothing about
+    // task_tags, and without this every tag on a migrated account would vanish on first load.
+    //
+    // The two cannot disagree by accident: this client writes the array on every save from the
+    // same names it writes the links from, so "no links but a non-empty array" only ever means
+    // "nothing has written links for this task yet".
+    tasks: tasks.map((task) => {
+      const linked = namesByTask.get(task.id)
+      return { ...task, tags: (linked ?? task.tags).slice().sort() }
+    }),
     subtasks: subtaskRows.map(subtaskFromRow),
+    // Completed with anything the tasks reference but the catalogue doesn't have yet — the
+    // migrated account above, again. A name a task carries has to exist as a tag or the next save
+    // would find no catalogue entry for it, write no link, and quietly drop it. Freshly minted ids
+    // are settled by that save; nothing points at a tag by id, so a temporary one costs nothing.
+    tags: completeCatalogue(catalogue.tagRows.map(tagFromRow), tasks),
     uiState,
   }
+}
+
+function completeCatalogue(tags: Tag[], tasks: Task[]): Tag[] {
+  const known = new Set(tags.map((tag) => tag.name.toLowerCase()))
+  const completed = [...tags]
+  for (const task of tasks) {
+    for (const raw of task.tags) {
+      const name = raw.trim()
+      const key = name.toLowerCase()
+      if (name && !known.has(key)) {
+        known.add(key)
+        completed.push({ id: crypto.randomUUID(), name })
+      }
+    }
+  }
+  return completed.sort((a, b) => a.name.localeCompare(b.name))
 }
 
 /** Parents before children so inserts satisfy folder/subtask foreign keys. */

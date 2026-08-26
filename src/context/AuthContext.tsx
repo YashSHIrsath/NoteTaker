@@ -10,7 +10,7 @@ import {
 import type { Session, User } from '@supabase/supabase-js'
 import { getAuthEmailRedirectTo } from '../lib/authRedirect'
 import { getSupabaseClient } from '../lib/supabase'
-import type { TilesPerRow, ViewStyle } from '../lib/viewStyle'
+import { tilesPerRowUpdate, type TileBandId, type TilesPerRow, type ViewStyle } from '../lib/viewStyle'
 
 export interface ProfileUpdate {
   fullName?: string
@@ -19,8 +19,13 @@ export interface ProfileUpdate {
   timezone?: string
   /** Whether the Notes/Important pages render as classic list cards or as colorful tiles. */
   viewStyle?: ViewStyle
-  /** Tiles per row in the note grids, or 'auto' to let the available width decide. */
+  /**
+   * Tiles per row in the note grids, or 'auto' to let the available width decide — recorded
+   * against one screen size, not the account as a whole. `tilesPerRowBand` says which.
+   */
   tilesPerRow?: TilesPerRow
+  /** Which screen size the tilesPerRow above applies to. Required alongside it. */
+  tilesPerRowBand?: TileBandId
 }
 
 interface AuthContextValue {
@@ -130,8 +135,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (update.viewStyle !== undefined) {
       data.view_style = update.viewStyle
     }
-    if (update.tilesPerRow !== undefined) {
-      data.tiles_per_row = String(update.tilesPerRow)
+    if (update.tilesPerRow !== undefined && update.tilesPerRowBand !== undefined) {
+      // One key per screen size (see tilesPerRowUpdate). The legacy account-wide key is left
+      // exactly where it is: it is still read as the starting point for a band nobody has set,
+      // and overwriting it here would make one screen's choice leak into all the others again.
+      Object.assign(data, tilesPerRowUpdate(update.tilesPerRowBand, update.tilesPerRow))
     }
     const { data: result, error } = await client.auth.updateUser({ data })
     if (error) {

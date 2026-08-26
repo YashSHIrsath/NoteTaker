@@ -414,47 +414,163 @@
   --bn-colors-side-menu: var(--color-text-muted);
 }
 
-/* The popover gets a real surface: the same card treatment as every other floating thing in the
-   app, so the tabs sit on something instead of over the note. */
-.bn-root .bn-panel-popover {
+/* The panel is dropped back into normal flow, under the block it belongs to.
+
+   BlockNote positions it with an absolutely-positioned wrapper carrying
+   `left: 0; top: 0; transform: translate(-54px, …)`. That -54 is the editor's own side padding,
+   and because nothing in this app's note card establishes a containing block, `left: 0` resolves
+   against the page rather than the editor — so the panel landed at page x = -54, i.e. off the
+   left of the card, and the card (which clips, being a rounded tile) cut it in half. That's the
+   sliced-off "Upload" tab.
+
+   Measured rather than guessed: in a 360px card the wrapper put the panel at -54…330; in flow it
+   sits at 24…368, inside the card and directly under the block. Flow placement also can't drift
+   again if BlockNote changes its offsets, and in a note "below the block" is the only place this
+   panel ever wants to be. The wrapper carries no class of its own, hence :has(). */
+.bn-root div:has(> .bn-panel) {
+  /* !important, and it is load-bearing: the positioner writes position/left/top/transform to the
+     wrapper's *inline* style, which no stylesheet rule can outrank without it. */
+  position: static !important;
+  transform: none !important;
+  width: auto !important;
+}
+
+/* The panel gets a real surface. Note the selector: this version of BlockNote renders the panel
+   as .bn-panel inside .bn-root, with no .bn-panel-popover wrapper — that class exists only in the
+   library's stylesheet, so styling it looked right and changed nothing. Verified against the
+   rendered DOM rather than the stylesheet. */
+.bn-root .bn-panel {
   background-color: var(--color-surface-raised);
   border: 1px solid var(--color-border);
   border-radius: 14px;
   box-shadow: var(--shadow-lg);
+  margin-block: 6px;
+  max-width: min(24rem, 100%);
   overflow: hidden;
-  max-width: min(22rem, calc(100vw - 2rem));
+  padding: 0;
 }
 
-.bn-root .bn-panel-popover .mantine-Tabs-root {
+.bn-root .bn-panel .mantine-Tabs-root {
   background-color: transparent;
+  width: 100%;
 }
 
-.bn-root .bn-panel-popover .mantine-Tabs-tab {
-  font-size: 13px;
+/* A segmented control rather than a row of underlined tabs. There are two of them, they switch
+   between two ways of doing one thing, and the app already says that shape everywhere else (the
+   Starred switch, the folder view's List/Board). The track is what makes it read as a switch, so
+   it needs its own inset fill rather than sitting directly on the panel. */
+.bn-root .bn-panel .mantine-Tabs-list {
+  background-color: var(--color-hover);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  gap: 2px;
+  margin: 10px 10px 0;
+  padding: 3px;
+}
+
+.bn-root .bn-panel .mantine-Tabs-tab {
+  border: none;
+  border-radius: 999px;
+  color: var(--color-text-muted);
+  flex: 1;
+  font-size: 12.5px;
   font-weight: 600;
-  padding: 8px 12px;
+  justify-content: center;
+  padding: 5px 12px;
+  transition:
+    background-color var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease);
 }
 
-/* Mantine's file input is a full-width bordered bar with centred bold text; as the only control
-   in the panel it read as a heading rather than a button. This makes it the app's own button. */
-.bn-root .bn-panel-popover .mantine-FileInput-input,
-.bn-root .bn-panel-popover .mantine-Button-root {
+.bn-root .bn-panel .mantine-Tabs-tab[data-active] {
+  background-color: var(--color-surface-raised);
+  box-shadow: var(--shadow-sm);
+  color: var(--color-text);
+}
+
+.bn-root .bn-panel .bn-tab-panel {
+  padding: 10px;
+}
+
+/* The file picker is a place to put a file, not a button to press.
+
+   It was a full-width block of accent fill with centred bold white text — the loudest thing in a
+   note, for the least important control on the screen, and shaped like a submit button when what
+   it actually accepts is a drop. It becomes the same dashed target as the "Add file" block the
+   panel opens from, so the two read as the same affordance at two sizes. */
+.bn-root .bn-panel .mantine-FileInput-input {
+  align-items: center;
+  background-color: var(--color-surface-muted);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: 12px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  display: flex;
+  font-size: 12.5px;
+  font-weight: 600;
+  justify-content: center;
+  min-height: 68px;
+  padding: 12px 14px;
+  text-align: center;
+  transition:
+    background-color var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease);
+  width: 100%;
+}
+
+.bn-root .bn-panel .mantine-FileInput-input:hover {
+  background-color: var(--color-accent-soft);
+  border-color: var(--color-accent);
+  color: var(--color-accent-ink);
+}
+
+/* Mantine's placeholder is a muted grey that lands grey-on-grey here; it is the target's only
+   label, so it takes the target's own colour and follows it on hover. */
+.bn-root .bn-panel .mantine-FileInput-placeholder,
+.bn-root .bn-panel .mantine-FileInput-input .mantine-Input-placeholder {
+  color: inherit;
+  font-weight: 600;
+}
+
+/* The embed tab's submit, which *is* a button: compact and pinned to the right, the way the
+   confirming action sits in every dialog in the app, rather than a full-width bar. */
+.bn-root .bn-panel .bn-button,
+.bn-root .bn-panel .mantine-Button-root {
   background-color: var(--color-accent);
   border: none;
   border-radius: 999px;
   color: #ffffff;
-  font-size: 13px;
+  display: flex;
+  font-size: 12.5px;
   font-weight: 600;
-  min-height: 36px;
+  justify-content: center;
+  margin-left: auto;
+  min-height: 30px;
+  padding-inline: 16px;
+  transition: background-color var(--motion-fast) var(--motion-ease);
+  width: auto;
 }
 
-.bn-root .bn-panel-popover .mantine-FileInput-input:hover,
-.bn-root .bn-panel-popover .mantine-Button-root:hover {
+.bn-root .bn-panel .bn-button:hover,
+.bn-root .bn-panel .mantine-Button-root:hover {
   background-color: var(--color-accent-hover);
 }
 
-.bn-root .bn-panel-popover .mantine-TextInput-input {
+.bn-root .bn-panel .mantine-TextInput-input {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: 10px;
+  color: var(--color-text);
+  font-size: 13px;
+  margin-bottom: 8px;
+  min-height: 34px;
+  padding-inline: 12px;
+}
+
+.bn-root .bn-panel .mantine-TextInput-input:focus {
+  border-color: var(--color-accent);
+  outline: none;
 }
 
 /* The block itself: a place to drop something, in this app's colours. */
@@ -478,4 +594,17 @@
 .task-blocknote [data-file-block] .bn-add-file-button-icon {
   width: 18px;
   height: 18px;
+}
+
+/* ------------------------------------------------------------ reading mode
+
+   The note with its editing surface switched off (see `readOnly` in TaskBlockNoteEditor). There
+   is no caret and no menus, so the only thing left to say is that the text is text and the
+   checklist is still yours to tick. */
+.task-blocknote-reading .bn-editor {
+  cursor: default;
+}
+
+.task-blocknote-reading .bn-editor input[type='checkbox'] {
+  cursor: pointer;
 }

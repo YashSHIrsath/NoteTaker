@@ -16,7 +16,7 @@ export function FolderBreadcrumb({ path, currentLabel, currentIsTask = false }: 
       <ol className="flex flex-wrap items-center gap-1">
         <li className="flex items-center gap-1">
           <Link
-            to="/"
+            to="/mynotes"
             className="rounded-sm hover:text-[var(--color-text)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/20"
           >
             Notes

@@ -1,6 +1,6 @@
-import type { Folder, Subtask, Task } from '../../types'
+import type { Folder, Subtask, Tag, Task } from '../../types'
 
-export const NOTES_STORAGE_VERSION = 9
+export const NOTES_STORAGE_VERSION = 10
 
 export interface UiState {
   myNotesSidebarExpanded: boolean
@@ -15,6 +15,9 @@ export interface AppSnapshot {
   folders: Folder[]
   tasks: Task[]
   subtasks: Subtask[]
+  /** Every tag this account has made, whether or not anything currently carries it — a tag you
+   *  created and then removed from its last task is still yours to reach for. */
+  tags: Tag[]
   uiState: UiState
 }
 

@@ -19,9 +19,9 @@
   min-height: 0;
 }
 
-/* The resize handle is injected next to the cell by react-resizable; only the card wrapper should
-   inherit the cell's full height. */
-.task-grid-cell > *:not(.react-resizable-handle) {
+/* The resize handle is injected next to the cell by react-resizable, and the drag grip is added
+   inside it by TaskGridCanvas; only the card wrapper should inherit the cell's full height. */
+.task-grid-cell > *:not(.react-resizable-handle):not(.task-grid-drag-handle) {
   height: 100%;
 }
 
@@ -57,18 +57,20 @@
   animation: task-grid-mirror 340ms var(--motion-spring) both;
 }
 
-/* The card being resized must track the pointer exactly. */
-.task-grid-canvas .react-grid-item.resizing {
+/* The card being resized or moved must track the pointer exactly. */
+.task-grid-canvas .react-grid-item.resizing,
+.task-grid-canvas .react-grid-item.react-draggable-dragging {
   transition: none;
   z-index: 30;
 }
 
 /* Apply lift to the card, not the grid item: the grid owns the item's transform. */
-.task-grid-canvas .task-grid-cell > * {
+.task-grid-canvas .task-grid-cell > *:not(.task-grid-drag-handle) {
   transition: box-shadow 200ms var(--motion-ease);
 }
 
-.task-grid-canvas .react-grid-item.resizing .task-grid-cell > * {
+.task-grid-canvas .react-grid-item.resizing .task-grid-cell > *:not(.task-grid-drag-handle),
+.task-grid-canvas .react-grid-item.react-draggable-dragging .task-grid-cell > *:not(.task-grid-drag-handle) {
   box-shadow: var(--shadow-lg);
 }
 
@@ -175,5 +177,63 @@
 
   .task-grid-canvas--mirrored {
     animation: none;
+  }
+}
+
+/* ------------------------------------------------------------ drag handle
+
+   Moving a card is bound to this grip and nothing else (dragConfig.handle in TaskGridCanvas).
+   That is a scrolling requirement before it is a design one: react-draggable preventDefaults the
+   touchstart it hears, so whatever it is bound to becomes a surface you cannot scroll from —
+   which, with no handle, is the whole card and therefore most of a phone screen. It checks the
+   handle selector before that preventDefault, so every other pixel of the card still scrolls.
+
+   Top centre, because it is the one part of a card no view puts anything in: titles are
+   left-aligned and truncate, the controls are top-right, the folder trail is bottom-left, and the
+   resize corner is bottom-right. Same size, colour and fade as that corner, so the two read as a
+   pair of edges on the same card rather than as two different mechanisms. */
+.task-grid-canvas .task-grid-drag-handle {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: var(--grid-handle-hit);
+  height: var(--grid-handle-hit);
+  transform: translateX(-50%);
+  color: var(--task-grid-handle, var(--color-border-strong));
+  opacity: 0.72;
+  cursor: grab;
+  /* The gesture belongs to the drag from the first touch; without this the browser starts
+     scrolling and react-draggable never sees the move. */
+  touch-action: none;
+  transition: opacity var(--motion-base) var(--motion-ease);
+  z-index: 4;
+}
+
+.task-grid-canvas .task-grid-drag-handle::after {
+  content: '';
+  position: absolute;
+  top: var(--grid-handle-inset);
+  left: 50%;
+  width: 22px;
+  height: 4px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.task-grid-canvas .react-grid-item.react-draggable-dragging .task-grid-drag-handle {
+  cursor: grabbing;
+  opacity: 1;
+}
+
+.task-grid-canvas .react-grid-item:hover .task-grid-drag-handle,
+.task-grid-canvas .react-grid-item:focus-within .task-grid-drag-handle,
+.task-grid-canvas .task-grid-drag-handle:hover {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .task-grid-canvas .task-grid-drag-handle {
+    transition: none;
   }
 }

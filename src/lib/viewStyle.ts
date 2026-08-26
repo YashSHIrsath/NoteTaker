@@ -8,61 +8,80 @@ export function readViewStyle(metadata: Record<string, unknown> | undefined): Vi
 export type TilesPerRow = 'auto' | number
 
 export const MIN_TILES_PER_ROW = 1
-export const MAX_TILES_PER_ROW = 10
 
 /**
- * Narrowest a note tile can be and still be worth having. Below this the title truncates to a
- * couple of characters and the content preview is gone, so the tile carries no information — the
- * grid looks denser while telling you less.
+ * The screen sizes this setting is kept separately for, and the most cards each will carry.
  *
- * Lower than the auto grid's own 150px minimum on purpose: auto is choosing what's *comfortable*,
- * while this is the floor on what's *legible*. Picking a fixed count is a deliberate ask for a
- * tighter grid, so it's allowed past comfortable — just not past useless.
- */
-export const MIN_READABLE_TILE_PX = 112
-
-/* The geometry the tile grids actually sit in: the page's own gutter (px-4, px-6 from sm), the
-   grid's gap (gap-2.5, gap-3 from sm) and, from lg, the sidebar beside it. Taken from
-   AllTasksPage/ImportantPage's scroll container and TASK_TILE_GRID; none of those containers caps
-   its width, so the viewport is the only other input. The expanded sidebar width is used rather
-   than the collapsed one, so the cap is a number that holds either way. */
-const GUTTER_PX = { compact: 32, wide: 48 }
-const GAP_PX = { compact: 10, wide: 12 }
-const SIDEBAR_PX = 264
-const SM_BREAKPOINT = 640
-const LG_BREAKPOINT = 1024
-
-/**
- * The highest tiles-per-row this viewport can carry without the tiles becoming unreadable.
+ * Fixed bands rather than a measurement. An earlier version worked the cap out from a minimum
+ * readable tile width, the page gutter, the grid gap and the sidebar, which was defensible and
+ * still produced counts nobody wanted: four columns on a large phone, ten on a desktop. These are
+ * the counts a card actually stays worth reading at, decided once and stated plainly.
  *
- * Both the picker and the grid go through this, so the options offered are exactly the ones that
- * work — and an account that picked 10 on a desktop degrades to whatever its phone can hold
- * instead of rendering ten 30px slivers.
+ * Ordered narrowest first and matched on the first `below` a width falls under, so the last entry
+ * is the open-ended one.
  */
+export const TILE_BANDS = [
+  { id: 'xs', below: 400, max: 1, label: 'Phone' },
+  { id: 'sm', below: 500, max: 2, label: 'Large phone' },
+  { id: 'md', below: 850, max: 3, label: 'Tablet' },
+  { id: 'lg', below: Number.POSITIVE_INFINITY, max: 6, label: 'Desktop' },
+] as const
+
+export type TileBand = (typeof TILE_BANDS)[number]
+export type TileBandId = TileBand['id']
+
+export const MAX_TILES_PER_ROW = Math.max(...TILE_BANDS.map((band) => band.max))
+
+/** Which band a viewport of this width is in. */
+export function tileBandForWidth(viewportWidth: number): TileBand {
+  return TILE_BANDS.find((band) => viewportWidth < band.below) ?? TILE_BANDS[TILE_BANDS.length - 1]
+}
+
+/** The most tiles-per-row this viewport can carry. Both the picker and the grid go through this,
+ *  so the options offered are exactly the ones that work. */
 export function maxTilesPerRowForWidth(viewportWidth: number): number {
-  const wide = viewportWidth >= SM_BREAKPOINT
-  const gutter = wide ? GUTTER_PX.wide : GUTTER_PX.compact
-  const gap = wide ? GAP_PX.wide : GAP_PX.compact
-  const sidebar = viewportWidth >= LG_BREAKPOINT ? SIDEBAR_PX : 0
-  const content = viewportWidth - sidebar - gutter
-  // n tiles need n minimums and n-1 gaps; adding one gap to both sides turns that into a division.
-  const fits = Math.floor((content + gap) / (MIN_READABLE_TILE_PX + gap))
-  return Math.min(MAX_TILES_PER_ROW, Math.max(MIN_TILES_PER_ROW, fits))
+  return tileBandForWidth(viewportWidth).max
 }
 
 /**
- * Stored on the account (user metadata) rather than per device, because it's a taste about how
- * the grid should look, not about this screen. "auto" is the default and stays the recommendation:
- * it fits as many columns as the available width can actually carry.
+ * The metadata key a band's choice is stored under.
+ *
+ * One key per band, rather than one number for the account, because a grid that reads well on a
+ * desktop is not the same grid that reads well on a phone — and picking 6 at a desk used to be
+ * the same act as picking 6 on the phone in your pocket, where it could only ever be clamped back
+ * down to 1. Each screen size now remembers what you asked for on that screen size.
  */
-export function readTilesPerRow(metadata: Record<string, unknown> | undefined): TilesPerRow {
-  const raw = metadata?.tiles_per_row
-  const value = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number.parseInt(raw, 10) : Number.NaN
-  if (!Number.isFinite(value)) {
-    return 'auto'
-  }
-  if (value < MIN_TILES_PER_ROW || value > MAX_TILES_PER_ROW) {
-    return 'auto'
+function bandKey(band: TileBandId): string {
+  return `tiles_per_row_${band}`
+}
+
+/** The legacy account-wide key, still read as the starting point for a band nobody has set yet:
+ *  a choice made before this was per-screen shouldn't silently reset to auto. Never written. */
+const LEGACY_KEY = 'tiles_per_row'
+
+function parseCount(raw: unknown): number | null {
+  const value =
+    typeof raw === 'number' ? raw : typeof raw === 'string' ? Number.parseInt(raw, 10) : Number.NaN
+  if (!Number.isFinite(value) || value < MIN_TILES_PER_ROW || value > MAX_TILES_PER_ROW) {
+    return null
   }
   return value
+}
+
+/**
+ * What this screen size is set to.
+ *
+ * Stored on the account rather than on the device, so it follows you between browsers — but
+ * keyed by band, so the phone's answer and the desktop's answer are two different answers.
+ */
+export function readTilesPerRow(
+  metadata: Record<string, unknown> | undefined,
+  band: TileBandId,
+): TilesPerRow {
+  return parseCount(metadata?.[bandKey(band)]) ?? parseCount(metadata?.[LEGACY_KEY]) ?? 'auto'
+}
+
+/** The metadata patch that records a choice for one band. */
+export function tilesPerRowUpdate(band: TileBandId, value: TilesPerRow): Record<string, string> {
+  return { [bandKey(band)]: String(value) }
 }

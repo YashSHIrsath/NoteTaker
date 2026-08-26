@@ -125,6 +125,7 @@ export function FolderView({
     viewStyle === 'clipboard' ? (
       <TaskGridCanvas
         tasks={taskList}
+        scope="folder"
         className="mt-3"
         handleColor={(task) => taskColorStyle(task.color, scatterCategoryForId(task.id)).ink}
       >
@@ -139,7 +140,7 @@ export function FolderView({
       </TaskGridCanvas>
     ) : (
       // The same canvas the tiles use, so a card keeps its place and size whichever style is on.
-      <TaskGridCanvas tasks={taskList} className="mt-3">
+      <TaskGridCanvas tasks={taskList} scope="folder" className="mt-3">
         {(task) => (
           <TaskCard
               taskId={task.id}

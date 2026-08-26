@@ -7,6 +7,7 @@ export function createDefaultSnapshot(): AppSnapshot {
     folders: [],
     tasks: [],
     subtasks: [],
+    tags: [],
     uiState: {
       myNotesSidebarExpanded: true,
       expandedFolderIds: [],

@@ -55,12 +55,19 @@ function App() {
             <Route element={<RequireAuth />}>
               <Route element={<AuthenticatedApp />}>
                 <Route element={<AppLayout />}>
-                  <Route path="/" element={<TreePage />} />
+                  {/* Starred is the app's front door: "/" is what a cold start, a deep link that
+                    *  no longer resolves, and the catch-all below all land on, so it is the one
+                    *  screen that has to be worth opening on. Tree kept its content and moved to
+                    *  its own path rather than being demoted to a redirect — the bar's first tab
+                    *  still goes straight to it. */}
+                  <Route path="/" element={<ImportantPage />} />
+                  <Route path="/tree" element={<TreePage />} />
                   <Route path="/mynotes" element={<MyNotesPage />} />
                   <Route path="/folder/:folderId" element={<FolderViewPage />} />
                   <Route path="/task/:taskId" element={<TaskViewPage />} />
                   <Route path="/tasks" element={<AllTasksPage />} />
-                  <Route path="/important" element={<ImportantPage />} />
+                  {/* Bookmarks, and the notification links already sent out, still say /important. */}
+                  <Route path="/important" element={<Navigate to="/" replace />} />
                   <Route path="/profile" element={<ProfilePage />} />
                 </Route>
               </Route>

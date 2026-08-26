@@ -244,18 +244,39 @@ body {
   mix-blend-mode: normal;
 }
 
-/* The incoming theme starts clipped to nothing, in CSS, before any script runs.
-   Without this there is a window — between the browser creating these pseudo-elements and
-   themeReveal.ts calling animate() on the next microtask — where the new snapshot is painted at
-   full size with no clip at all. Replacing the default cross-fade with `animation: none` above is
-   what opens that window: there is no longer a UA animation holding the new snapshot back. Lose
-   that race by one frame and the whole screen flashes the new theme before the circle grows out of
-   the button. A phone, with less to lay out, usually wins it; a desktop window does not.
+/* The reveal itself: a CSS animation, driven entirely by the three custom properties
+   themeReveal.ts writes on :root *before* it starts the transition.
 
-   The origin comes from the same two custom properties themeReveal.ts sets before starting the
-   transition, so the clip is already centred on the button when the first frame lands. */
+   It used to be a script animation attached on transition.ready, and that was a race the first
+   switch of a session could lose. Between the browser creating these pseudo-elements and a
+   promise callback running, the new snapshot is on screen with whatever clip the stylesheet gave
+   it — and replacing the UA cross-fade with `animation: none` above is what opens that window,
+   since there is no longer a UA animation holding the snapshot back. A CSS animation cannot lose
+   that race: it is part of the pseudo-element's own computed style, so it is running on the first
+   frame the element exists. It also cannot leak — a script animation with `fill: forwards` and a
+   pseudoElement target outlives the pseudo-element it was aimed at and is still hanging off the
+   root when the next transition builds a new one.
+
+   `left`/`top` are spelled out rather than using the bare two-length form: a <position> given as
+   two lengths is resolved from whichever edges count as "start" for the box, so the same two
+   numbers can mean "264px from the left" or "264px from the right" depending on what this
+   pseudo-element tree inherits. The keyword form has exactly one meaning. */
 ::view-transition-new(root) {
-  clip-path: circle(0 at var(--theme-reveal-x, 50%) var(--theme-reveal-y, 50%));
+  animation: theme-reveal var(--motion-reveal) cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+@keyframes theme-reveal {
+  from {
+    clip-path: circle(0 at left var(--theme-reveal-x, 50%) top var(--theme-reveal-y, 50%));
+  }
+  to {
+    /* A px radius that just clears the furthest corner, from themeReveal.ts. The percentage is
+       the fallback for a transition nothing set up: it is measured off the box's own diagonal, so
+       it always covers. */
+    clip-path: circle(
+      var(--theme-reveal-r, 150%) at left var(--theme-reveal-x, 50%) top var(--theme-reveal-y, 50%)
+    );
+  }
 }
 
 /* The outgoing theme holds still underneath while the incoming one is clipped over the top. */

@@ -7,30 +7,18 @@
  * corner. That's what makes it read as the new theme flooding outwards — a hand-rolled version
  * would have to duplicate the entire UI in both themes to get the same effect.
  *
+ * Everything this file does is write three numbers and start the transition. The animation itself
+ * is a CSS rule on ::view-transition-new(root) in index.css that reads them. That split is
+ * deliberate: an earlier version attached the animation from script, on transition.ready, and the
+ * first switch of a session could land before the properties it depended on were in effect — a
+ * race a stylesheet cannot lose, because the animation is part of the pseudo-element's computed
+ * style from the first frame it exists.
+ *
  * Where the API is missing (Safari < 18, Firefox) or motion is turned down, `apply` just runs and
  * the switch is instant, exactly as it was before.
  */
 
-/** If --motion-reveal can't be read for any reason. */
-const FALLBACK_MS = 1100
-
-/**
- * The duration lives in index.css with every other timing in the app; this reads it back rather
- * than keeping a second copy in sync by hand. The build minifies `1100ms` to `1.1s`, so both
- * units have to be understood.
- */
-function durationMs(): number {
-  const raw = getComputedStyle(document.documentElement).getPropertyValue('--motion-reveal').trim()
-  const value = raw.endsWith('ms')
-    ? Number.parseFloat(raw)
-    : raw.endsWith('s')
-      ? Number.parseFloat(raw) * 1000
-      : Number.NaN
-  return Number.isFinite(value) && value > 0 ? value : FALLBACK_MS
-}
-
 type StartViewTransition = (callback: () => void) => {
-  ready: Promise<void>
   finished: Promise<void>
 }
 
@@ -66,40 +54,16 @@ export function revealThemeChange(apply: () => void, origin?: RevealOrigin): voi
   // either one fading underneath the circle would muddy the edge we're animating.
   root.dataset.themeRevealing = ''
 
-  // Published before the transition starts, not after: index.css uses these to clip the incoming
-  // snapshot to a zero-radius circle from its very first frame, which is what stops the new theme
-  // flashing full-screen in the gap before the animation below is attached.
+  // Set before the transition starts, not after: these are what the keyframes are made of, so
+  // they have to be in effect by the time the pseudo-elements are created.
   root.style.setProperty('--theme-reveal-x', `${from.x}px`)
   root.style.setProperty('--theme-reveal-y', `${from.y}px`)
+  root.style.setProperty('--theme-reveal-r', `${radiusFrom(from)}px`)
 
   const start = (document as unknown as { startViewTransition: StartViewTransition })
     .startViewTransition
 
   const transition = start.call(document, apply)
-
-  void transition.ready
-    .then(() => {
-      const radius = radiusFrom(from)
-      root.animate(
-        {
-          clipPath: [
-            `circle(0px at ${from.x}px ${from.y}px)`,
-            `circle(${radius}px at ${from.x}px ${from.y}px)`,
-          ],
-        },
-        {
-          duration: durationMs(),
-          easing: 'cubic-bezier(0.32, 0.72, 0, 1)',
-          // The old theme stays put underneath; only the incoming one is clipped.
-          pseudoElement: '::view-transition-new(root)',
-          // Holds the full circle at the end. Without it the animation stops filling and the
-          // clip-path falls back to the CSS base — circle(0) — blanking the new theme for the
-          // frame between the animation finishing and the transition tearing the snapshot down.
-          fill: 'forwards',
-        },
-      )
-    })
-    .catch(() => undefined)
 
   void transition.finished
     .catch(() => undefined)
@@ -107,6 +71,7 @@ export function revealThemeChange(apply: () => void, origin?: RevealOrigin): voi
       delete root.dataset.themeRevealing
       root.style.removeProperty('--theme-reveal-x')
       root.style.removeProperty('--theme-reveal-y')
+      root.style.removeProperty('--theme-reveal-r')
     })
 }
 

@@ -11,7 +11,9 @@ import {
   taskToRow,
   type FolderRow,
   type SubtaskRow,
+  type TagRow,
   type TaskRow,
+  type TaskTagRow,
 } from './mappers'
 import { loadPersistedUiState, persistUiState, normalizeUiState } from './uiStateStore'
 
@@ -63,6 +65,23 @@ function requireUuid(id: string, label: string): void {
   }
 }
 
+/**
+ * The catalogue tables are optional at runtime, on purpose.
+ *
+ * A build can reach a database whose migrations are behind it - that is exactly what the tasks
+ * upsert already handles column by column. Tags degrade the same way: the app falls back to the
+ * names in each task's own array, which is what it read before this feature existed, and says so
+ * once in the console rather than failing a save that has already written the note.
+ */
+function warnMissingCatalogue(error: { message?: string } | null): null {
+  console.warn(
+    'Supabase has no tag catalogue yet (' +
+      (error?.message ?? 'unknown error') +
+      ') - tags are read and written per task instead. Apply the pending migration (npm run db:push) to share them across tasks.',
+  )
+  return null
+}
+
 function throwIfError(error: { message?: string } | null, fallback: string): void {
   if (error) {
     throw toRepositoryError(error, fallback)
@@ -94,17 +113,20 @@ export class SupabaseNotesDataRepository implements NotesDataRepository {
   async load(): Promise<AppSnapshot> {
     try {
       const userId = await this.requireSession()
-      const [foldersResult, tasksResult, subtasksResult] = await Promise.all([
-        this.client
-          .from('folders')
-          .select('id,parent_id,name,is_important,sort_order')
-          .order('sort_order', { ascending: true }),
-        this.client
-          .from('tasks')
-          .select(TASK_COLUMNS)
-          .order('sort_order', { ascending: true }),
-        this.client.from('subtasks').select('id,task_id,parent_subtask_id,title,completed'),
-      ])
+      const [foldersResult, tasksResult, subtasksResult, tagsResult, taskTagsResult] =
+        await Promise.all([
+          this.client
+            .from('folders')
+            .select('id,parent_id,name,is_important,sort_order')
+            .order('sort_order', { ascending: true }),
+          this.client
+            .from('tasks')
+            .select(TASK_COLUMNS)
+            .order('sort_order', { ascending: true }),
+          this.client.from('subtasks').select('id,task_id,parent_subtask_id,title,completed'),
+          this.client.from('tags').select('id,name').order('name', { ascending: true }),
+          this.client.from('task_tags').select('task_id,tag_id'),
+        ])
 
       throwIfError(foldersResult.error, 'Could not load folders.')
       throwIfError(tasksResult.error, 'Could not load tasks.')
@@ -115,6 +137,15 @@ export class SupabaseNotesDataRepository implements NotesDataRepository {
         (tasksResult.data ?? []) as TaskRow[],
         (subtasksResult.data ?? []) as SubtaskRow[],
         normalizeUiState(loadPersistedUiState(userId)),
+        // Not thrown on, unlike the three above: a database without the catalogue migration
+        // answers these with an error, and the app is expected to keep working off the tags each
+        // task already carries in its own column until `npm run db:push` runs.
+        tagsResult.error || taskTagsResult.error
+          ? warnMissingCatalogue(tagsResult.error ?? taskTagsResult.error)
+          : {
+              tagRows: (tagsResult.data ?? []) as TagRow[],
+              taskTagRows: (taskTagsResult.data ?? []) as TaskTagRow[],
+            },
       )
     } catch (error) {
       throw toRepositoryError(error, 'Could not load notes.')
@@ -210,11 +241,84 @@ export class SupabaseNotesDataRepository implements NotesDataRepository {
         throwIfError(error, 'Could not save subtasks.')
       }
 
+      await this.saveTags(snapshot)
+
       await this.deleteMissing('subtasks', snapshot.subtasks.map((item) => item.id))
       await this.deleteMissing('tasks', snapshot.tasks.map((item) => item.id))
       await this.deleteMissing('folders', snapshot.folders.map((item) => item.id))
     } catch (error) {
       throw toRepositoryError(error, 'Could not save notes.')
+    }
+  }
+
+  /**
+   * The tag catalogue and the task->tag join, rewritten to match the snapshot.
+   *
+   * The tags themselves are upserted and anything no longer in the catalogue is deleted, the same
+   * shape as folders and tasks. The join is rebuilt rather than diffed: it is two uuids per row
+   * with no identity of its own, so working out which associations changed costs more than
+   * writing the ones that should exist and deleting the rest. task_tags cascades from both ends,
+   * so a deleted tag or task takes its links with it without any help from here.
+   *
+   * The whole thing is skipped, loudly but without failing the save, when the tables are not
+   * there - the note itself has already been written by this point and must not be rolled back
+   * over a migration that has not been pushed.
+   */
+  private async saveTags(snapshot: AppSnapshot): Promise<void> {
+    for (const tag of snapshot.tags) {
+      requireUuid(tag.id, 'Tag id')
+    }
+
+    if (snapshot.tags.length > 0) {
+      const { error } = await this.client
+        .from('tags')
+        .upsert(
+          snapshot.tags.map((tag) => ({ id: tag.id, name: tag.name })),
+          { onConflict: 'id' },
+        )
+      if (error) {
+        warnMissingCatalogue(error)
+        return
+      }
+    }
+
+    const keptTagIds = snapshot.tags.map((tag) => tag.id)
+    const deleteTags = this.client.from('tags').delete()
+    const { error: tagCleanupError } = await (keptTagIds.length > 0
+      ? deleteTags.not('id', 'in', `(${keptTagIds.join(',')})`)
+      : deleteTags.not('id', 'is', null))
+    if (tagCleanupError) {
+      warnMissingCatalogue(tagCleanupError)
+      return
+    }
+
+    const idByName = new Map(snapshot.tags.map((tag) => [tag.name.toLowerCase(), tag.id]))
+    const links: TaskTagRow[] = []
+    for (const task of snapshot.tasks) {
+      for (const name of task.tags) {
+        const tagId = idByName.get(name.trim().toLowerCase())
+        // A name with no catalogue entry can only come from a client that predates the catalogue.
+        // Dropping the link is right: the association is defined by the catalogue, and the name
+        // still sits in the task's own tags column for that older client to keep reading.
+        if (tagId) {
+          links.push({ task_id: task.id, tag_id: tagId })
+        }
+      }
+    }
+
+    const taskIds = snapshot.tasks.map((task) => task.id)
+    if (taskIds.length > 0) {
+      const { error } = await this.client.from('task_tags').delete().in('task_id', taskIds)
+      if (error) {
+        warnMissingCatalogue(error)
+        return
+      }
+    }
+    if (links.length > 0) {
+      const { error } = await this.client.from('task_tags').insert(links)
+      if (error) {
+        warnMissingCatalogue(error)
+      }
     }
   }
 

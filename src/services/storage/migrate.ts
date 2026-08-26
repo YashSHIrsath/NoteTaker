@@ -180,6 +180,40 @@ function migrateV8ToV9(value: Record<string, unknown>): Record<string, unknown> 
   }
 }
 
+/**
+ * The tag catalogue arrives, seeded from the names already written on tasks.
+ *
+ * Every distinct name across every task becomes a tag, matched case-insensitively so "job" and
+ * "Job" collapse into the one that was written first. Tasks keep their names untouched — they
+ * reference the catalogue by name, and the names they already have are exactly the ones just
+ * put in it.
+ */
+function migrateV9ToV10(value: Record<string, unknown>): Record<string, unknown> {
+  const byKey = new Map<string, { id: string; name: string }>()
+  if (Array.isArray(value.tasks)) {
+    for (const task of value.tasks) {
+      if (!isRecord(task) || !Array.isArray(task.tags)) {
+        continue
+      }
+      for (const raw of task.tags) {
+        if (typeof raw !== 'string') {
+          continue
+        }
+        const name = raw.trim()
+        const key = name.toLowerCase()
+        if (name && !byKey.has(key)) {
+          byKey.set(key, { id: crypto.randomUUID(), name })
+        }
+      }
+    }
+  }
+  return {
+    ...value,
+    version: 10,
+    tags: [...byKey.values()].sort((a, b) => a.name.localeCompare(b.name)),
+  }
+}
+
 /** Brings stored snapshots up to the current schema without dropping user data. */
 export function migrateSnapshot(value: unknown): unknown {
   if (!isRecord(value) || typeof value.version !== 'number') {
@@ -211,6 +245,9 @@ export function migrateSnapshot(value: unknown): unknown {
   }
   if (current.version === 8) {
     current = migrateV8ToV9(current)
+  }
+  if (current.version === 9) {
+    current = migrateV9ToV10(current)
   }
 
   return current

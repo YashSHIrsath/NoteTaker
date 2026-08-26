@@ -81,7 +81,7 @@ export function GlobalSearch({ className }: GlobalSearchProps) {
         id: 'go-tree',
         label: 'Go to Tree',
         icon: <ListTree className="h-4 w-4" aria-hidden />,
-        run: () => runAction(() => navigate('/')),
+        run: () => runAction(() => navigate('/tree')),
       },
       {
         id: 'go-mynotes',
@@ -99,7 +99,7 @@ export function GlobalSearch({ className }: GlobalSearchProps) {
         id: 'go-important',
         label: 'Go to Important',
         icon: <Star className="h-4 w-4" aria-hidden />,
-        run: () => runAction(() => navigate('/important')),
+        run: () => runAction(() => navigate('/')),
       },
       {
         id: 'go-profile',

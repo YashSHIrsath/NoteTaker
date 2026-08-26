@@ -81,6 +81,42 @@ function subtaskBlock(subtask: Subtask, allSubtasks: Subtask[]): StoredBlock {
 
 const EMPTY_DOCUMENT: StoredBlock[] = [{ type: 'paragraph', content: [] }]
 
+/** A block nobody would call content: an empty paragraph, and nothing else counts as one. */
+function isBlankBlock(block: StoredBlock): boolean {
+  if (block.type !== 'paragraph') {
+    return false
+  }
+  if (block.children?.some((child) => !isBlankBlock(child))) {
+    return false
+  }
+  return !block.content?.some((run) => (run.text ?? '').trim().length > 0)
+}
+
+/**
+ * True when a note has nothing in it yet.
+ *
+ * Used to decide which way a note opens: there is nothing to read in an empty one, so it opens
+ * ready to type, and everything else opens as something to read. A brand new note is an empty
+ * string before BlockNote has ever saved it, and one paragraph with no runs afterwards — both
+ * are the same "nothing here", so both have to answer true.
+ */
+export function isEmptyDocument(content: string): boolean {
+  const trimmed = content.trim()
+  if (!trimmed) {
+    return true
+  }
+  if (!isBlockNoteContent(trimmed)) {
+    // A legacy plain-text note, which by definition has text in it.
+    return false
+  }
+  try {
+    const blocks = JSON.parse(trimmed) as StoredBlock[]
+    return blocks.every(isBlankBlock)
+  } catch {
+    return true
+  }
+}
+
 /**
  * Builds the blocks BlockNote should start from. New notes already store BlockNote JSON and
  * pass straight through; notes written before this migration are plain text with inline

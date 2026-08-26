@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CalendarClock, ChevronDown, ChevronUp, GripVertical } from 'lucide-react'
+import { CalendarClock, ChevronDown, ChevronUp, Check, GripVertical, Pencil } from 'lucide-react'
 import type { Attachment, Folder, Task } from '../../types'
 import { FolderBreadcrumb } from '../folder/FolderBreadcrumb'
 import { TaskBlockNoteEditor } from './TaskBlockNoteEditor'
@@ -20,6 +20,7 @@ import { cn } from '../../lib/cn'
 import { formatDueDate, isOverdue } from '../../lib/dueDate'
 import { nextTaskStatus } from '../../lib/taskStatus'
 import { useBlockHandles, useCollapseImages } from '../../hooks/useBlockHandles'
+import { isEmptyDocument } from '../../lib/blockNoteContent'
 
 export interface TaskEditorProps {
   task: Task
@@ -46,6 +47,27 @@ export function TaskEditor({ task, folderPath, showActions = true }: TaskEditorP
   const { enabled: blockHandles, toggle: toggleBlockHandles } = useBlockHandles()
   const { collapsed: imagesCollapsed, toggle: toggleImages } = useCollapseImages()
   const [previewAttachment, setPreviewAttachment] = useState<Attachment | null>(null)
+
+  /**
+   * Opening a note shows it; editing it is a thing you ask for.
+   *
+   * Except when there is nothing to show. A note you just created has no content to read, so
+   * landing in reading mode would mean every new note starts with a button press before you can
+   * type — the state is seeded from the note's own emptiness instead.
+   *
+   * `task.content` is read only when the note changes, not on every render: the moment you type,
+   * the content stops being empty, and re-deriving from it would throw you out of the editor
+   * mid-sentence. Resetting during render rather than in an effect is React's own pattern for
+   * state that follows a prop — it re-renders before anything is painted, where an effect would
+   * show one frame of the previous note's mode.
+   */
+  const [openedTaskId, setOpenedTaskId] = useState(task.id)
+  const [editing, setEditing] = useState(() => isEmptyDocument(task.content))
+  if (openedTaskId !== task.id) {
+    setOpenedTaskId(task.id)
+    setEditing(isEmptyDocument(task.content))
+  }
+
   const overdue = task.dueAt !== null && task.status !== 'complete' && isOverdue(task.dueAt)
   // Every file attached to the note. Not filtered by what the text still references: documents
   // aren't inserted into the text any more (they live here), so that filter would hide the very
@@ -69,15 +91,45 @@ export function TaskEditor({ task, folderPath, showActions = true }: TaskEditorP
         <TaskTitleEditor
           id={`task-title-${task.id}`}
           value={task.title}
+          readOnly={!editing}
           onChange={(title) => updateTaskTitle(task.id, title)}
         />
 
         <div className="flex min-w-0 shrink-0 items-center gap-1.5">
+          {/* The note's mode, and the first control in the row because it decides what the rest
+              of them are for. Reading is the resting state, so this reads "Edit" almost always;
+              "Done" only while you are actually in the note changing it.
+
+              Built as one of this row's chips rather than as a Button: everything alongside it is
+              a 20px pill at 10px type, and a `size="sm"` Button is 28px at 12px — next to the due
+              date it read as a different class of control that had wandered in. It carries the
+              accent instead of the height, which is what makes it the one you reach for without
+              making it the tallest thing in the row. */}
+          <button
+            type="button"
+            aria-pressed={editing}
+            onClick={() => setEditing((current) => !current)}
+            className={cn(
+              'anim-press inline-flex h-5 shrink-0 items-center gap-1 rounded-full border px-2 text-[10px] font-semibold transition-colors',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/20',
+              editing
+                ? 'border-transparent bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)]'
+                : 'border-[var(--color-accent)]/30 bg-[var(--color-accent-soft)] text-[var(--color-accent)] hover:bg-[var(--color-accent-soft-hover)]',
+            )}
+          >
+            {editing ? (
+              <Check className="h-2.5 w-2.5 shrink-0" aria-hidden />
+            ) : (
+              <Pencil className="h-2.5 w-2.5 shrink-0" aria-hidden />
+            )}
+            {editing ? 'Done' : 'Edit'}
+          </button>
+
           <button
             type="button"
             onClick={() => setDueDialogOpen(true)}
             className={cn(
-              'anim-press inline-flex min-w-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium transition-colors',
+              'anim-press inline-flex h-5 min-w-0 items-center gap-1 rounded-full border px-2 text-[10px] font-medium transition-colors',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/20',
               task.dueAt
                 ? overdue
@@ -131,7 +183,9 @@ export function TaskEditor({ task, folderPath, showActions = true }: TaskEditorP
           ) : null}
 
           {/* Gutter controls on/off. Off is the default: the "+" and drag handle need a 54px
-              margin the text would rather have, and "/" does the same job inline. */}
+              margin the text would rather have, and "/" does the same job inline. Hidden while
+              reading, where there is nothing for a "+" or a drag handle to do. */}
+          {editing ? (
           <button
             type="button"
             aria-pressed={blockHandles}
@@ -147,6 +201,7 @@ export function TaskEditor({ task, folderPath, showActions = true }: TaskEditorP
           >
             <GripVertical className="h-3 w-3" aria-hidden />
           </button>
+          ) : null}
 
           {/* The full-page route has no dialog header to put these in; the dialog renders its own,
               alongside the save state. */}
@@ -165,9 +220,17 @@ export function TaskEditor({ task, folderPath, showActions = true }: TaskEditorP
         </div>
       </div>
 
-      <div className="mt-1.5 shrink-0">
-        <TaskTagInput tags={task.tags} onChange={(tags) => updateTaskTags(task.id, tags)} />
-      </div>
+      {/* Reading an untagged note, this row is the "add a tag" button and nothing else — so it
+          isn't there. */}
+      {editing || task.tags.length > 0 ? (
+        <div className="mt-1.5 shrink-0">
+          <TaskTagInput
+            tags={task.tags}
+            readOnly={!editing}
+            onChange={(tags) => updateTaskTags(task.id, tags)}
+          />
+        </div>
+      ) : null}
 
       </div>
 
@@ -182,6 +245,7 @@ export function TaskEditor({ task, folderPath, showActions = true }: TaskEditorP
             content={task.content}
             showBlockHandles={blockHandles}
             collapseImages={imagesCollapsed}
+            readOnly={!editing}
             onContentChange={(content) => updateTaskContent(task.id, content)}
           />
         </div>

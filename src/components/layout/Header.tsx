@@ -68,7 +68,7 @@ export function Header({ className }: HeaderProps) {
           )}
         </IconButton>
 
-        <IconButton label="Important" onClick={() => navigate('/important')} className="hidden lg:inline-flex">
+        <IconButton label="Important" onClick={() => navigate('/')} className="hidden lg:inline-flex">
           <Star className="h-5 w-5" />
         </IconButton>
         {import.meta.env.DEV ? (

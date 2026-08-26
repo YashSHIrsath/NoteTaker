@@ -8,10 +8,10 @@ import { useLocation } from 'react-router-dom'
  * move rightwards rather than as arriving from nowhere.
  */
 const NAV_ORDER: { index: number; matches: (pathname: string) => boolean }[] = [
-  { index: 0, matches: (path) => path === '/' },
+  { index: 0, matches: (path) => path === '/tree' },
   { index: 1, matches: (path) => path === '/mynotes' || path.startsWith('/folder/') },
   { index: 2, matches: (path) => path === '/tasks' || path.startsWith('/task/') },
-  { index: 3, matches: (path) => path === '/important' },
+  { index: 3, matches: (path) => path === '/' },
   { index: 4, matches: (path) => path === '/profile' },
 ]
 

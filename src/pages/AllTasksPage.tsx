@@ -49,6 +49,7 @@ export function AllTasksPage() {
     viewStyle === 'clipboard' ? (
       <TaskGridCanvas
         tasks={taskList}
+        scope="tasks"
         className="mt-3"
         handleColor={(task) => taskColorStyle(task.color, scatterCategoryForId(task.id)).ink}
       >
@@ -64,7 +65,7 @@ export function AllTasksPage() {
       </TaskGridCanvas>
     ) : (
       // The same canvas the tiles use, so a card keeps its place and size whichever style is on.
-      <TaskGridCanvas tasks={taskList} className="mt-3">
+      <TaskGridCanvas tasks={taskList} scope="tasks" className="mt-3">
         {(task) => (
           <TaskCard
               taskId={task.id}
@@ -92,13 +93,27 @@ export function AllTasksPage() {
             everything inside it, so wrapping the whole row (as this page used to) took the New
             Task button away with the title and left an empty bar hovering over the cards. Wrapped
             around the title alone, the row keeps its controls and still gives the height back. */}
-        <div className="flex w-full items-center justify-between gap-2 sm:gap-3">
+        {/* One row, and the two controls sit at opposite ends of it.
+
+            The title is the only thing that moves. It is a flex item with `flex-basis: 0` whose
+            `flex-grow` animates between 1 and 0, so on the way down it gives up the whole left
+            half of the bar and on the way back it takes it again — and New Task, sitting right
+            after it, glides between the two ends under that. The tag menu is pinned to the right
+            by `ml-auto`, which claims whatever free space the title has let go of: at grow 1 the
+            title has taken it all and the two controls sit together on the right, at grow 0 the
+            margin has it all and they are at opposite corners. One animated property, and no
+            second copy of either button to cross-fade between.
+            (`order` would say this more directly and cannot be animated at all.) */}
+        <div className="flex w-full items-center gap-2 sm:gap-3">
           <div
             className={cn(
               COLLAPSIBLE_TITLE_CLASS,
-              'min-w-0 flex-1',
-              condensed ? 'max-h-0 opacity-0' : 'max-h-16 opacity-100',
+              'min-w-0',
+              // Cancels the row gap as the title reaches zero width, so New Task ends up against
+              // the bar's own padding rather than a gap's width short of it.
+              condensed ? 'max-h-0 -mr-2 opacity-0 sm:-mr-3' : 'max-h-16 opacity-100',
             )}
+            style={{ flexGrow: condensed ? 0 : 1, flexBasis: 0 }}
           >
             <div className="flex min-w-0 items-center gap-2 sm:gap-3">
               <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent-soft)] text-[var(--color-accent)] sm:h-9 sm:w-9">
@@ -120,17 +135,17 @@ export function AllTasksPage() {
             </div>
           </div>
 
-          {/* The half that survives scrolling. */}
-          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-            <Button
-              variant="primary"
-              size="sm"
-              className="h-8 sm:h-9"
-              onClick={() => setNewTaskOpen(true)}
-            >
-              <Plus className="h-4 w-4" aria-hidden />
-              New Task
-            </Button>
+          {/* Both of these survive scrolling; only where they sit changes. */}
+          <Button
+            variant="primary"
+            size="sm"
+            className="h-8 shrink-0 sm:h-9"
+            onClick={() => setNewTaskOpen(true)}
+          >
+            <Plus className="h-4 w-4" aria-hidden />
+            New Task
+          </Button>
+          <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
             {allTagsInScope.length > 0 ? (
               <TagFilterMenu tags={allTagsInScope} activeTag={activeTag} onSelect={setActiveTag} />
             ) : null}
