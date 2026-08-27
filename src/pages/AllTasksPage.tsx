@@ -1,15 +1,22 @@
 import { useState } from 'react'
 import { ClipboardList, Pin, Plus } from 'lucide-react'
 import type { Task } from '../types'
-import { TagFilterMenu } from '../components/folder/TagFilterMenu'
 import { AllTaskTile } from '../components/task/AllTaskTile'
 import { TaskGridCanvas } from '../components/task/TaskGridCanvas'
 import { NewTaskDialog } from '../components/task/NewTaskDialog'
+import { TaskFilterMenu } from '../components/task/TaskFilterMenu'
 import { TaskCard } from '../components/task/TaskCard'
 import { TaskEditorDialog } from '../components/task/TaskEditorDialog'
 import { Button } from '../components/ui/Button'
 import { useAuth } from '../hooks/useAuth'
 import { useFolders } from '../hooks/useFolders'
+import { useServerNowCoarse } from '../hooks/useServerNow'
+import {
+  applyTaskFilters,
+  emptyFilterMessage,
+  type KindFilter,
+  type StatusFilter,
+} from '../lib/taskFilters'
 import {
   COLLAPSIBLE_TITLE_CLASS,
   FLOATING_HEADER_CLASS,
@@ -23,6 +30,17 @@ import { usePageEnter } from '../hooks/usePageEnterDirection'
 import { cn } from '../lib/cn'
 
 
+/** What the section heading says once a status filter is on — the pill is the only place the
+ *  page repeats back what you asked for, so it should say the narrower thing. */
+const SECTION_TITLE: Partial<Record<StatusFilter, string>> = {
+  incomplete: 'Incomplete',
+  upcoming: 'Not due yet',
+  overdue: 'Overdue',
+  completed: 'Completed',
+  on_time: 'Completed on time',
+  late: 'Completed late',
+}
+
 export function AllTasksPage() {
   const { folders, tasks } = useFolders()
   const { user } = useAuth()
@@ -32,14 +50,20 @@ export function AllTasksPage() {
   const viewStyle = readViewStyle(user?.user_metadata as Record<string, unknown> | undefined)
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
   const [activeTag, setActiveTag] = useState<string | null>(null)
+  const [kindFilter, setKindFilter] = useState<KindFilter>('all')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [newTaskOpen, setNewTaskOpen] = useState(false)
+  // Coarse on purpose: the status filter needs the clock, and re-running this whole grid once a
+  // second to move nothing would be a steep price for it. The cards' own countdowns still tick.
+  const now = useServerNowCoarse(tasks.some((task) => task.noteKind === 'due_task'))
   // Same floating top bar as the folder view, so the two pages' headers line up.
   const { headerRef, contentRef, condensed } = useFloatingHeader()
   // Which side this whole view slides in from — the side of the bar you came from.
   const pageEnter = usePageEnter()
 
   const allTagsInScope = Array.from(new Set(tasks.flatMap((task) => task.tags))).sort()
-  const visibleTasks = activeTag ? tasks.filter((task) => task.tags.includes(activeTag)) : tasks
+  const byTag = activeTag ? tasks.filter((task) => task.tags.includes(activeTag)) : tasks
+  const visibleTasks = applyTaskFilters(byTag, kindFilter, statusFilter, now)
   const pinnedTasks = visibleTasks.filter((task) => task.isPinned)
   const otherTasks = visibleTasks.filter((task) => !task.isPinned)
 
@@ -135,7 +159,9 @@ export function AllTasksPage() {
             </div>
           </div>
 
-          {/* Both of these survive scrolling; only where they sit changes. */}
+          {/* Both of these survive scrolling; only where they sit changes. Three separate filter
+              controls used to share this row and were the first thing crushed on a narrow
+              screen; one pill fits, and the page keeps its single header row. */}
           <Button
             variant="primary"
             size="sm"
@@ -145,10 +171,18 @@ export function AllTasksPage() {
             <Plus className="h-4 w-4" aria-hidden />
             New Task
           </Button>
-          <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
-            {allTagsInScope.length > 0 ? (
-              <TagFilterMenu tags={allTagsInScope} activeTag={activeTag} onSelect={setActiveTag} />
-            ) : null}
+          <div className="ml-auto flex shrink-0 items-center">
+            <TaskFilterMenu
+              tasks={tasks}
+              nowMs={now}
+              kind={kindFilter}
+              status={statusFilter}
+              tag={activeTag}
+              tags={allTagsInScope}
+              onKindChange={setKindFilter}
+              onStatusChange={setStatusFilter}
+              onTagChange={setActiveTag}
+            />
           </div>
         </div>
       </div>
@@ -169,13 +203,17 @@ export function AllTasksPage() {
 
         <section className="mt-4 lg:mt-6">
           <h2 className="inline-flex items-center rounded-full border border-[var(--color-border)] bg-[var(--color-hover)] px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)] sm:px-3 sm:py-1 sm:text-xs">
-            All tasks
+            {SECTION_TITLE[statusFilter] ??
+              (kindFilter === 'tasks' ? 'Due-date tasks' : kindFilter === 'notes' ? 'Notes' : 'All tasks')}
           </h2>
           {visibleTasks.length === 0 ? (
             <p className="mt-2 px-2.5 text-sm text-[var(--color-text-muted)]">
-              {activeTag
-                ? `No tasks tagged "${activeTag}"`
-                : 'No tasks yet — use New Task to create one in any folder.'}
+              {emptyFilterMessage(
+                kindFilter,
+                statusFilter,
+                'No tasks yet — use New Task to create one in any folder.',
+                activeTag,
+              )}
             </p>
           ) : otherTasks.length === 0 ? (
             <p className="mt-2 px-2.5 text-sm text-[var(--color-text-muted)]">All tasks are pinned.</p>

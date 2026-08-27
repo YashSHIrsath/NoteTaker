@@ -4,11 +4,11 @@ import type {
   AttachmentType,
   Folder,
   Subtask,
+  NoteKind,
   Tag,
   Task,
   TaskGridLayouts,
   TaskGridPlacement,
-  TaskStatus,
 } from '../../types'
 import { isTaskColor } from '../../lib/taskColor'
 import { GRID_SCOPES } from '../../lib/taskGrid'
@@ -30,9 +30,10 @@ export interface TaskRow {
   is_important: boolean
   is_pinned: boolean
   sort_order: number
+  note_kind: string
   due_at: string | null
-  remind_before_minutes: number | null
-  status: string | null
+  completed: boolean
+  completed_at: string | null
   tags: string[]
   color: string | null
   grid_layout: unknown
@@ -81,6 +82,12 @@ export function folderToRow(folder: Folder): FolderRow {
   }
 }
 
+/** Anything that isn't the task marker is a plain note — the same forgiving read the database's
+ *  own normalising trigger does, so an unknown value can't strand a row in a third state. */
+function toNoteKind(value: string): NoteKind {
+  return value === 'due_task' ? 'due_task' : 'note'
+}
+
 export function taskFromRow(row: TaskRow): Task {
   return {
     id: row.id,
@@ -90,9 +97,10 @@ export function taskFromRow(row: TaskRow): Task {
     isImportant: row.is_important,
     isPinned: row.is_pinned,
     sortOrder: row.sort_order,
+    noteKind: toNoteKind(row.note_kind),
     dueAt: row.due_at,
-    remindBeforeMinutes: row.remind_before_minutes,
-    status: isTaskStatus(row.status) ? row.status : null,
+    completed: row.completed === true,
+    completedAt: row.completed_at,
     tags: Array.isArray(row.tags) ? row.tags : [],
     color: isTaskColor(row.color) ? row.color : null,
     gridLayouts: toGridLayouts(row.grid_layout),
@@ -108,9 +116,12 @@ export function taskToRow(task: Task): TaskRow {
     is_important: task.isImportant,
     is_pinned: task.isPinned,
     sort_order: task.sortOrder,
+    note_kind: task.noteKind,
     due_at: task.dueAt,
-    remind_before_minutes: task.remindBeforeMinutes,
-    status: task.status,
+    completed: task.completed,
+    // Sent so the row shape stays complete, but the server does not take it: a trigger stamps
+    // completed_at from its own clock and keeps whatever is already there. See the migration.
+    completed_at: task.completedAt,
     tags: task.tags,
     color: task.color,
     grid_layout: task.gridLayouts,
@@ -162,11 +173,6 @@ function toGridLayouts(value: unknown): TaskGridLayouts | null {
   }
   return Object.keys(layouts).length > 0 ? layouts : null
 }
-
-function isTaskStatus(value: string | null): value is TaskStatus {
-  return value === 'pending' || value === 'ongoing' || value === 'complete'
-}
-
 
 export function subtaskFromRow(row: SubtaskRow): Subtask {
   return {

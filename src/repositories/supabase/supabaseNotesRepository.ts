@@ -29,7 +29,7 @@ import { loadPersistedUiState, persistUiState, normalizeUiState } from './uiStat
  * hand .select() a plain string and the row comes back as GenericStringError[].
  */
 const TASK_COLUMNS =
-  'id,folder_id,title,content,is_important,is_pinned,sort_order,due_at,remind_before_minutes,status,tags,color,grid_layout'
+  'id,folder_id,title,content,is_important,is_pinned,sort_order,note_kind,due_at,completed,completed_at,tags,color,grid_layout'
 
 type SplitColumns<S extends string> = S extends `${infer Head},${infer Rest}`
   ? Head | SplitColumns<Rest>

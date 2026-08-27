@@ -214,6 +214,42 @@ function migrateV9ToV10(value: Record<string, unknown>): Record<string, unknown>
   }
 }
 
+/**
+ * Notes and tasks become two explicit kinds, and completion grows a timestamp.
+ *
+ * A note that already has a due date was already being tracked against one, so it becomes a
+ * due-date task and keeps behaving as it did. Everything else stays a plain note, which is the
+ * whole point of the switch: nothing turns into a task on its own.
+ *
+ * The old three-state `status` collapses to a boolean, because the four lifecycle states the app
+ * now shows can't be derived from a colour someone clicked — only from when a task was finished
+ * against when it was due. 'ongoing' had no equivalent and is read as not-yet-complete.
+ * completedAt is left null rather than invented: a local snapshot never recorded one, and guessing
+ * would be the difference between "on time" and "late" decided by a guess.
+ */
+function migrateV10ToV11(value: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...value,
+    version: 11,
+    tasks: Array.isArray(value.tasks)
+      ? value.tasks.map((task) => {
+          if (!isRecord(task)) {
+            return task
+          }
+          const dueAt = typeof task.dueAt === 'string' ? task.dueAt : null
+          const completed = task.status === 'complete'
+          return {
+            ...task,
+            noteKind: dueAt ? 'due_task' : 'note',
+            dueAt,
+            completed,
+            completedAt: completed && typeof task.completedAt === 'string' ? task.completedAt : null,
+          }
+        })
+      : value.tasks,
+  }
+}
+
 /** Brings stored snapshots up to the current schema without dropping user data. */
 export function migrateSnapshot(value: unknown): unknown {
   if (!isRecord(value) || typeof value.version !== 'number') {
@@ -248,6 +284,9 @@ export function migrateSnapshot(value: unknown): unknown {
   }
   if (current.version === 9) {
     current = migrateV9ToV10(current)
+  }
+  if (current.version === 10) {
+    current = migrateV10ToV11(current)
   }
 
   return current

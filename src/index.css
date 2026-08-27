@@ -336,6 +336,23 @@ body {
   height: 0;
 }
 
+/* A track scrolled by its own controls — the landing carousel, which has arrows and dots.
+ *
+ * A real class rather than Tailwind's arbitrary variants, because the rule it has to beat is the
+ * `*` selector above: every scroll container in this app is given a thin visible bar on purpose,
+ * and that includes one the user is never meant to drag. Both properties are needed — Firefox
+ * reads scrollbar-width, WebKit and Blink only take the pseudo-element away. */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 /* A row/card arriving: new task, new folder, or an existing card re-mounting somewhere else —
    pinning in board view moves a card to another column, which is a mount there, so the same
    animation covers "it moved" without a hand-rolled FLIP. */
@@ -580,6 +597,62 @@ body.dnd-touch-active {
   -webkit-touch-callout: none;
 }
 
+/* A block that grows and shrinks with its own content instead of appearing at full size.
+ *
+ * Used by the Schedule dialog, where switching Normal note -> Due-date task adds a whole date
+ * field and the dialog jumped a row taller in one frame.
+ *
+ * The single-row grid rather than max-height: the content's natural height is not a number this
+ * stylesheet knows, and a guessed max-height either clips a tall block or spends the tail of the
+ * transition animating empty space. A grid track can interpolate 0fr -> 1fr, and 1fr *is* the
+ * content's height — so the container arrives exactly when the content does, whatever is in it.
+ *
+ * The inner element owns the overflow; without it the content spills out of the collapsed row
+ * rather than being clipped by it. Pad that inner element instead of giving it a margin — a
+ * margin escapes the track and leaves a gap behind when the block is closed. */
+.anim-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows var(--motion-slow) var(--motion-ease),
+    opacity var(--motion-base) var(--motion-ease);
+}
+
+.anim-collapse > * {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.anim-collapse[data-open='true'] {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+/* A block on its way out is still in the document for the length of the animation. Nobody should
+   be able to click a field that is busy disappearing. */
+.anim-collapse:not([data-open='true']) {
+  pointer-events: none;
+}
+
+/* A number field without the browser's spinner arrows.
+ *
+ * The arrows are two 8px hit targets stacked inside a control that already sits in a tight row of
+ * pickers — they read as clutter next to the plain selects beside them, and nobody nudges "every
+ * N days" one step at a time. Typing and the arrow keys both still work; only the painted buttons
+ * go. `appearance: textfield` is what removes them in Firefox, the ::-webkit rules in the rest. */
+.no-spinner {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.no-spinner::-webkit-outer-spin-button,
+.no-spinner::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  appearance: none;
+  margin: 0;
+}
+
 /* Press feedback for every button that opts in via the shared Button/IconButton components. */
 .anim-press {
   transition: transform var(--motion-fast) var(--motion-ease);
@@ -587,6 +660,65 @@ body.dnd-touch-active {
 
 .anim-press:active:not(:disabled) {
   transform: scale(0.94);
+}
+
+/* A deadline asking to be dealt with: rings leaving the marker like a sonar ping.
+ *
+ * Two rings half a period apart rather than one, so the mark reads as *radiating* continuously
+ * instead of flashing once every few seconds — and a border rather than a fill, so the ring
+ * expands past the icon without ever covering it. The period is a variable because urgency sets
+ * it: an overdue task pings twice as often as one due next week, which is the only part of this
+ * that carries information.
+ *
+ * `color` on the marker drives both rings via currentColor, so one inline colour per urgency
+ * level styles the whole thing. */
+@keyframes anim-radiate-ring {
+  from {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(2.15);
+  }
+}
+
+.anim-radiate {
+  position: relative;
+}
+
+.anim-radiate::before,
+.anim-radiate::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  border: 2px solid currentColor;
+  pointer-events: none;
+  animation: anim-radiate-ring var(--radiate-period, 2600ms) var(--motion-ease) infinite;
+}
+
+.anim-radiate::after {
+  animation-delay: calc(var(--radiate-period, 2600ms) / 2);
+}
+
+/* The same pulse at card scale, for the spotlight when the deadline is today or already gone.
+   A ring that grows out of the card's own edge and fades — no layout cost, since box-shadow is
+   painted outside the box. */
+@keyframes anim-breathe {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--radiate-color, var(--color-accent)) 34%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 0 12px color-mix(in srgb, var(--radiate-color, var(--color-accent)) 0%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--radiate-color, var(--color-accent)) 0%, transparent);
+  }
+}
+
+.anim-breathe {
+  animation: anim-breathe var(--radiate-period, 2600ms) var(--motion-ease) infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -601,8 +733,16 @@ body.dnd-touch-active {
   .anim-overlay-in,
   .anim-overlay-out,
   .anim-dialog-in,
-  .anim-dialog-out {
+  .anim-dialog-out,
+  .anim-breathe {
     animation: none;
+  }
+
+  /* The rings are the whole animation — with nothing to animate they would sit on screen as two
+     static circles round the marker, which says nothing. Take them away instead. */
+  .anim-radiate::before,
+  .anim-radiate::after {
+    display: none;
   }
 
   .anim-task-exit {
@@ -613,5 +753,10 @@ body.dnd-touch-active {
   .anim-press:active:not(:disabled) {
     transition: none;
     transform: none;
+  }
+
+  /* Still opens and closes — it just gets there in one frame. */
+  .anim-collapse {
+    transition: none;
   }
 }

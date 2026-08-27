@@ -20,13 +20,15 @@ import type {
   Attachment,
   Folder,
   FolderNode,
+  NoteKind,
+  Reminder,
+  ReminderDraft,
   Subtask,
   Tag,
   Task,
   TaskColor,
   TaskGridPlacement,
   TaskGridScope,
-  TaskStatus,
 } from '../types'
 import { getTaskById, getTasksByFolder, nextTaskSortOrder, reorderSiblingTasks as applyTaskReorder } from '../lib/tasks'
 import { getSubtasksByTask } from '../lib/subtasks'
@@ -41,7 +43,16 @@ import {
   shouldApplySessionResult,
   snapshotFromParts,
 } from '../lib/persistGuard'
-import { getAttachmentRepository, getNotesRepository, RepositoryError, type MaybePromise, type UiState } from '../repositories'
+import {
+  getAttachmentRepository,
+  getNotesRepository,
+  getRemindersRepository,
+  RepositoryError,
+  type MaybePromise,
+  type UiState,
+} from '../repositories'
+import { normalizeDraft } from '../lib/reminders'
+import { syncServerClock } from '../lib/serverClock'
 import { persistUiState, normalizeUiState } from '../repositories/supabase/uiStateStore'
 import { detectDocumentType, isAcceptedImageFile, isAcceptedPdfFile } from '../services/attachments'
 import { NotesDeletionService } from '../services/deletion/notesDeletionService'
@@ -100,8 +111,28 @@ interface FolderContextValue {
   deleteTask: (taskId: string) => Promise<{ folderId: string; deletedTaskIds: string[] }>
   toggleTaskImportant: (taskId: string) => void
   toggleTaskPinned: (taskId: string) => void
-  updateTaskReminder: (taskId: string, dueAt: string | null, remindBeforeMinutes: number | null) => void
-  updateTaskStatus: (taskId: string, status: TaskStatus) => void
+  /**
+   * The note/task switch and the deadline, written together.
+   *
+   * One call rather than two because they are one invariant: a plain note has no due date, and the
+   * database normalises any row that claims otherwise. Setting them separately would mean a moment
+   * where local state and the server disagree about what the note even is.
+   */
+  updateTaskSchedule: (taskId: string, noteKind: NoteKind, dueAt: string | null) => void
+  /** Tick or untick. The *time* of the tick is the server's to write, not ours — see Task.completedAt. */
+  setTaskCompleted: (taskId: string, completed: boolean) => void
+  /** This task's reminders, newest last. Empty for a note that has none. */
+  getRemindersForTask: (taskId: string) => Reminder[]
+  addReminder: (taskId: string, draft: ReminderDraft) => Promise<void>
+  updateReminder: (reminderId: string, taskId: string, draft: ReminderDraft) => Promise<void>
+  setReminderActive: (reminderId: string, isActive: boolean) => Promise<void>
+  deleteReminder: (reminderId: string) => Promise<void>
+  /** Re-reads every reminder from the server. The scheduler writes last_run_at and next_run_at
+   *  from outside this app entirely, so a reminder that fires while a page is open only becomes
+   *  visible by asking again. */
+  refreshReminders: () => Promise<void>
+  /** Set when a reminder write fails, so the dialog can say so instead of silently no-opping. */
+  reminderError: string | null
   updateTaskTags: (taskId: string, tags: string[]) => void
   /** Every tag this account has, name-sorted — what the tag picker offers instead of retyping. */
   tags: Tag[]
@@ -174,12 +205,15 @@ export function FolderProvider({ children }: { children: ReactNode }) {
   const userId = user?.id ?? null
   const notesRepository = getNotesRepository()
   const attachmentRepository = getAttachmentRepository()
+  const remindersRepository = getRemindersRepository()
   const deletionService = useMemo(
     () => new NotesDeletionService(notesRepository, attachmentRepository),
     [attachmentRepository, notesRepository],
   )
   const [folders, setFolders] = useState<Folder[]>([])
   const [tasks, setTasks] = useState<Task[]>([])
+  const [reminders, setReminders] = useState<Reminder[]>([])
+  const [reminderError, setReminderError] = useState<string | null>(null)
   const [subtasks, setSubtasks] = useState<Subtask[]>([])
   const [tags, setTags] = useState<Tag[]>([])
   const [uiState, setUiState] = useState<UiState>(EMPTY_UI_STATE)
@@ -394,6 +428,61 @@ export function FolderProvider({ children }: { children: ReactNode }) {
     }
   }, [applyNotes, attachmentRepository, loadGeneration, notesRepository, userId])
 
+  /**
+   * Reminders and the clock, loaded once per session alongside the notes.
+   *
+   * Read in one go rather than per task: an account has a handful of reminders, and fetching them
+   * when a note opens would mean the card grid couldn't show a bell on a note without asking the
+   * server about every note on screen.
+   *
+   * The clock sync rides along here because it is needed for the same reason and at the same
+   * moment — every countdown and every overdue decision measures against server time, and the
+   * first paint after a load is exactly when a task that expired while the browser was closed has
+   * to already look overdue.
+   */
+  useEffect(() => {
+    if (!userId) {
+      setReminders([])
+      setReminderError(null)
+      return
+    }
+    let cancelled = false
+    const requestUserId = userId
+    void syncServerClock()
+    void Promise.resolve(remindersRepository.listAll())
+      .then((items) => {
+        if (
+          !shouldApplySessionResult({
+            cancelled,
+            requestUserId,
+            currentUserId: userIdRef.current,
+          })
+        ) {
+          return
+        }
+        setReminders(items)
+      })
+      .catch((error: unknown) => {
+        if (
+          !shouldApplySessionResult({
+            cancelled,
+            requestUserId,
+            currentUserId: userIdRef.current,
+          })
+        ) {
+          return
+        }
+        // Not fatal to the app: notes load and edit perfectly well without their reminders, and
+        // the reminder section says so rather than showing an empty list as though there were none.
+        setReminderError(
+          error instanceof RepositoryError ? error.message : 'Could not load reminders.',
+        )
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [remindersRepository, userId])
+
   useEffect(() => {
     if (!userId) {
       return
@@ -575,6 +664,10 @@ export function FolderProvider({ children }: { children: ReactNode }) {
         }
         applyNotes(next)
         setAttachments((current) => current.filter((item) => !taskIds.has(item.taskId)))
+        // The rows themselves are gone already — reminders cascade from tasks in the schema. This
+        // drops the local copies, which nothing renders once their task is gone but which would
+        // otherwise accumulate in memory for the rest of the session.
+        setReminders((current) => current.filter((item) => !taskIds.has(item.taskId)))
         lastConfirmedRef.current = snapshotFromParts(
           next.folders,
           next.tasks,
@@ -625,9 +718,10 @@ export function FolderProvider({ children }: { children: ReactNode }) {
         content: '',
         isImportant: false,
         isPinned: false,
+        noteKind: 'note',
         dueAt: null,
-        remindBeforeMinutes: null,
-        status: null,
+        completed: false,
+        completedAt: null,
         tags: [],
         color: null,
         gridLayouts: null,
@@ -765,6 +859,9 @@ export function FolderProvider({ children }: { children: ReactNode }) {
         }
         applyNotes(next)
         setAttachments((current) => current.filter((item) => !taskIds.has(item.taskId)))
+        // Cascaded away in the database along with the task; dropped here so the session's copy
+        // doesn't keep them.
+        setReminders((current) => current.filter((item) => !taskIds.has(item.taskId)))
         lastConfirmedRef.current = snapshotFromParts(
           next.folders,
           next.tasks,
@@ -826,19 +923,21 @@ export function FolderProvider({ children }: { children: ReactNode }) {
     [applyNotes, persistNotes],
   )
 
-  const updateTaskReminder = useCallback(
-    (taskId: string, dueAt: string | null, remindBeforeMinutes: number | null) => {
+  const updateTaskSchedule = useCallback(
+    (taskId: string, noteKind: NoteKind, dueAt: string | null) => {
       applyNotes({
         folders: foldersRef.current,
         tasks: tasksRef.current.map((task) => {
           if (task.id !== taskId) {
             return task
           }
-          // Status only makes sense while a due date exists: clearing the due date clears
-          // status too, and setting one for the first time starts it at "pending" instead of
-          // leaving status null (which the UI treats as "not tracked").
-          const status = dueAt === null ? null : task.status ?? 'pending'
-          return { ...task, dueAt, remindBeforeMinutes, status }
+          // Turning a task back into a note drops the deadline and the tick with it, matching what
+          // the database's normalising trigger does. Applying it here as well keeps the card from
+          // showing a stale "overdue" for the moment before the save comes back.
+          if (noteKind === 'note') {
+            return { ...task, noteKind, dueAt: null, completed: false, completedAt: null }
+          }
+          return { ...task, noteKind, dueAt }
         }),
         subtasks: subtasksRef.current,
       })
@@ -847,16 +946,116 @@ export function FolderProvider({ children }: { children: ReactNode }) {
     [applyNotes, persistNotes],
   )
 
-  const updateTaskStatus = useCallback(
-    (taskId: string, status: TaskStatus) => {
+  const setTaskCompleted = useCallback(
+    (taskId: string, completed: boolean) => {
       applyNotes({
         folders: foldersRef.current,
-        tasks: tasksRef.current.map((task) => (task.id === taskId ? { ...task, status } : task)),
+        tasks: tasksRef.current.map((task) => {
+          if (task.id !== taskId) {
+            return task
+          }
+          // The optimistic timestamp is the device's, and it is replaced by the server's on the
+          // way back. It exists so the card can show "on time" or "late" in the same frame as the
+          // tick rather than a beat later; the two only differ by clock skew, which is exactly
+          // what lib/serverClock keeps small.
+          return {
+            ...task,
+            completed,
+            completedAt: completed ? new Date().toISOString() : null,
+          }
+        }),
         subtasks: subtasksRef.current,
       })
       void persistNotes().catch(() => undefined)
     },
     [applyNotes, persistNotes],
+  )
+
+  /**
+   * Reminders, which do not travel with the notes document.
+   *
+   * Every other mutation here edits local state and lets persistNotes() upsert the whole snapshot.
+   * Reminders can't work that way: that save deletes any row the snapshot doesn't mention, and a
+   * reminder carries server-written scheduling (next_run_at) that no client should be authoring.
+   * So each of these writes one row and folds the returned row — the server's version of it, with
+   * the real next run time — back into local state.
+   */
+  const getRemindersForTask = useCallback(
+    (taskId: string) => reminders.filter((reminder) => reminder.taskId === taskId),
+    [reminders],
+  )
+
+  const runReminderWrite = useCallback(async (write: () => Promise<void>) => {
+    setReminderError(null)
+    try {
+      await write()
+    } catch (error) {
+      setReminderError(
+        error instanceof RepositoryError ? error.message : 'Could not save the reminder.',
+      )
+      throw error
+    }
+  }, [])
+
+  const addReminder = useCallback(
+    async (taskId: string, draft: ReminderDraft) => {
+      await runReminderWrite(async () => {
+        const created = await remindersRepository.create(taskId, normalizeDraft(draft))
+        setReminders((current) => [...current, created])
+      })
+    },
+    [remindersRepository, runReminderWrite],
+  )
+
+  const updateReminder = useCallback(
+    async (reminderId: string, taskId: string, draft: ReminderDraft) => {
+      await runReminderWrite(async () => {
+        const saved = await remindersRepository.update(reminderId, normalizeDraft(draft), taskId)
+        setReminders((current) =>
+          current.map((reminder) => (reminder.id === reminderId ? saved : reminder)),
+        )
+      })
+    },
+    [remindersRepository, runReminderWrite],
+  )
+
+  const setReminderActive = useCallback(
+    async (reminderId: string, isActive: boolean) => {
+      await runReminderWrite(async () => {
+        const saved = await remindersRepository.setActive(reminderId, isActive)
+        setReminders((current) =>
+          current.map((reminder) => (reminder.id === reminderId ? saved : reminder)),
+        )
+      })
+    },
+    [remindersRepository, runReminderWrite],
+  )
+
+  /**
+   * Pulls the reminder list back from the server.
+   *
+   * Every other write here updates local state from its own response, which is enough for changes
+   * this app makes. A reminder firing is not one of those: the sweep runs on a schedule with no
+   * browser involved, and the row it stamps is invisible here until it is re-read. Failure is
+   * silent on purpose — the list already on screen is still the best answer available.
+   */
+  const refreshReminders = useCallback(async () => {
+    try {
+      const items = await Promise.resolve(remindersRepository.listAll())
+      setReminders(items)
+    } catch {
+      /* Keep what we have. */
+    }
+  }, [remindersRepository])
+
+  const deleteReminder = useCallback(
+    async (reminderId: string) => {
+      await runReminderWrite(async () => {
+        await remindersRepository.remove(reminderId)
+        setReminders((current) => current.filter((reminder) => reminder.id !== reminderId))
+      })
+    },
+    [remindersRepository, runReminderWrite],
   )
 
   /**
@@ -1277,8 +1476,15 @@ export function FolderProvider({ children }: { children: ReactNode }) {
       deleteTask,
       toggleTaskImportant,
       toggleTaskPinned,
-      updateTaskReminder,
-      updateTaskStatus,
+      updateTaskSchedule,
+      setTaskCompleted,
+      getRemindersForTask,
+      addReminder,
+      updateReminder,
+      setReminderActive,
+      deleteReminder,
+      refreshReminders,
+      reminderError,
       updateTaskTags,
       tags,
       deleteTag,
@@ -1337,8 +1543,15 @@ export function FolderProvider({ children }: { children: ReactNode }) {
       deleteTask,
       toggleTaskImportant,
       toggleTaskPinned,
-      updateTaskReminder,
-      updateTaskStatus,
+      updateTaskSchedule,
+      setTaskCompleted,
+      getRemindersForTask,
+      addReminder,
+      updateReminder,
+      setReminderActive,
+      deleteReminder,
+      refreshReminders,
+      reminderError,
       updateTaskTags,
       tags,
       deleteTag,

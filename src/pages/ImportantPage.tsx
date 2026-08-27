@@ -5,13 +5,21 @@ import { StarButton } from '../components/common/StarButton'
 import { RowDeleteButton } from '../components/common/RowDeleteButton'
 import { FolderActions } from '../components/folder/FolderActions'
 import { AllTaskTile } from '../components/task/AllTaskTile'
+import { TaskFilterMenu } from '../components/task/TaskFilterMenu'
 import { TaskGridCanvas } from '../components/task/TaskGridCanvas'
 import { TaskEditorDialog } from '../components/task/TaskEditorDialog'
 import { useAuth } from '../hooks/useAuth'
 import { useDeleteTask } from '../hooks/useDeleteTask'
 import { useFolders } from '../hooks/useFolders'
+import { useServerNowCoarse } from '../hooks/useServerNow'
 import { folderPathLabel, getImportantFolders } from '../lib/folders'
 import { getImportantTasks } from '../lib/tasks'
+import {
+  applyTaskFilters,
+  emptyFilterMessage,
+  type KindFilter,
+  type StatusFilter,
+} from '../lib/taskFilters'
 import { categoryVar, getRootCategoryForFolder, scatterCategoryForId } from '../lib/folderColor'
 import { taskColorStyle } from '../lib/taskColor'
 import { readViewStyle } from '../lib/viewStyle'
@@ -46,56 +54,6 @@ type ImportantTab = (typeof TABS)[number]['key']
  *  is the same content arriving rather than a different screen being pushed in. */
 const PANE_TRAVEL = 28
 
-/**
- * The tag chips, in whichever row this breakpoint has room for them.
- *
- * One definition rendered in two places rather than two copies: on a phone it sits above the
- * cards, because the floating switch has no width to spare; from lg it sits in the header band
- * beside the switch, because that row is otherwise a single pill in an empty line.
- */
-function TagFilter({
-  tags,
-  activeTag,
-  onSelect,
-  className,
-}: {
-  tags: string[]
-  activeTag: string | null
-  onSelect: (next: string | null) => void
-  className?: string
-}) {
-  return (
-    <div className={cn('flex flex-wrap items-center gap-1.5', className)}>
-      <span className="text-[12px] font-medium text-[var(--color-text-muted)]">Sort by tags:</span>
-      {tags.map((tag) => (
-        <button
-          key={tag}
-          type="button"
-          aria-pressed={activeTag === tag}
-          onClick={() => onSelect(activeTag === tag ? null : tag)}
-          className={cn(
-            'anim-press rounded-full border px-2.5 py-1 text-[12px] font-medium transition-colors',
-            activeTag === tag
-              ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
-              : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:bg-[var(--color-hover)] hover:text-[var(--color-text)]',
-          )}
-        >
-          {tag}
-        </button>
-      ))}
-      {activeTag ? (
-        <button
-          type="button"
-          onClick={() => onSelect(null)}
-          className="text-[12px] font-medium text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
-        >
-          Clear
-        </button>
-      ) : null}
-    </div>
-  )
-}
-
 export function ImportantPage() {
   const navigate = useNavigate()
   const { folders, tasks, toggleFolderImportant, toggleTaskImportant } = useFolders()
@@ -107,16 +65,21 @@ export function ImportantPage() {
   // the new pane renders the tab it came from is gone.
   const [paneTravel, setPaneTravel] = useState(0)
   const [activeTag, setActiveTag] = useState<string | null>(null)
+  const [kindFilter, setKindFilter] = useState<KindFilter>('all')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
   const { headerRef, contentRef } = useFloatingHeader()
   // Which side this whole view slides in from — the side of the bar you came from.
   const pageEnter = usePageEnter()
   const importantFolders = getImportantFolders(folders)
   const importantTasks = getImportantTasks(tasks)
+  // Coarse: the status filter needs the clock, and the whole card list re-renders with it.
+  const now = useServerNowCoarse(importantTasks.some((task) => task.noteKind === 'due_task'))
   const allTagsInScope = Array.from(new Set(importantTasks.flatMap((task) => task.tags))).sort()
-  const visibleImportantTasks = activeTag
+  const byTag = activeTag
     ? importantTasks.filter((task) => task.tags.includes(activeTag))
     : importantTasks
+  const visibleImportantTasks = applyTaskFilters(byTag, kindFilter, statusFilter, now)
 
   const removeTaskFromImportant = (taskId: string) => {
     void performWithTaskExit(taskId, () => toggleTaskImportant(taskId))
@@ -157,11 +120,11 @@ export function ImportantPage() {
           'absolute inset-x-4 top-3 z-20 mx-auto w-fit shrink-0 sm:inset-x-6 sm:top-4',
           // From lg this stops being a pill hovering over the content and becomes the page's
           // header band — full width, on the surface, ruled off from the content below it, and
-          // carrying the tag filter alongside the switch.
+          // carrying the filter pill alongside the switch.
           //
           // Floating suits a phone: the bar is the only thing on its layer, cards scroll under it,
           // and centring it lets them pass either side. On a desktop the same pill was a lone
-          // control adrift at the top of an empty line, with the filter stranded a hundred pixels
+          // control adrift at the top of an empty line, with the filters stranded a hundred pixels
           // below it and nothing tying either to the page. Every other page here opens with a
           // band; this one now does too.
           'lg:static lg:mx-0 lg:w-auto lg:border-b lg:border-[var(--color-border)]',
@@ -173,7 +136,10 @@ export function ImportantPage() {
             role="tablist"
             aria-label="Starred"
             className={cn(
-              'relative inline-flex items-center rounded-full p-1',
+              // h-9 on both this and the filter beside it: the two used to size themselves from
+              // their own contents — a line-height here, a button height there — and landed a few
+              // pixels apart, which on two pills side by side is all it takes to look wrong.
+              'relative inline-flex h-9 items-center rounded-full p-1',
               // The floating-surface treatment the bar used to carry, now on the only thing left.
               'border border-[var(--color-border)]/60 bg-[var(--color-surface)]/70 backdrop-blur-md',
               'shadow-[var(--shadow-md)] supports-[backdrop-filter:blur(0px)]:bg-[var(--color-surface)]/80',
@@ -208,7 +174,7 @@ export function ImportantPage() {
                   aria-selected={active}
                   onClick={() => selectTab(item.key)}
                   className={cn(
-                    'anim-press relative z-10 w-[104px] rounded-full px-3 py-1 text-[12.5px] font-semibold',
+                    'anim-press relative z-10 h-full w-[104px] rounded-full px-3 text-[12.5px] font-semibold',
                     'transition-colors duration-200 sm:w-[120px]',
                     active ? 'text-[var(--color-text)]' : 'text-[var(--color-text-muted)]',
                   )}
@@ -220,15 +186,34 @@ export function ImportantPage() {
             })}
           </div>
 
-          {/* Tags belong to the tasks half; a folder has none, so on that tab the row would be a
-              filter for something not on screen. */}
-          {tab === 'tasks' && allTagsInScope.length > 0 ? (
-            <TagFilter
-              tags={allTagsInScope}
-              activeTag={activeTag}
-              onSelect={setActiveTag}
-              className="hidden lg:flex"
-            />
+          {/* Filtering belongs to the tasks half; a folder has no kind, no deadline and no tags,
+              so on that tab the control would narrow something that isn't on screen.
+
+              The wrapper carries the same floating-surface treatment as the switch beside it,
+              because below lg this bar is transparent and the cards scroll underneath: an
+              outlined pill with nothing behind it would have note titles running through it. */}
+          {tab === 'tasks' ? (
+            <div
+              className={cn(
+                'ml-1.5 inline-flex h-9 shrink-0 items-center rounded-full p-1',
+                'border border-[var(--color-border)]/60 bg-[var(--color-surface)]/70 backdrop-blur-md',
+                'shadow-[var(--shadow-md)] supports-[backdrop-filter:blur(0px)]:bg-[var(--color-surface)]/80',
+                'lg:ml-0 lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:backdrop-blur-none',
+              )}
+            >
+              <TaskFilterMenu
+                tasks={importantTasks}
+                nowMs={now}
+                kind={kindFilter}
+                status={statusFilter}
+                tag={activeTag}
+                tags={allTagsInScope}
+                onKindChange={setKindFilter}
+                onStatusChange={setStatusFilter}
+                onTagChange={setActiveTag}
+                size="fill"
+              />
+            </div>
           ) : null}
         </div>
       </div>
@@ -297,22 +282,14 @@ export function ImportantPage() {
         ) : (
         <section className="mt-3 sm:mt-4 lg:mt-4">
 
-          {/* Below lg only: from lg the same control lives in the header band, beside the switch,
-              where there is a row's worth of width going spare. */}
-          {allTagsInScope.length > 0 ? (
-            <TagFilter
-              tags={allTagsInScope}
-              activeTag={activeTag}
-              onSelect={setActiveTag}
-              className="lg:hidden"
-            />
-          ) : null}
-
           {visibleImportantTasks.length === 0 ? (
             <p className="mt-2 px-2.5 text-sm text-[var(--color-text-muted)]">
-              {activeTag
-                ? `No starred tasks tagged "${activeTag}"`
-                : 'Nothing starred yet — star a task to keep it here.'}
+              {emptyFilterMessage(
+                kindFilter,
+                statusFilter,
+                'Nothing starred yet — star a task to keep it here.',
+                activeTag,
+              )}
             </p>
           ) : viewStyle === 'clipboard' ? (
             <TaskGridCanvas

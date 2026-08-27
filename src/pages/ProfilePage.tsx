@@ -68,6 +68,8 @@ const fieldLabelClassName = 'block pl-4 text-[13px] font-medium text-[var(--colo
 /** The colours the stat chips and section headers cycle through, in order. */
 const ACCENTS = ['indigo', 'teal', 'amber', 'rose'] as const
 
+/** "Oct 12, 2025". The long month spelled the date out to twenty characters, which is what
+ *  pushed the third chip past its share of the row. */
 function formatJoinDate(iso: string | undefined): string {
   if (!iso) {
     return 'Unknown'
@@ -76,7 +78,7 @@ function formatJoinDate(iso: string | undefined): string {
   if (Number.isNaN(date.getTime())) {
     return 'Unknown'
   }
-  return date.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
+  return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
 /**
@@ -139,12 +141,14 @@ function StatChip({
   value,
   category,
   order,
+  className,
 }: {
   icon: ReactNode
   label: string
   value: number | string
   category: (typeof ACCENTS)[number]
   order: number
+  className?: string
 }) {
   const numeric = typeof value === 'number'
   const counted = useCountUp(numeric ? value : 0)
@@ -152,8 +156,9 @@ function StatChip({
   return (
     <div
       className={cn(
-        'anim-rise flex min-w-0 flex-1 items-center gap-2.5 rounded-2xl px-3 py-2.5',
+        'anim-rise flex min-w-0 items-center gap-2.5 rounded-2xl px-3 py-2.5',
         'border border-[var(--color-border)] bg-[var(--color-surface)]/70 backdrop-blur-sm',
+        className,
       )}
       style={{ animationDelay: `${140 + order * 70}ms` }}
     >
@@ -413,7 +418,11 @@ export function ProfilePage() {
             </div>
           </div>
 
-          <div className="relative mt-5 flex flex-wrap gap-2">
+          {/* A grid, not a wrapping row of flex-1 boxes. Three equal shares of a phone's width is
+              about a hundred pixels each, which is why every one of these read "Fol…", "Not…",
+              "Me…". The two counts are short enough to sit side by side; the join date is a whole
+              sentence of a value, so below sm it takes the row to itself. */}
+          <div className="relative mt-5 grid grid-cols-2 gap-2 sm:grid-cols-3">
             <StatChip
               icon={<Folder className="h-4 w-4" aria-hidden />}
               label="Folders"
@@ -434,6 +443,7 @@ export function ProfilePage() {
               value={formatJoinDate(user.created_at)}
               category="amber"
               order={2}
+              className="col-span-2 sm:col-span-1"
             />
           </div>
         </section>
@@ -562,11 +572,12 @@ export function ProfilePage() {
           <CardTitle icon={<LayoutGrid className="h-3.5 w-3.5" aria-hidden />} category="teal">
             Cards per row
           </CardTitle>
-          <p className="mt-3 text-[12.5px] leading-relaxed text-[var(--color-text-muted)]">
-            How small a card is allowed to get on the grid. At 2, a card can never be narrower than
-            half the width; at 3, never narrower than a third. It's a floor, not a fixed size —
-            any card can still be pulled wider, right up to the full width, and dragged wherever you
-            want it. Auto uses as many as this screen can fit and still leave a card readable.
+          {/* One line. This card used to open with a four-sentence paragraph explaining that the
+              number is a floor rather than a fixed width — but the live preview directly below it
+              shows exactly that, and a card nobody reads to the end explains nothing. The detail
+              that survived is the one the preview can't show: cards can still be dragged wider. */}
+          <p className="mt-2.5 text-[12.5px] text-[var(--color-text-muted)]">
+            The narrowest a card may get — any card can still be dragged wider.
           </p>
 
           {/* Which screen this is setting. The counts differ enough between a phone and a desktop
@@ -574,8 +585,7 @@ export function ProfilePage() {
               choice being clamped on the phone. */}
           <p className="mt-2.5 inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-hover)] px-2.5 py-1 text-[11.5px] font-medium text-[var(--color-text-muted)]">
             <Monitor className="h-3 w-3 shrink-0" aria-hidden />
-            Setting {tileBand.label.toLowerCase()} screens — up to {maxTilesPerRow}. Your other
-            screen sizes keep their own.
+            {tileBand.label} screens · max {maxTilesPerRow}
           </p>
 
           {/* A live miniature of the choice: how wide the smallest card can be. */}
@@ -640,10 +650,9 @@ export function ProfilePage() {
               band nobody has set yet, and one of them can be higher than this band allows. Picking
               anything here writes this screen's own value and the note goes for good. */}
           {typeof tilesPerRow === 'number' && tilesPerRow > maxTilesPerRow ? (
-            <p className="mt-3 text-[12px] leading-relaxed text-[var(--color-text-muted)]">
-              You picked {tilesPerRow} per row before this setting was kept per screen size, so this
-              one is using {maxTilesPerRow}. Choose above to set it for {tileBand.label.toLowerCase()}{' '}
-              screens on their own.
+            <p className="mt-2.5 text-[11.5px] text-[var(--color-text-muted)]">
+              Using {maxTilesPerRow} here — your old {tilesPerRow} came from before this was per
+              screen. Pick one above to set it.
             </p>
           ) : null}
         </Card>

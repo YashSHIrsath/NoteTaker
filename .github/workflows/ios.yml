@@ -24,7 +24,6 @@ jobs:
     # receives those if it names the environment.
     environment: Production
     env:
-      WORKSPACE: ios/App/App.xcworkspace
       SCHEME: App
       ARCHIVE_PATH: ${{ github.workspace }}/build/App.xcarchive
     steps:
@@ -63,9 +62,13 @@ jobs:
           # emails, which is not a link anyone can open.
           VITE_PUBLIC_APP_URL: ${{ secrets.VITE_PUBLIC_APP_URL }}
 
-      # cap add is what creates ios/App/App.xcworkspace — the old version of this job ran
-      # `cap sync ios` against a directory that has never existed in this repo. sync also runs
-      # pod install, so there's no separate CocoaPods step.
+      # The native project is generated rather than committed, same as android.yml.
+      #
+      # Capacitor 8 lays this out with Swift Package Manager, not CocoaPods: the CLI hard-codes
+      # ios-spm-template.tar.gz (see its dist/config.js), and that template ships App.xcodeproj
+      # and CapApp-SPM — no Podfile and no App.xcworkspace anywhere in it. So there is no
+      # `pod install` here to run or to wait for. Package resolution happens inside xcodebuild,
+      # pulling capacitor-swift-pm from GitHub.
       #
       # The launcher icon is Capacitor's template default here; android.yml brands its own via
       # npm run android:icons, and there's no iOS equivalent script yet.
@@ -73,6 +76,31 @@ jobs:
         run: |
           npx cap add ios
           npx cap sync ios
+
+      # Which container xcodebuild is pointed at is decided by what `cap add` just produced,
+      # rather than by an assumption written in this file.
+      #
+      # This job used to hard-code `-workspace ios/App/App.xcworkspace`, which under the SPM
+      # layout is a path that never exists — so every run died at the archive step, on every
+      # commit, with everything before it having gone fine. Capacitor's own build command chooses
+      # the same way (dist/ios/build.js: `-workspace` under CocoaPods, `-project` under SPM), so
+      # this follows the project on disk and keeps working if the template ever changes back.
+      - name: Locate the Xcode project
+        run: |
+          set -euo pipefail
+          if [ -d ios/App/App.xcworkspace ]; then
+            echo "Found a CocoaPods workspace."
+            echo "XCODE_CONTAINER_FLAG=-workspace" >> "$GITHUB_ENV"
+            echo "XCODE_CONTAINER_PATH=ios/App/App.xcworkspace" >> "$GITHUB_ENV"
+          elif [ -d ios/App/App.xcodeproj ]; then
+            echo "Found an SPM project."
+            echo "XCODE_CONTAINER_FLAG=-project" >> "$GITHUB_ENV"
+            echo "XCODE_CONTAINER_PATH=ios/App/App.xcodeproj" >> "$GITHUB_ENV"
+          else
+            echo "::error::cap add ios produced neither ios/App/App.xcworkspace nor ios/App/App.xcodeproj."
+            ls -la ios ios/App 2>/dev/null || true
+            exit 1
+          fi
 
       # Unsigned, deliberately. An archive for a device needs a certificate and a provisioning
       # profile, and this repo has neither, so asking xcodebuild to sign fails outright. Building
@@ -86,7 +114,7 @@ jobs:
           set -euo pipefail
           mkdir -p build
           xcodebuild archive \
-            -workspace "$WORKSPACE" \
+            "$XCODE_CONTAINER_FLAG" "$XCODE_CONTAINER_PATH" \
             -scheme "$SCHEME" \
             -configuration Release \
             -destination 'generic/platform=iOS' \

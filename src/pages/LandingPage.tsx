@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import {
   ArrowRight,
+  Bell,
   CalendarClock,
   Check,
   ClipboardList,
@@ -10,6 +11,7 @@ import {
   Palette,
   Paperclip,
   Search,
+  SlidersHorizontal,
   Smartphone,
   Star,
   Sun,
@@ -18,6 +20,7 @@ import type { ReactNode } from 'react'
 import { useTheme } from '../hooks/useTheme'
 import { originFromElement } from '../lib/themeReveal'
 import { ProjectLogo } from '../components/brand/ProjectLogo'
+import { FeatureCarousel } from '../components/landing/FeatureCarousel'
 import { cn } from '../lib/cn'
 
 /**
@@ -43,13 +46,23 @@ const FEATURES: { icon: ReactNode; title: string; body: string }[] = [
   },
   {
     icon: <CalendarClock className="h-4 w-4" aria-hidden />,
-    title: 'Due dates and reminders',
-    body: 'Give a note a due date and a status, and get an email before it lands — timed to your own clock.',
+    title: 'Deadlines that keep score',
+    body: 'Turn any note into a task with a due date. It counts down live against the server’s clock, and it knows the difference between finished on time and finished late.',
+  },
+  {
+    icon: <Bell className="h-4 w-4" aria-hidden />,
+    title: 'Reminders by email',
+    body: 'At a set time, every so many days or weeks, or pinned to the deadline itself. Scheduled in the database, in the timezone you set them in, so they fire with the browser shut.',
+  },
+  {
+    icon: <SlidersHorizontal className="h-4 w-4" aria-hidden />,
+    title: 'Filter from any list',
+    body: 'One control in every listing: notes or tasks, overdue or waiting, finished early or late, by tag — with a live count against each answer before you pick it.',
   },
   {
     icon: <Star className="h-4 w-4" aria-hidden />,
     title: 'Tags, pins and stars',
-    body: 'Tag freely, pin what you keep returning to, star anything to find it on the Important page.',
+    body: 'Tag freely, pin what you keep returning to, star anything to find it again on the Starred page.',
   },
   {
     icon: <Search className="h-4 w-4" aria-hidden />,
@@ -59,7 +72,7 @@ const FEATURES: { icon: ReactNode; title: string; body: string }[] = [
   {
     icon: <ListTree className="h-4 w-4" aria-hidden />,
     title: 'The whole thing at a glance',
-    body: 'A tree of every folder and note, with counts, so you can see the shape of what you have.',
+    body: 'A tree of every folder and note with counts, the deadline coming at you next, and one bar showing how much of your tracked work is done, waiting or late.',
   },
   {
     icon: <Palette className="h-4 w-4" aria-hidden />,
@@ -148,8 +161,9 @@ export function LandingPage() {
                 know, stacked
               </h1>
               <p className="mt-6 max-w-md text-[16px] leading-relaxed text-white/85 sm:text-[17.5px]">
-                Notes that hold text, checklists and files. Folders you arrange yourself. Reminders
-                when something is due. It syncs to your account and follows you to your phone.
+                Notes that hold text, checklists and files. Folders you arrange yourself. Give a
+                note a deadline and it counts down, emails you before it lands, and remembers
+                whether you finished on time.
               </p>
 
               <Link
@@ -172,12 +186,18 @@ export function LandingPage() {
       </section>
 
       <main className="mx-auto max-w-6xl px-5 sm:px-8">
+        {/* Seeing before reading. The grid below names every part in a paragraph each and shows
+            none of it; this walks the same ground with a picture of each screen. */}
         <section className="py-14 sm:py-20">
+          <FeatureCarousel />
+        </section>
+
+        <section className="border-t border-[var(--color-border)] py-14 sm:py-20">
           <h2
             className="text-[30px] font-extrabold tracking-tight sm:text-[38px]"
             style={{ fontFamily: 'var(--font-display)' }}
           >
-            What’s in it
+            The full list
           </h2>
           <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {FEATURES.map((feature) => (
@@ -224,7 +244,8 @@ export function LandingPage() {
             </Plain>
             <Plain title="What it doesn’t do">
               No sharing or collaboration, no offline editing, no iOS build, and no sign-in with
-              Google or Apple. Notes need a connection to load and save.
+              Google or Apple. Reminders arrive by email only — no push notifications. Notes need a
+              connection to load and save.
             </Plain>
             <Plain title="Where it runs">
               Your account, notes and files live with Supabase — Postgres and object storage — on

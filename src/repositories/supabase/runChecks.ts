@@ -16,6 +16,7 @@ import { runInvalidRecordChecks, runPersistHardeningChecks } from '../../service
 import { runDeletionChecks, runDuplicateDeleteLockCheck } from '../../services/deletion/deletionChecks'
 import { runFolderManagementChecks } from '../../services/folders/folderManagementChecks'
 import { runSearchChecks } from '../../services/search/searchChecks'
+import { runSchedulingChecks } from '../../services/scheduling/schedulingChecks'
 import { runTaskEditorChecks } from '../../services/persistence/taskEditorChecks'
 import { runMigrationChecks, runMigrationServiceChecks } from '../../services/migration/migrationChecks'
 import { runAttachmentHardeningChecks } from './attachmentHardeningChecks'
@@ -110,9 +111,10 @@ export function runMapperChecks(): void {
     content: 'notes',
     is_important: false,
     is_pinned: false,
+    note_kind: 'note',
     due_at: null,
-    remind_before_minutes: null,
-    status: null,
+    completed: false,
+    completed_at: null,
     tags: [],
         color: null,
         grid_layout: null,
@@ -154,9 +156,10 @@ export function runMapperChecks(): void {
         content: task.content,
         is_important: false,
         is_pinned: false,
+        note_kind: 'note',
         due_at: null,
-        remind_before_minutes: null,
-        status: null,
+        completed: false,
+        completed_at: null,
         tags: [],
         color: null,
         grid_layout: null,
@@ -288,6 +291,7 @@ export async function runAllRepositoryChecks(): Promise<void> {
   runPersistHardeningChecks()
   runFolderManagementChecks()
   runSearchChecks()
+  runSchedulingChecks()
   runTaskEditorChecks()
   await runDeletionChecks()
   runDuplicateDeleteLockCheck()

@@ -10,8 +10,12 @@ export interface AnchoredPanel<T extends HTMLElement> {
   anchorRef: React.RefObject<T | null>
   /** Attach to the panel itself (it needs measuring to decide whether to flip). */
   panelRef: React.RefObject<HTMLDivElement | null>
-  /** Fixed coordinates for the panel — null until the first measure. */
-  position: { top: number; left: number } | null
+  /**
+   * Fixed coordinates for the panel, and the tallest it may be where it has been put — null until
+   * the first measure. A panel that can outgrow the space has to honour `maxHeight` and scroll,
+   * or it will be placed for a height it doesn't have.
+   */
+  position: { top: number; left: number; maxHeight: number } | null
 }
 
 /**
@@ -23,9 +27,12 @@ export interface AnchoredPanel<T extends HTMLElement> {
  * anchor when there's no room below, and re-measured on scroll — captured, because the anchor
  * usually scrolls inside a container rather than the window.
  */
+/** Below this a panel is too short to be worth opening, so it stops giving space back. */
+const MIN_PANEL_HEIGHT = 160
+
 export function useAnchoredPanel<T extends HTMLElement>(width: number): AnchoredPanel<T> {
   const [open, setOpen] = useState(false)
-  const [position, setPosition] = useState<{ top: number; left: number } | null>(null)
+  const [position, setPosition] = useState<AnchoredPanel<T>['position']>(null)
   const anchorRef = useRef<T | null>(null)
   const panelRef = useRef<HTMLDivElement | null>(null)
 
@@ -48,16 +55,34 @@ export function useAnchoredPanel<T extends HTMLElement>(width: number): Anchored
         Math.max(VIEWPORT_MARGIN, anchor.right - width),
         Math.max(VIEWPORT_MARGIN, window.innerWidth - width - VIEWPORT_MARGIN),
       )
-      const below = anchor.bottom + ANCHOR_GAP
-      const flip = panelHeight > 0 && below + panelHeight > window.innerHeight - VIEWPORT_MARGIN
+
+      /*
+       * Which side, and how much room is on it.
+       *
+       * "Flip above when it doesn't fit below" was only half an answer: a tall panel opened from a
+       * control low on the page fits on neither side, and the flip then clamped its top to the
+       * viewport margin — so the panel jumped to the top corner of the screen, nowhere near the
+       * button that opened it. Now the side with more room wins and the panel is told how tall it
+       * may be there, so it shrinks and scrolls instead of running away.
+       */
+      const spaceBelow = window.innerHeight - anchor.bottom - ANCHOR_GAP - VIEWPORT_MARGIN
+      const spaceAbove = anchor.top - ANCHOR_GAP - VIEWPORT_MARGIN
+      const openDown = panelHeight === 0 || panelHeight <= spaceBelow || spaceBelow >= spaceAbove
+      const maxHeight = Math.max(MIN_PANEL_HEIGHT, openDown ? spaceBelow : spaceAbove)
       const next = {
-        top: flip ? Math.max(VIEWPORT_MARGIN, anchor.top - panelHeight - ANCHOR_GAP) : below,
+        top: openDown
+          ? anchor.bottom + ANCHOR_GAP
+          : Math.max(VIEWPORT_MARGIN, anchor.top - Math.min(panelHeight, maxHeight) - ANCHOR_GAP),
         left,
+        maxHeight,
       }
       // Skipping an identical update keeps the re-measure below from looping: place() sets state,
       // which re-renders, which measures again.
       setPosition((current) =>
-        current && Math.abs(current.top - next.top) < 0.5 && Math.abs(current.left - next.left) < 0.5
+        current &&
+        Math.abs(current.top - next.top) < 0.5 &&
+        Math.abs(current.left - next.left) < 0.5 &&
+        Math.abs(current.maxHeight - next.maxHeight) < 0.5
           ? current
           : next,
       )

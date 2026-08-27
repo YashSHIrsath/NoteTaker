@@ -17,12 +17,19 @@ interface BottomNavItem {
   icon: ReactNode
 }
 
-/** Caps how much the indicator can give, so a jump across the whole bar can't balloon it. */
+/**
+ * The five tabs, in bar order.
+ *
+ * Starred sits in the middle because Starred is "/" — it is what a cold start, a dead deep link
+ * and the catch-all route all land on. The home tab belongs under the thumb at the centre of the
+ * bar, not fourth along where it was; and the centre slot is the one the indicator travels
+ * shortest to from either side.
+ */
 const ITEMS: BottomNavItem[] = [
   { id: 'tree', label: 'Tree', icon: <ListTree className="h-[18px] w-[18px]" aria-hidden /> },
   { id: 'mynotes', label: 'Notes', icon: <Folder className="h-[18px] w-[18px]" aria-hidden /> },
-  { id: 'tasks', label: 'Tasks', icon: <ClipboardList className="h-[18px] w-[18px]" aria-hidden /> },
   { id: 'important', label: 'Starred', icon: <Star className="h-[18px] w-[18px]" aria-hidden /> },
+  { id: 'tasks', label: 'Tasks', icon: <ClipboardList className="h-[18px] w-[18px]" aria-hidden /> },
   // profile's icon is the account's own avatar, filled in below
   { id: 'profile', label: 'You', icon: null },
 ]

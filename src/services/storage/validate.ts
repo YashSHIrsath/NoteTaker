@@ -31,9 +31,10 @@ function isTask(value: unknown): value is Task {
     typeof value.isImportant === 'boolean' &&
     typeof value.isPinned === 'boolean' &&
     typeof value.sortOrder === 'number' &&
+    (value.noteKind === 'note' || value.noteKind === 'due_task') &&
     (value.dueAt === null || typeof value.dueAt === 'string') &&
-    (value.remindBeforeMinutes === null || typeof value.remindBeforeMinutes === 'number') &&
-    (value.status === null || value.status === 'pending' || value.status === 'ongoing' || value.status === 'complete') &&
+    typeof value.completed === 'boolean' &&
+    (value.completedAt === null || typeof value.completedAt === 'string') &&
     Array.isArray(value.tags) &&
     value.tags.every((tag) => typeof tag === 'string') &&
     (value.color === null || isTaskColor(value.color))

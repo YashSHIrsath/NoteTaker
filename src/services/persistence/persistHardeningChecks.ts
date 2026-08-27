@@ -7,6 +7,8 @@ import {
   rollbackNotesOnSaveFailure,
   shouldApplySessionResult,
   snapshotFromParts,
+  UNTITLED,
+  UNTITLED_FOLDER,
 } from '../../lib/persistGuard'
 import type { AppSnapshot } from '../storage/types'
 
@@ -43,9 +45,10 @@ function sampleSnapshot(name: string): AppSnapshot {
         content: 'hello',
         isImportant: false,
         isPinned: false,
+        noteKind: 'note',
         dueAt: null,
-        remindBeforeMinutes: null,
-        status: null,
+        completed: false,
+        completedAt: null,
         tags: [],
         color: null,
         gridLayouts: null,
@@ -130,6 +133,50 @@ export function runPersistHardeningChecks(): void {
 
   const retry = rollbackNotesOnSaveFailure({ lastConfirmed: confirmed, attempted: sampleSnapshot('Retry me') })
   assert(retry.pendingRetry.folders[0]?.name === 'Retry me', 'retry after failure keeps the attempted notes')
+
+  /*
+   * A blank name never leaves the client.
+   *
+   * folders.name, tasks.title and subtasks.title each carry length(btrim(...)) > 0 in the schema.
+   * A rejected row rolls the whole document back to the last accepted snapshot, so one empty title
+   * does not fail quietly — it undoes whatever else was in the same save. These are the cases the
+   * title field can actually produce mid-edit.
+   */
+  const blank = sampleSnapshot('   ')
+  blank.tasks[0]!.title = ''
+  blank.subtasks = [
+    {
+      id: 'cccccccc-cccc-cccc-cccc-cccccccccccc',
+      taskId: blank.tasks[0]!.id,
+      parentSubtaskId: null,
+      title: '  ',
+      completed: false,
+    },
+  ]
+  const named = snapshotFromParts(blank.folders, blank.tasks, blank.subtasks, blank.tags, emptyUi)
+  assert(named.folders[0]?.name === UNTITLED_FOLDER, 'a blank folder name is replaced on the way out')
+  assert(named.tasks[0]?.title === UNTITLED, 'a blank task title is replaced on the way out')
+  assert(named.subtasks[0]?.title === UNTITLED, 'a whitespace subtask title is replaced on the way out')
+
+  const spaced = snapshotFromParts(
+    [{ ...blank.folders[0]!, name: ' Job applications ' }],
+    [{ ...blank.tasks[0]!, title: 'Interview ' }],
+    [],
+    [],
+    emptyUi,
+  )
+  assert(spaced.folders[0]?.name === ' Job applications ', 'padding around a real name is left alone')
+  assert(spaced.tasks[0]?.title === 'Interview ', 'a trailing space mid-typing is left alone')
+
+  // Both sides of the fingerprint comparison are built here, so a snapshot that needed no fixing
+  // has to come back identical — otherwise every save would look like a change and loop.
+  const clean = snapshotFromParts(confirmed.folders, confirmed.tasks, [], [], emptyUi)
+  assert(clean.folders === confirmed.folders, 'a snapshot with no blank names is not rebuilt')
+  assert(
+    notesFingerprint(snapshotFromParts(named.folders, named.tasks, named.subtasks, [], emptyUi)) ===
+      notesFingerprint(named),
+    'normalising twice is the same as normalising once',
+  )
 }
 
 export function runInvalidRecordChecks(): void {

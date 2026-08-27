@@ -11,6 +11,6 @@ export function formatDueDate(iso: string): string {
   })
 }
 
-export function isOverdue(iso: string): boolean {
-  return new Date(iso).getTime() < Date.now()
-}
+/* isOverdue used to live here and read `Date.now()`. Overdue is no longer a question the device
+   clock answers on its own — it is one rung of the lifecycle ladder, measured against server time.
+   See lib/taskLifecycle.ts. */

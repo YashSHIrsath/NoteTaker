@@ -15,10 +15,17 @@ import { TaskEditorDialog } from '../task/TaskEditorDialog'
 import { useFolders } from '../../hooks/useFolders'
 import { useAuth } from '../../hooks/useAuth'
 import { useIsCompact } from '../../hooks/useMediaQuery'
+import { useServerNowCoarse } from '../../hooks/useServerNow'
 import { cn } from '../../lib/cn'
 import { StarButton } from '../common/StarButton'
 import { FolderActions } from './FolderActions'
-import { TagFilterMenu } from './TagFilterMenu'
+import { TaskFilterMenu } from '../task/TaskFilterMenu'
+import {
+  applyTaskFilters,
+  emptyFilterMessage,
+  type KindFilter,
+  type StatusFilter,
+} from '../../lib/taskFilters'
 import { categoryVar, getRootCategoryForFolder, scatterCategoryForId } from '../../lib/folderColor'
 import { taskColorStyle } from '../../lib/taskColor'
 import { focusTaskTitle } from '../../lib/focusTaskTitle'
@@ -57,6 +64,8 @@ export function FolderView({
   )
   const [viewMode, setViewMode] = useState<ViewMode>('list')
   const [activeTag, setActiveTag] = useState<string | null>(null)
+  const [kindFilter, setKindFilter] = useState<KindFilter>('all')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const isCompact = useIsCompact()
   // The compact folders sheet is only ever open or closed — it's pinned to the bottom bar, so
   // there's nothing to anchor or measure against the control that opens it.
@@ -104,11 +113,21 @@ export function FolderView({
 
   // Tags are cross-cutting, so the filter draws from every task in scope (this folder plus,
   // in board mode, its immediate sub-folder columns) — not just the current view's list.
-  const allTagsInScope = Array.from(
-    new Set(Object.values(tasksByFolderId).flat().flatMap((task) => task.tags)),
-  ).sort()
+  const tasksInScope = Object.values(tasksByFolderId).flat()
+  const allTagsInScope = Array.from(new Set(tasksInScope.flatMap((task) => task.tags))).sort()
+  // Coarse: the status filter reads the clock, and the cards below re-render with it. Their own
+  // countdowns keep the once-a-second tick to themselves. Scoped to the board's columns as well
+  // as this folder, since those are the tasks the filter is being applied to.
+  const now = useServerNowCoarse(tasksInScope.some((task) => task.noteKind === 'due_task'))
+  // Both filters, in one place, so the list and the board columns can't drift apart about what
+  // they are showing.
   const byActiveTag = <T extends Task>(list: T[]): T[] =>
-    activeTag ? list.filter((task) => task.tags.includes(activeTag)) : list
+    applyTaskFilters(
+      activeTag ? list.filter((task) => task.tags.includes(activeTag)) : list,
+      kindFilter,
+      statusFilter,
+      now,
+    ) as T[]
   // Board columns don't split into a separate "Pinned" section like list mode does, so a
   // pinned task needs to sort to the top of its own column instead.
   const pinnedFirst = <T extends Task>(list: T[]): T[] =>
@@ -233,6 +252,20 @@ export function FolderView({
             </Button>
 
             <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+              {/* The filters live in this row rather than in a band of their own above the
+                  cards: a folder is its notes, and the controls for narrowing them shouldn't
+                  outrank them on the way in. */}
+              <TaskFilterMenu
+                tasks={tasksInScope}
+                nowMs={now}
+                kind={kindFilter}
+                status={statusFilter}
+                tag={activeTag}
+                tags={allTagsInScope}
+                onKindChange={setKindFilter}
+                onStatusChange={setStatusFilter}
+                onTagChange={setActiveTag}
+              />
               <Button variant="subtle" size="sm" className="h-8 sm:h-9" onClick={() => setFolderDialogOpen(true)}>
                 <Folder className="h-4 w-4" aria-hidden />
                 <span className="hidden sm:inline">New Folder</span>
@@ -278,11 +311,6 @@ export function FolderView({
             ref={contentRef}
             className="min-h-0 flex-1 overflow-y-auto px-4 pb-28 sm:px-6 lg:pb-5"
           >
-            {allTagsInScope.length > 0 ? (
-              <div className="mt-3 sm:mt-4">
-                <TagFilterMenu tags={allTagsInScope} activeTag={activeTag} onSelect={setActiveTag} />
-              </div>
-            ) : null}
             <FolderBoardView
               columns={boardColumns}
               tasksByFolderId={filteredTasksByFolderId}
@@ -295,11 +323,6 @@ export function FolderView({
             ref={contentRef}
             className="min-h-0 flex-1 overflow-y-auto bg-[var(--color-surface-muted)] px-4 pb-28 sm:px-6 lg:pb-5"
           >
-            {allTagsInScope.length > 0 ? (
-              <div className="mt-3 sm:mt-4">
-                <TagFilterMenu tags={allTagsInScope} activeTag={activeTag} onSelect={setActiveTag} />
-              </div>
-            ) : null}
             {pinnedTasks.length > 0 ? (
               <section className="mt-2 sm:mt-6">
                 <h2 className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-accent)]/30 bg-[var(--color-accent-soft)] px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-accent)] sm:px-3 sm:py-1 sm:text-xs">
@@ -316,7 +339,7 @@ export function FolderView({
               </h2>
               {visibleTasks.length === 0 ? (
                 <p className="mt-2 px-2.5 text-sm text-[var(--color-text-muted)]">
-                  {activeTag ? `No tasks tagged "${activeTag}"` : 'No tasks'}
+                  {emptyFilterMessage(kindFilter, statusFilter, 'No tasks', activeTag)}
                 </p>
               ) : otherTasks.length === 0 ? (
                 <p className="mt-2 px-2.5 text-sm text-[var(--color-text-muted)]">

@@ -5,20 +5,22 @@ import { FolderBreadcrumb } from '../folder/FolderBreadcrumb'
 import { TaskBlockNoteEditor } from './TaskBlockNoteEditor'
 import { TaskTitleEditor } from './TaskTitleEditor'
 import { SaveStatusLabel } from './SaveStatusLabel'
-import { TaskDueDateDialog } from './TaskDueDateDialog'
-import { TaskStatusBadge } from './TaskStatusBadge'
+import { TaskScheduleDialog } from './TaskScheduleDialog'
+import { TaskStatusBadge, ReminderCountPill } from './TaskStatusBadge'
+import { TaskCountdown } from './TaskCountdown'
 import { TaskTagInput } from './TaskTagInput'
 import { AttachmentPreviewDialog } from '../attachment/AttachmentPreviewDialog'
 import { AttachmentTypeIcon, attachmentSortRank } from '../attachment/AttachmentTypeIcon'
 import { useFolders } from '../../hooks/useFolders'
-import { useAuth } from '../../hooks/useAuth'
 import { StarButton } from '../common/StarButton'
 import { PinButton } from '../common/PinButton'
 import { RowDeleteButton } from '../common/RowDeleteButton'
 import { useDeleteTask } from '../../hooks/useDeleteTask'
+import { useTaskCompletion } from '../../hooks/useTaskCompletion'
 import { cn } from '../../lib/cn'
-import { formatDueDate, isOverdue } from '../../lib/dueDate'
-import { nextTaskStatus } from '../../lib/taskStatus'
+import { formatDueDate } from '../../lib/dueDate'
+import { taskLifecycle } from '../../lib/taskLifecycle'
+import { useServerNow } from '../../hooks/useServerNow'
 import { useBlockHandles, useCollapseImages } from '../../hooks/useBlockHandles'
 import { isEmptyDocument } from '../../lib/blockNoteContent'
 
@@ -35,14 +37,13 @@ export function TaskEditor({ task, folderPath, showActions = true }: TaskEditorP
     toggleTaskPinned,
     updateTaskTitle,
     updateTaskContent,
-    updateTaskReminder,
-    updateTaskStatus,
+    getRemindersForTask,
     updateTaskTags,
     getAttachmentsForTask,
     saveStatus,
   } = useFolders()
   const { requestTaskDelete, dialog: taskDeleteDialog } = useDeleteTask()
-  const { updateProfile } = useAuth()
+  const { toggleCompleted, dialog: reopenDialog } = useTaskCompletion()
   const [dueDialogOpen, setDueDialogOpen] = useState(false)
   const { enabled: blockHandles, toggle: toggleBlockHandles } = useBlockHandles()
   const { collapsed: imagesCollapsed, toggle: toggleImages } = useCollapseImages()
@@ -68,7 +69,11 @@ export function TaskEditor({ task, folderPath, showActions = true }: TaskEditorP
     setEditing(isEmptyDocument(task.content))
   }
 
-  const overdue = task.dueAt !== null && task.status !== 'complete' && isOverdue(task.dueAt)
+  const isTracked = task.noteKind === 'due_task' && task.dueAt !== null
+  const now = useServerNow(isTracked && !task.completed)
+  const lifecycle = taskLifecycle(task, now)
+  const overdue = lifecycle === 'overdue'
+  const reminderCount = getRemindersForTask(task.id).filter((reminder) => reminder.isActive).length
   // Every file attached to the note. Not filtered by what the text still references: documents
   // aren't inserted into the text any more (they live here), so that filter would hide the very
   // files this bar exists for.
@@ -131,7 +136,7 @@ export function TaskEditor({ task, folderPath, showActions = true }: TaskEditorP
             className={cn(
               'anim-press inline-flex h-5 min-w-0 items-center gap-1 rounded-full border px-2 text-[10px] font-medium transition-colors',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/20',
-              task.dueAt
+              isTracked
                 ? overdue
                   ? 'border-[var(--color-danger)]/30 bg-[var(--color-danger)]/10 text-[var(--color-danger)] hover:bg-[var(--color-danger)]/15'
                   : 'border-[var(--color-accent)]/30 bg-[var(--color-accent-soft)] text-[var(--color-accent)] hover:bg-[var(--color-accent-soft-hover)]'
@@ -140,23 +145,26 @@ export function TaskEditor({ task, folderPath, showActions = true }: TaskEditorP
           >
             <CalendarClock className="h-2.5 w-2.5 shrink-0" aria-hidden />
             <span className="truncate">
-              {task.dueAt
-                ? overdue
-                  ? `Overdue · ${formatDueDate(task.dueAt)}`
-                  : formatDueDate(task.dueAt)
-                : 'Due date'}
+              {isTracked && task.dueAt ? formatDueDate(task.dueAt) : 'Schedule'}
             </span>
           </button>
 
           {/* Symbol only: the icon already says pending / ongoing / complete, and the word was the
               widest thing in the row. The label lives on as the tooltip and the accessible name. */}
-          {task.dueAt && task.status ? (
+          {isTracked ? (
             <TaskStatusBadge
-              status={task.status}
+              lifecycle={lifecycle}
+              completed={task.completed}
               iconOnly
-              onCycle={() => updateTaskStatus(task.id, nextTaskStatus(task.status!))}
+              onToggle={() => toggleCompleted(task.id)}
             />
           ) : null}
+
+          {/* The live countdown, right where the deadline is. It ticks on its own — nothing on
+              this screen needs reloading for a task to become overdue while you are reading it. */}
+          {isTracked ? <TaskCountdown task={task} compact /> : null}
+
+          <ReminderCountPill count={reminderCount} compact />
 
           {/* Pictures shown or collapsed to their filename. Same chip shape as the controls
               beside it, and it only appears when the note actually has an image to collapse. */}
@@ -275,21 +283,8 @@ export function TaskEditor({ task, folderPath, showActions = true }: TaskEditorP
 
       <AttachmentPreviewDialog attachment={previewAttachment} onClose={() => setPreviewAttachment(null)} />
 
-      <TaskDueDateDialog
-        open={dueDialogOpen}
-        dueAt={task.dueAt}
-        remindBeforeMinutes={task.remindBeforeMinutes}
-        onClose={() => setDueDialogOpen(false)}
-        onSave={(dueAt, remindBeforeMinutes) => {
-          updateTaskReminder(task.id, dueAt, remindBeforeMinutes)
-          // The reminder email is rendered server-side with no timezone context of its own,
-          // so it needs to know yours — stamped fresh here rather than once at sign-in, since
-          // that's cheap and covers you setting a due date after traveling to a new zone.
-          if (dueAt) {
-            void updateProfile({ timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }).catch(() => undefined)
-          }
-        }}
-      />
+      <TaskScheduleDialog open={dueDialogOpen} task={task} onClose={() => setDueDialogOpen(false)} />
+      {reopenDialog}
       {showActions ? taskDeleteDialog : null}
     </div>
   )

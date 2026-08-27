@@ -5,19 +5,27 @@ import {
   useState,
   type MouseEvent,
 } from 'react'
-import { ChevronRight, FolderInput, Pin } from 'lucide-react'
+import { CalendarClock, ChevronRight, FolderInput, Pin } from 'lucide-react'
 import type { Attachment } from '../../types'
 import type { FolderCategory } from '../../lib/folderColor'
 import { taskColorStyle } from '../../lib/taskColor'
 import { formatDueDate } from '../../lib/dueDate'
+import { lifecycleStyle, taskLifecycle } from '../../lib/taskLifecycle'
+import { nextReminderAt } from '../../lib/reminders'
+import { countdownLabel } from '../../lib/countdown'
+import { useServerNow } from '../../hooks/useServerNow'
 import { findBlockAttachmentId, referencedAttachmentIds } from '../../lib/blockNoteContent'
 import { useFolders } from '../../hooks/useFolders'
+import { useTaskCompletion } from '../../hooks/useTaskCompletion'
 import { AttachmentPreviewDialog } from '../attachment/AttachmentPreviewDialog'
 import { TaskColorButton } from './TaskColorButton'
 import { MoveTaskDialog } from './MoveTaskDialog'
+import { TaskScheduleDialog } from './TaskScheduleDialog'
 import { TaskTagsPill } from './TaskTagsPill'
 import { AttachmentTypeIcon, attachmentSortRank } from '../attachment/AttachmentTypeIcon'
 import { TaskContentPreview } from './TaskContentPreview'
+import { TaskCountdown } from './TaskCountdown'
+import { TaskStatusBadge, ReminderCountPill } from './TaskStatusBadge'
 import { cn } from '../../lib/cn'
 
 /**
@@ -55,19 +63,35 @@ export interface AllTaskTileProps {
  *  contains. Fixed in pixels rather than as an aspect ratio on purpose: an aspect ratio ties height
  *  to column width, which is what turned these into tall empty squares on a wide screen. */
 export function AllTaskTile({ taskId, category, folderLabel, onOpen }: AllTaskTileProps) {
-  const { getTask, getAttachmentsForTask, updateTaskColor } =
-    useFolders()
+  const { getTask, getAttachmentsForTask, updateTaskColor, getRemindersForTask } = useFolders()
+  const { toggleCompleted, dialog: reopenDialog } = useTaskCompletion()
   const [isOverflowing, setIsOverflowing] = useState(false)
   const [attachmentsScrollable, setAttachmentsScrollable] = useState(false)
   const [previewAttachment, setPreviewAttachment] = useState<Attachment | null>(null)
   const [moveOpen, setMoveOpen] = useState(false)
+  const [scheduleOpen, setScheduleOpen] = useState(false)
   const bodyRef = useRef<HTMLDivElement>(null)
   const attachmentsRef = useRef<HTMLDivElement>(null)
 
   const task = getTask(taskId)
   // An explicit pick wins; without one the view's own rule (folder color, or the scatter in a
   // flat list) still decides, exactly as before the picker existed.
-  const colors = taskColorStyle(task?.color ?? null, category)
+  const isTracked = task?.noteKind === 'due_task' && task.dueAt !== null
+  const now = useServerNow(isTracked && !task?.completed)
+  const lifecycle = task ? taskLifecycle(task, now) : 'note'
+  const taskReminders = getRemindersForTask(taskId)
+  const reminderCount = taskReminders.filter((reminder) => reminder.isActive).length
+  // The clock button says when the next email actually goes out, not just that reminders exist.
+  const nextReminder = nextReminderAt(taskReminders)
+  const scheduleHint = nextReminder
+    ? `Next reminder ${countdownLabel(new Date(nextReminder).getTime(), now).replace(' remaining', '')}`
+    : isTracked
+      ? 'Due date & reminders'
+      : 'Add due date or reminder'
+  // A due-date task's fill is its status and can't be overridden; a plain note keeps the picker.
+  // Same rule as TaskCard, for the same reason: the colour is information here, not decoration.
+  const statusColors = lifecycleStyle(lifecycle)
+  const colors = statusColors ?? taskColorStyle(task?.color ?? null, category)
   const ink = colors.ink
 
   const referencedIds = task ? referencedAttachmentIds(task.content) : new Set<string>()
@@ -172,12 +196,42 @@ export function AllTaskTile({ taskId, category, folderLabel, onOpen }: AllTaskTi
             <FolderInput className="h-3.5 w-3.5" aria-hidden />
           </button>
         ) : null}
-        <TaskColorButton
-          compact
-          activeColor={colors.solid}
-          selected={task.color}
-          onSelect={(color) => updateTaskColor(taskId, color)}
-        />
+        {/* Deadlines and reminders without opening the note — the tile grid is where people work,
+          *  and putting this only in the editor meant opening a note to say when it was due. */}
+        <button
+          type="button"
+          aria-label={
+            isTracked
+              ? `Edit schedule for ${task.title.trim() || 'note'}`
+              : `Add a due date or reminder to ${task.title.trim() || 'note'}`
+          }
+          title={scheduleHint}
+          onClick={(event) => {
+            event.stopPropagation()
+            setScheduleOpen(true)
+          }}
+          className="anim-press inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-black/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/40"
+          style={{ color: ink }}
+        >
+          <CalendarClock className="h-3.5 w-3.5" aria-hidden />
+        </button>
+        {/* The picker is a note's control. On a task the same slot shows what the colour already
+          *  means, and ticking it is the only thing that changes it. */}
+        {isTracked ? (
+          <TaskStatusBadge
+            lifecycle={lifecycle}
+            completed={task.completed}
+            iconOnly
+            onToggle={() => toggleCompleted(taskId)}
+          />
+        ) : (
+          <TaskColorButton
+            compact
+            activeColor={colors.solid}
+            selected={task.color}
+            onSelect={(color) => updateTaskColor(taskId, color)}
+          />
+        )}
       </div>
 
       {/* One hairline instead of per-element borders: it separates header from body without
@@ -251,19 +305,33 @@ export function AllTaskTile({ taskId, category, folderLabel, onOpen }: AllTaskTi
 
       {/* Rendered only when populated — an empty footer row still cost a line of height plus its
         *  margin, which read as dead space under the attachment icons. */}
-      {folderLabel || task.dueAt ? (
+      {folderLabel || isTracked || reminderCount > 0 ? (
         <div
           className="mt-2 flex shrink-0 items-center justify-between gap-2 text-[10.5px] opacity-80 sm:text-[11px]"
           style={{ color: ink }}
         >
           {folderLabel ? <span className="min-w-0 truncate">in {folderLabel}</span> : <span />}
-          {task.dueAt ? <span className="shrink-0 truncate">{formatDueDate(task.dueAt)}</span> : null}
+          <span className="flex shrink-0 items-center gap-1">
+            <ReminderCountPill count={reminderCount} compact />
+            {/* Under a day out (or already past), the live figure says more than the date does.
+              *  The tile's own ink carries the colour, so the countdown inherits rather than
+              *  painting its own — a red countdown on a red card reads as a smudge. */}
+            {/* The live figure rather than the date: the tile's own ink carries the colour, so the
+              *  countdown inherits it — a red countdown on a red card reads as a smudge. */}
+            {isTracked && task.dueAt ? (
+              <span style={{ color: ink }} title={formatDueDate(task.dueAt)}>
+                <TaskCountdown task={task} compact className="!text-inherit" />
+              </span>
+            ) : null}
+          </span>
         </div>
       ) : null}
     </div>
     </div>
     <MoveTaskDialog open={moveOpen} taskId={taskId} onClose={() => setMoveOpen(false)} />
+    <TaskScheduleDialog open={scheduleOpen} task={task} onClose={() => setScheduleOpen(false)} />
     <AttachmentPreviewDialog attachment={previewAttachment} onClose={() => setPreviewAttachment(null)} />
+    {reopenDialog}
     </Fragment>
   )
 }

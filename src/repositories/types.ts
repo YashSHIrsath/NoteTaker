@@ -1,4 +1,4 @@
-import type { Attachment } from '../types'
+import type { Attachment, Reminder, ReminderDraft, TaskEvent } from '../types'
 import type { AppSnapshot, UiState } from '../services/storage'
 
 export type { AppSnapshot, UiState }
@@ -29,7 +29,28 @@ export interface AttachmentDataRepository {
   clearCache(): void
 }
 
+/**
+ * Reminders, as ordinary per-row CRUD rather than part of the notes document.
+ *
+ * Deliberately not folded into NotesDataRepository: that one round-trips the whole snapshot and
+ * deletes anything the snapshot doesn't mention, which would wipe a reminder added in another tab
+ * and stamp over the `next_run_at` the scheduler wrote. Reminders are server-owned enough that
+ * they need their own boundary.
+ */
+export interface RemindersDataRepository {
+  /** Every reminder the signed-in account owns; the UI groups them by task itself. */
+  listAll(): MaybePromise<Reminder[]>
+  create(taskId: string, draft: ReminderDraft): MaybePromise<Reminder>
+  update(reminderId: string, draft: ReminderDraft, taskId: string): MaybePromise<Reminder>
+  setActive(reminderId: string, isActive: boolean): MaybePromise<Reminder>
+  remove(reminderId: string): MaybePromise<void>
+  /** One task's history, newest first. Read on demand rather than with the notes document: it is
+   *  only ever looked at for the note whose panel is open, and it grows without bound. */
+  listEvents(taskId: string): MaybePromise<TaskEvent[]>
+}
+
 export interface AppRepositories {
   notes: NotesDataRepository
   attachments: AttachmentDataRepository
+  reminders: RemindersDataRepository
 }
