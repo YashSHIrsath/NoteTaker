@@ -116,11 +116,17 @@ export function TaskColorButton({ activeColor, selected, onSelect, compact = fal
           // A 24px box, matching the actions menu it sits beside — the swatch inside stays small.
           // The button used to *be* the swatch at 18px, which left three controls of three
           // different sizes in one row and a hit target smaller than a fingertip.
-          compact ? 'h-6 w-6' : 'h-7 w-7',
+          // 22px in the compact case, to sit inside the card's 24px control capsule with a
+          // pixel of room either side rather than filling it edge to edge.
+          compact ? 'h-[22px] w-[22px]' : 'h-7 w-7',
+          // The same highlight the menu beside it has, so the two halves of the pill they share
+          // behave alike — inside it --color-hover is tinted with the card's ink, so this picks up
+          // the card's colour without knowing it exists. See TaskCardControls.
+          'transition-colors hover:bg-[var(--color-hover)]',
         )}
       >
         <span
-          className={cn('block rounded-full', SWATCH_BORDER, compact ? 'h-4 w-4' : 'h-5 w-5')}
+          className={cn('block rounded-full', SWATCH_BORDER, compact ? 'h-[13px] w-[13px]' : 'h-5 w-5')}
           style={{ background: activeColor }}
         />
       </button>

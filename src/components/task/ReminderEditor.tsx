@@ -19,6 +19,8 @@ import {
 } from '../../lib/reminders'
 import { serverNowMs } from '../../lib/serverClock'
 import { cn } from '../../lib/cn'
+import { DateTimeField } from '../ui/DateTimeField'
+import { TimeField } from '../ui/TimeField'
 
 /** One shared look for every control in here, so a row of them reads as one control strip. */
 const FIELD =
@@ -141,12 +143,13 @@ export function ReminderEditor({
             <label className={LABEL} htmlFor={`${ids}-at`}>
               Date &amp; time
             </label>
-            <input
+            {/* The app's own picker, not the browser's — see DateTimeField. The value contract is
+              * the one the native input had, so isoToLocalInput/localInputToIso are untouched. */}
+            <DateTimeField
               id={`${ids}-at`}
-              type="datetime-local"
               value={isoToLocalInput(draft.atUtc)}
-              onChange={(event) => set({ atUtc: localInputToIso(event.target.value) })}
-              className={cn(FIELD, 'mt-1 w-full')}
+              onChange={(next) => set({ atUtc: localInputToIso(next) })}
+              className="mt-1"
             />
           </div>
         ) : null}
@@ -221,12 +224,11 @@ export function ReminderEditor({
               <label className={LABEL} htmlFor={`${ids}-time`}>
                 At
               </label>
-              <input
+              <TimeField
                 id={`${ids}-time`}
-                type="time"
                 value={draft.recurTime ?? '09:00'}
-                onChange={(event) => set({ recurTime: event.target.value })}
-                className={cn(FIELD, 'mt-1 w-full')}
+                onChange={(next) => set({ recurTime: next })}
+                className="mt-1"
               />
             </div>
           </div>

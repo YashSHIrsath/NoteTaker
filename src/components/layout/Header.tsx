@@ -19,6 +19,17 @@ export interface HeaderProps {
   className?: string
 }
 
+/** The blob: somebody is waiting on you. Ringed in the header's own surface so it reads as sitting
+ *  on top of the glyph rather than as part of it, at any accent. */
+function PendingDot() {
+  return (
+    <span
+      aria-hidden
+      className="absolute right-1 top-1 h-2 w-2 rounded-full bg-[var(--color-accent)] ring-2 ring-[var(--color-surface)]"
+    />
+  )
+}
+
 export function Header({ className }: HeaderProps) {
   const { signOut } = useAuth()
   const { theme, toggleTheme } = useTheme()
@@ -27,7 +38,7 @@ export function Header({ className }: HeaderProps) {
   // attribute anything to. And only for an owner or admin — everyone else sees what a space is and
   // who is in it, not a record of what each of them did.
   const spaceId = useSpaceId()
-  const { getSpace } = useSpaces()
+  const { getSpace, invites } = useSpaces()
   const currentSpace = spaceId ? getSpace(spaceId) : undefined
   const canSeeHistory = currentSpace ? roleCanManageMembers(currentSpace.role) : false
   const navigate = useNavigate()
@@ -58,12 +69,15 @@ export function Header({ className }: HeaderProps) {
           *
           * This briefly showed the space's name instead, which put a workspace label where the
           * product's identity belongs. Which space you are in is the sidebar's job — see
-          * WorkspaceSwitcher — and on a phone the Spaces tab in the bottom bar carries it. */}
+          * WorkspaceSwitcher — and on a phone the Spaces tab in the bottom bar carries it.
+          *
+          * --font-brand, not --font-display: heading faces are a preference now, and the wordmark is
+          * the one piece of type in the app that must not follow it. */}
         <h1
           // Dropped on the narrowest screens: the search bar needs the room far more, and the
           // bottom bar now carries the app's identity/navigation there.
           className="hidden shrink-0 whitespace-nowrap px-0.5 text-base font-semibold tracking-tight text-[var(--color-text)] sm:inline sm:text-lg"
-          style={{ fontFamily: 'var(--font-display)' }}
+          style={{ fontFamily: 'var(--font-brand)' }}
         >
           Mindstack
         </h1>
@@ -84,11 +98,19 @@ export function Header({ className }: HeaderProps) {
           * opens the spaces so you can switch or step out. Inside one it also wears that space's
           * face, so the header says which workspace you are in without taking the app's name.
           */}
+        {/* A pending invitation is somebody waiting on an answer from you, so the dot rides
+          * whichever of these two the workspace puts here — on a phone this and the bottom bar are
+          * the only chrome there is, and neither had anywhere else to say it. */}
         {currentSpace ? (
           <IconButton
-            label={`Switch or leave ${currentSpace.name}`}
+            label={
+              invites.length > 0
+                ? `Switch or leave ${currentSpace.name} — ${invites.length} invitation${invites.length === 1 ? '' : 's'} waiting`
+                : `Switch or leave ${currentSpace.name}`
+            }
+            tooltip="Switch or leave"
             onClick={() => setSpacesOpen((value) => !value)}
-            className="lg:hidden"
+            className="relative lg:hidden"
           >
             <SpaceAvatar
               spaceId={currentSpace.id}
@@ -97,14 +119,21 @@ export function Header({ className }: HeaderProps) {
               className="h-5 w-5 rounded"
               iconClassName="h-3 w-3"
             />
+            {invites.length > 0 ? <PendingDot /> : null}
           </IconButton>
         ) : (
           <IconButton
-            label="Shared spaces"
+            label={
+              invites.length > 0
+                ? `Shared spaces — ${invites.length} invitation${invites.length === 1 ? '' : 's'} waiting`
+                : 'Shared spaces'
+            }
+            tooltip="Shared spaces"
             onClick={() => navigate('/spaces')}
-            className="lg:hidden"
+            className="relative lg:hidden"
           >
             <Users className="h-5 w-5" />
+            {invites.length > 0 ? <PendingDot /> : null}
           </IconButton>
         )}
 

@@ -8,7 +8,7 @@ import type { SidebarNavId } from '../types'
 import { useTrackNavSection } from '../hooks/usePageEnterDirection'
 import { useAuth } from '../hooks/useAuth'
 import { NAV_DESTINATIONS, resolveDefaultPage } from '../lib/navOrder'
-import { useWorkspacePath } from '../hooks/useWorkspace'
+import { useSpaceId, useWorkspacePath } from '../hooks/useWorkspace'
 import { workspaceRelativePath } from '../lib/workspace'
 
 const SIDEBAR_COLLAPSED_KEY = 'mynotes-sidebar-collapsed'
@@ -28,6 +28,7 @@ export function AppLayout() {
    */
   const relativePath = workspaceRelativePath(location.pathname)
   const to = useWorkspacePath()
+  const spaceId = useSpaceId()
   /*
    * matchPath, not useMatch, and against the relative path.
    *
@@ -78,10 +79,14 @@ export function AppLayout() {
     if (relativePath !== '/') {
       return
     }
-    const target = NAV_DESTINATIONS[resolveDefaultPage(user.user_metadata as Record<string, unknown>)]
+    // This workspace's answer, not the account's one answer. A space you share with four people and
+    // your own notes are opened for different reasons, and the choice used to be a single value —
+    // so setting one set the other, and both settings screens showed the same thing.
+    const target =
+      NAV_DESTINATIONS[
+        resolveDefaultPage(user.user_metadata as Record<string, unknown>, spaceId)
+      ]
     if (target.path !== '/') {
-      // Applies inside a space too, and to that space's copy of the page. Opening a shared workspace
-      // on the page you chose to open on is the same preference, not a different one.
       navigate(to(target.path), { replace: true })
     }
     // Runs on the first render that has a signed-in account; the ref makes it once-only.

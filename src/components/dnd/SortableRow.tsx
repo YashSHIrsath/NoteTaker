@@ -1,9 +1,8 @@
-import type { DragEvent, ReactNode } from 'react'
+import { useCallback, type KeyboardEvent, type ReactNode } from 'react'
 import { GripVertical } from 'lucide-react'
-import { useItemDnd, type DropPosition, type ItemDndKind } from '../../context/ItemDndContext'
+import { useSortable } from '../../context/SortableContext'
+import type { DropPosition, ItemDndKind } from '../../context/ItemDndContext'
 import { cn } from '../../lib/cn'
-
-const DRAG_TYPE = 'text/plain'
 
 export interface SortableRowProps {
   kind: ItemDndKind
@@ -20,14 +19,24 @@ export interface SortableRowProps {
   children: ReactNode
 }
 
-function dropPositionFromEvent(
-  event: DragEvent<HTMLElement>,
-  element: HTMLElement,
-): DropPosition {
-  const rect = element.getBoundingClientRect()
-  return event.clientY < rect.top + rect.height / 2 ? 'before' : 'after'
-}
-
+/**
+ * One row of a list you can drag to reorder.
+ *
+ * Rebuilt on pointer events (see SortableContext), replacing the HTML5 drag-and-drop this used to
+ * use. Three things were wrong with that, in rising order of severity: the browser draws its own
+ * translucent ghost and nothing can be done about it; a drop target is whatever happens to be under
+ * the cursor, so nested folder lists fought each other over dragover; and, fatally, the API has no
+ * touch implementation — `draggable` is simply inert on a phone. Every one of these lists is a list
+ * people reorder on a phone.
+ *
+ * What that bought, beyond working: the rows now open a gap and close it as you drag, and the row you
+ * release glides into its slot before the real order is applied underneath it, so nothing jumps at
+ * the end. And the grip takes arrow keys, which the old one could not — dragging was the only way to
+ * reorder anything in the app.
+ *
+ * The group is the row's parent id: a folder only ever reorders among its siblings, and the provider
+ * keys its registry on exactly that. Which is why no list needed a wrapper to gain any of this.
+ */
 export function SortableRow({
   kind,
   itemId,
@@ -39,92 +48,91 @@ export function SortableRow({
   onReorder,
   children,
 }: SortableRowProps) {
-  const { dragging, dropHint, getDragging, beginDrag, updateDropHint, endDrag, startPointerDrag } =
-    useItemDnd()
-  const isDragging = dragging?.kind === kind && dragging.itemId === itemId
-  const hint =
-    dropHint?.kind === kind && dropHint.itemId === itemId ? dropHint.position : null
+  const sortable = useSortable()
+  // One key per kind and parent, so a folder list and a task list at the same level cannot see each
+  // other's rows, and two different parents' children never mix.
+  const groupKey = `${kind}:${groupId ?? 'root'}`
 
-  const sessionMatchesGroup = (
-    session: { kind: ItemDndKind; itemId: string; groupId: string | null } | null,
-  ) =>
-    session !== null &&
-    session.kind === kind &&
-    session.itemId !== itemId &&
-    session.groupId === groupId
+  /*
+   * `register` is pulled out on its own, and that matters.
+   *
+   * The context value is rebuilt on every pointer move — it carries the live session — so a ref
+   * callback that depended on the whole object would be a new function on every frame of a drag, and
+   * React calls a changed ref callback with null before calling it with the element. The row would
+   * therefore unregister and re-register itself sixty times a second in the middle of the drag that
+   * is reading the registry. `register` itself is stable, so this callback is too.
+   */
+  const { register } = sortable
+  const setRef = useCallback(
+    (element: HTMLDivElement | null) => {
+      register(groupKey, itemId, element)
+    },
+    [groupKey, itemId, register],
+  )
 
-  const handleDragStart = (event: DragEvent<HTMLSpanElement>) => {
-    event.stopPropagation()
-    event.dataTransfer.effectAllowed = 'move'
-    event.dataTransfer.setData(DRAG_TYPE, itemId)
-    beginDrag({ kind, itemId, groupId })
-  }
+  const offset = sortable.offsetOf(groupKey, itemId)
+  const dragging = sortable.isDragging(groupKey, itemId)
+  const active = sortable.isActive(groupKey)
 
-  const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
-    const session = getDragging()
-    if (!sessionMatchesGroup(session)) {
+  const onKeyDown = (event: KeyboardEvent<HTMLSpanElement>) => {
+    const direction = event.key === 'ArrowUp' ? -1 : event.key === 'ArrowDown' ? 1 : 0
+    if (direction === 0) {
       return
     }
     event.preventDefault()
     event.stopPropagation()
-    event.dataTransfer.dropEffect = 'move'
-    updateDropHint({
-      kind,
-      itemId,
-      position: dropPositionFromEvent(event, event.currentTarget),
-    })
-  }
-
-  const handleDrop = (event: DragEvent<HTMLDivElement>) => {
-    event.preventDefault()
-    event.stopPropagation()
-    const session = getDragging()
-    if (!session || !sessionMatchesGroup(session)) {
-      endDrag()
-      return
-    }
-    const position = dropPositionFromEvent(event, event.currentTarget)
-    onReorder(session.itemId, itemId, position)
-    endDrag()
+    sortable.nudge({ groupKey, id: itemId, reorder: onReorder, direction })
   }
 
   return (
     <div
+      ref={setRef}
       data-dnd-item={itemId}
       data-dnd-kind={kind}
       data-dnd-group={groupId ?? ''}
       className={cn(
-        'anim-item-in relative overflow-hidden rounded-2xl border border-transparent transition-all duration-200 ease-out',
+        'anim-item-in relative rounded-2xl border border-transparent',
         revealHandleOnHover && 'group',
-        hint === 'before' &&
-          'before:absolute before:left-3 before:right-3 before:top-0 before:h-[3px] before:rounded-full before:bg-[var(--color-accent)] before:shadow-[0_0_0_1px_rgba(139,133,240,0.2)] before:content-[""]',
-        hint === 'after' &&
-          'after:absolute after:left-3 after:right-3 after:bottom-0 after:h-[3px] after:rounded-full after:bg-[var(--color-accent)] after:shadow-[0_0_0_1px_rgba(139,133,240,0.2)] after:content-[""]',
-        isDragging &&
-          'scale-[0.995] border-[var(--color-accent)]/60 bg-[var(--color-accent-soft)] shadow-[0_10px_25px_rgba(0,0,0,0.18)] opacity-80',
+        /*
+         * The dragged row rides above its siblings and is not clipped by them; every other row
+         * transitions into its displaced position.
+         *
+         * The transition is off for the row under the pointer — it has to track the finger exactly,
+         * and a 180ms ease on that is lag. It is also off for everyone when no drag is in progress,
+         * so a list that re-renders for an unrelated reason does not animate.
+         */
+        dragging
+          ? 'z-20 shadow-[0_12px_30px_rgba(0,0,0,0.22)]'
+          : active
+            ? 'transition-transform duration-[180ms] ease-out motion-reduce:transition-none'
+            : undefined,
+        dragging &&
+          'border-[var(--color-accent)]/60 bg-[var(--color-accent-soft)] scale-[1.01] cursor-grabbing',
         className,
       )}
-      onDragOver={handleDragOver}
-      onDrop={handleDrop}
+      style={{
+        transform: offset === 0 ? undefined : `translateY(${offset}px)`,
+        // Only while something is moving: `relative` alone is enough at rest, and a permanent
+        // stacking context on every folder row is a needless one.
+        position: active ? 'relative' : undefined,
+      }}
     >
       <div
-        className={cn(
-          'flex w-full items-center py-0.5',
-          revealHandleOnHover ? 'gap-0' : 'gap-0.5',
-        )}
+        className={cn('flex w-full items-center py-0.5', revealHandleOnHover ? 'gap-0' : 'gap-0.5')}
       >
         <span
           role="button"
           tabIndex={0}
-          draggable
-          aria-label={dragLabel}
+          aria-label={`${dragLabel}. Use the up and down arrow keys to move it.`}
           title={dragLabel}
-          onDragStart={handleDragStart}
-          onDragEnd={() => endDrag()}
-          onPointerDown={(event) =>
-            startPointerDrag(event, { kind, itemId, groupId }, { reorder: onReorder })
-          }
+          onPointerDown={(event) => {
+            event.stopPropagation()
+            sortable.begin(event, { groupKey, id: itemId, reorder: onReorder })
+          }}
+          onKeyDown={onKeyDown}
           className={cn(
+            // touch-none is what makes this work on a phone: without it the browser claims the
+            // gesture for scrolling before the first pointermove arrives.
             'inline-flex shrink-0 cursor-grab touch-none select-none items-center justify-center rounded-full border border-transparent bg-transparent text-[var(--color-text-muted)] shadow-none transition-all duration-150',
             'active:cursor-grabbing',
             compact ? 'h-6' : 'h-7',

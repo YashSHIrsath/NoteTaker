@@ -12,6 +12,8 @@ import {
   useDisplaySettings,
   useDisplaySettingsWriter,
 } from '../../hooks/useDisplaySettings'
+import { useSpaceId } from '../../hooks/useWorkspace'
+import { useSpaces } from '../../hooks/useSpaces'
 import { Notice } from '../ui/Notice'
 import { cn } from '../../lib/cn'
 import { NavOrderList } from './NavOrderList'
@@ -43,7 +45,18 @@ export function NavigationSettings() {
    */
   const { navOrder: order } = useDisplaySettings()
   const display = useDisplaySettingsWriter()
-  const defaultPage = readDefaultPage(metadata)
+  /*
+   * And it is per workspace, not per account.
+   *
+   * One value used to answer for everything, so choosing to open a shared space on Tasks moved your
+   * own notes there too — and this screen, rendered in either workspace, showed the other one's
+   * answer as though it were this one's. A space you share with four people and your own notes are
+   * opened for different reasons.
+   */
+  const spaceId = useSpaceId()
+  const { getSpace } = useSpaces()
+  const currentSpace = spaceId ? getSpace(spaceId) : undefined
+  const defaultPage = readDefaultPage(metadata, spaceId)
 
   const run = async (write: () => Promise<void>) => {
     setSaving(true)
@@ -65,7 +78,8 @@ export function NavigationSettings() {
   }
 
   const saveOrder = (next: NavId[]) => void run(() => display.save({ navOrder: next }))
-  const saveDefaultPage = (page: SidebarNavId) => void run(() => updateProfile({ defaultPage: page }))
+  const saveDefaultPage = (page: SidebarNavId) =>
+    void run(() => updateProfile({ defaultPage: page, defaultPageSpaceId: spaceId }))
 
   return (
     <div className="mt-4 flex flex-col gap-6">
@@ -73,7 +87,9 @@ export function NavigationSettings() {
       <div>
         <p className="text-[13px] font-semibold text-[var(--color-text)]">Open on</p>
         <p className="mt-0.5 text-[12px] leading-relaxed text-[var(--color-text-muted)]">
-          The page you land on when you start the app.
+          {currentSpace
+            ? `The page you land on when you open ${currentSpace.name}. Only this space — your own notes and every other space keep their own.`
+            : 'The page you land on when you open your own notes. Each shared space has its own.'}
         </p>
         <div className="mt-2.5 flex flex-wrap gap-1.5">
           {DEFAULT_PAGE_CHOICES.map((id) => {

@@ -21,9 +21,19 @@ const variantClasses: Record<ButtonVariant, string> = {
   danger: 'bg-[var(--color-danger)] text-white hover:bg-[var(--color-danger-hover)]',
 }
 
+/*
+ * Smaller below `sm`, full size from there up.
+ *
+ * Both of these were `text-sm` — 14px — at every width, so "small" and "medium" differed only in
+ * padding and nothing shrank on a phone. Next to the 11-12px helper text these buttons sit beside
+ * in cards, a 14px label with desktop padding is the thing that reads as oversized, and three of
+ * them in a row is what pushed the space panel's picture controls onto their own lines.
+ *
+ * Only the mobile end moves. A wide screen keeps exactly the sizes it had.
+ */
 const sizeClasses: Record<ButtonSize, string> = {
-  sm: 'px-2.5 py-1.5 text-sm',
-  md: 'px-3 py-2 text-sm',
+  sm: 'px-2.5 py-1 text-[12.5px] sm:py-1.5 sm:text-sm',
+  md: 'px-3 py-1.5 text-[13px] sm:py-2 sm:text-sm',
 }
 
 export function Button({

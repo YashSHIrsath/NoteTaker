@@ -8,10 +8,17 @@
    live in the plain :root[data-theme="dark"] block below, which is never tree-shaken. */
 @theme static {
   --font-sans: "Inter", "Segoe UI", "Helvetica Neue", system-ui, sans-serif;
-  /* Sansita carries the brand: headings, the wordmark, numbers on the Tree page. Inter stays the
-     text face — Sansita's high contrast and tight apertures are made for display sizes, and long
-     note text and 11px metadata read better in a UI face. */
-  --font-display: "Sansita", "Iowan Old Style", Georgia, serif;
+  /* The wordmark's face, and nothing else's.
+     Separate from --font-display because that one is a preference now — see lib/fonts — and a logo
+     that changes when somebody picks a heading font is not a logo. Nothing in the settings can
+     reach this token. */
+  --font-brand: "Sansita", "Iowan Old Style", Georgia, serif;
+
+  /* The two faces in force, both overridable per account from <html> (see useAppFonts).
+     Declared as the defaults here so the app is correct before any session resolves, and so the
+     landing page — which mounts outside the shell that overrides them — always uses these. */
+  --font-display: var(--font-brand);
+  --font-body: var(--font-sans);
 
   /* The untinted grounds. Named separately because a space's theme mixes its own colour into
      these — see .space-theme — and duplicating the literals there is how the two would drift. */
@@ -216,7 +223,8 @@ body,
 
 body {
   margin: 0;
-  font-family: var(--font-sans);
+  font-family: var(--font-body);
+  letter-spacing: var(--font-body-tracking, normal);
   font-feature-settings: "cv11", "ss01";
   color: var(--color-text);
   background-color: var(--color-surface);
@@ -694,6 +702,81 @@ body {
   animation: anim-space-halo 1900ms var(--motion-ease) infinite;
 }
 
+/* The landing carousel's dwell bar: how long the slide on screen has left. Duration and play state
+   are both set inline, so this is only the shape of the motion. */
+@keyframes anim-carousel-dwell {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.anim-carousel-dwell {
+  transform-origin: left;
+  animation-name: anim-carousel-dwell;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+/* ------------------------------------------------------------------ dealing a card
+ *
+ * The landing deck's front card, on its way to the back.
+ *
+ * Depth transforms alone could not do this. Moving the front card straight to the back of the stack
+ * meant it faded out where it stood, which reads as a card being *deleted* rather than dealt — and
+ * the whole point of the deck is the gesture of turning one over. So the outgoing card gets a
+ * keyframe animation that overrides its depth transform for the length of the deal: it slides out to
+ * the left and rotates as a thumb would push it, lifts, and only then goes.
+ *
+ * It ends at opacity 0, which is what lets the animation be removed afterwards without a visible
+ * jump — by then the card is at the back of the stack, where the depth formula also has it invisible.
+ */
+@keyframes anim-card-deal {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(0deg) scale(1);
+    opacity: 1;
+  }
+  30% {
+    transform: translate3d(-16%, 2%, 0) rotate(-7deg) scale(0.99);
+    opacity: 1;
+  }
+  62% {
+    transform: translate3d(-52%, -1%, 0) rotate(-14deg) scale(0.95);
+    opacity: 0.55;
+  }
+  100% {
+    transform: translate3d(-14%, -30px, 0) rotate(-3deg) scale(0.86);
+    opacity: 0;
+  }
+}
+
+.anim-card-deal {
+  animation: anim-card-deal 700ms cubic-bezier(0.32, 0, 0.36, 1) both;
+  /* Above the cards it is passing over on the way out, and it must not be clipped by them. */
+  z-index: 30;
+}
+
+/* The card arriving at the front gets a short settle of its own, so the deck reads as two hands
+   rather than one card leaving. Layered on top of the depth transition, which is what actually moves
+   it forward — this only adds the lift at the end of that move. */
+@keyframes anim-card-land {
+  0% {
+    box-shadow: var(--shadow-md);
+  }
+  55% {
+    box-shadow: 0 26px 48px -14px rgb(0 0 0 / 0.45);
+  }
+  100% {
+    box-shadow: var(--shadow-lg);
+  }
+}
+
+.anim-card-land {
+  animation: anim-card-land 700ms var(--motion-ease) both;
+}
+
 .anim-loader-bar {
   transform-origin: bottom;
   animation: anim-loader-bar 900ms var(--motion-ease) infinite;
@@ -884,6 +967,9 @@ body.dnd-touch-active {
   .anim-pop,
   .anim-rise,
   .anim-page-enter,
+  .anim-card-deal,
+  .anim-card-land,
+  .anim-carousel-dwell,
   .anim-space-enter,
   .anim-space-enter::after,
   .anim-space-mark,

@@ -19,6 +19,7 @@ import { useFolders } from '../../hooks/useFolders'
 import { useTaskCompletion } from '../../hooks/useTaskCompletion'
 import { AttachmentPreviewDialog } from '../attachment/AttachmentPreviewDialog'
 import { TaskColorButton } from './TaskColorButton'
+import { TaskCardControls } from './TaskCardControls'
 import { TaskActionsMenu } from './TaskActionsMenu'
 import { TaskTagsPill } from './TaskTagsPill'
 import { AttachmentTypeIcon, attachmentSortRank } from '../attachment/AttachmentTypeIcon'
@@ -172,7 +173,9 @@ export function AllTaskTile({ taskId, scope, category, folderLabel, onOpen }: Al
         * view that pins, and the menu says "Unpin" when you open it.
         *
         * What is left is one control that is genuinely one-tap — the colour on a note, its state
-        * on a task — and the menu holding everything else.
+        * on a task — and the menu holding everything else. Both live in one divided pill (see
+        * TaskCardControls), pulled up into the card's own padding so it reads as belonging to the
+        * corner rather than as the third item in the title's row.
         */}
       <div className="flex h-7 shrink-0 items-center gap-1.5">
         <h3
@@ -182,22 +185,29 @@ export function AllTaskTile({ taskId, scope, category, folderLabel, onOpen }: Al
         >
           {task.title.trim() || 'Untitled'}
         </h3>
-        {isTracked ? (
-          <TaskStatusBadge
-            lifecycle={lifecycle}
-            completed={task.completed}
-            iconOnly
-            onToggle={() => toggleCompleted(taskId)}
+        <div className="-mr-1 -mt-1 sm:-mr-1.5 sm:-mt-1.5">
+          <TaskCardControls
+            ink={ink}
+            left={
+              isTracked ? (
+                <TaskStatusBadge
+                  lifecycle={lifecycle}
+                  completed={task.completed}
+                  iconOnly
+                  onToggle={() => toggleCompleted(taskId)}
+                />
+              ) : (
+                <TaskColorButton
+                  compact
+                  activeColor={colors.solid}
+                  selected={task.color}
+                  onSelect={(color) => updateTaskColor(taskId, color)}
+                />
+              )
+            }
+            right={<TaskActionsMenu task={task} scope={scope} compact ink={ink} />}
           />
-        ) : (
-          <TaskColorButton
-            compact
-            activeColor={colors.solid}
-            selected={task.color}
-            onSelect={(color) => updateTaskColor(taskId, color)}
-          />
-        )}
-        <TaskActionsMenu task={task} scope={scope} compact ink={ink} />
+        </div>
       </div>
 
       {/* One hairline instead of per-element borders: it separates header from body without

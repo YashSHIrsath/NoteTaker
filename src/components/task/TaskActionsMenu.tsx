@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import {
   CalendarClock,
   FolderInput,
+  Ellipsis,
   MoreVertical,
   Pin,
   PinOff,
@@ -128,7 +129,10 @@ export function TaskActionsMenu({
         <IconButton
           label={`Actions for ${title}`}
           aria-expanded={menu.open}
-          className={cn(compact ? 'h-6 w-6' : 'h-7 w-7')}
+          // box="none": this trigger is sized to the pill it sits in (24px), not to the default
+          // touch target, and the base's own responsive size would override a bare className.
+          box="none"
+          className={cn(compact ? 'h-[22px] w-[22px]' : 'h-7 w-7')}
           style={ink ? { color: ink } : undefined}
           onClick={(event) => {
             event.preventDefault()
@@ -137,7 +141,18 @@ export function TaskActionsMenu({
           }}
           onPointerDown={(event) => event.stopPropagation()}
         >
-          <MoreVertical className="h-4 w-4" aria-hidden />
+          {/* Flat, and with no ring of its own.
+            *
+            * The compact trigger lives inside TaskCardControls, which is already a ring — a circled
+            * ellipsis there was a ring inside a ring inside a card. Horizontal rather than stacked
+            * because the pill it sits in is horizontal, and dots across its short axis fought the
+            * shape. Where this trigger stands on its own the vertical dots stay: nothing encloses
+            * them there, so the axis of the row is what they should follow. */}
+          {compact ? (
+            <Ellipsis className="h-4 w-4" aria-hidden />
+          ) : (
+            <MoreVertical className="h-4 w-4" aria-hidden />
+          )}
         </IconButton>
       </div>
 

@@ -27,6 +27,8 @@ import {
   Star,
   Sun,
   Timer,
+  UserPlus,
+  Users,
 } from 'lucide-react'
 import { cn } from '../../lib/cn'
 
@@ -49,6 +51,14 @@ import { cn } from '../../lib/cn'
 interface Slide {
   key: string
   icon: ReactNode
+  /**
+   * Two words, for the tab row.
+   *
+   * Separate from `eyebrow`, which is a sentence — "Counted against the server, not your device"
+   * says the right thing inside a slide and is useless as a tab. Eleven anonymous dots said nothing
+   * at all; eleven names say what the whole set contains before you turn any of it.
+   */
+  tab: string
   eyebrow: string
   title: string
   body: string
@@ -121,6 +131,7 @@ const SLIDES: Slide[] = [
   {
     key: 'folders',
     icon: <FolderTree className="h-4 w-4" aria-hidden />,
+    tab: 'Folders',
     eyebrow: 'Where everything lives',
     title: 'Folders inside folders, arranged by you',
     body: 'Notes go in folders, folders go in folders, as deep as you like. Drag to reorder anything, and open a folder either as a plain list or as a board split into columns by its subfolders.',
@@ -180,6 +191,7 @@ const SLIDES: Slide[] = [
   {
     key: 'editor',
     icon: <Pencil className="h-4 w-4" aria-hidden />,
+    tab: 'Editor',
     eyebrow: 'The note itself',
     title: 'A block editor, not a text box',
     body: 'Headings, bullet and numbered lists, checklists, collapsible toggles and inline formatting — with a “/” menu that reaches all of it without leaving the keyboard. Notes save themselves as you type.',
@@ -234,6 +246,7 @@ const SLIDES: Slide[] = [
   {
     key: 'files',
     icon: <Paperclip className="h-4 w-4" aria-hidden />,
+    tab: 'Files',
     eyebrow: 'Attachments',
     title: 'Files sit in the note they belong to',
     body: 'Images, PDFs, Word documents, spreadsheets and CSVs, up to 10 MB each. Pictures show inline; everything else waits in a bar at the foot of the note and previews there without downloading.',
@@ -263,6 +276,7 @@ const SLIDES: Slide[] = [
   {
     key: 'deadlines',
     icon: <CalendarClock className="h-4 w-4" aria-hidden />,
+    tab: 'Tasks',
     eyebrow: 'Notes and tasks',
     title: 'A note becomes a task when you say so',
     body: 'One switch turns a note into something with a deadline, a countdown and a status. The status is worked out from the deadline, the tick and the clock — never chosen from a menu — and the server stamps the moment you tick it off.',
@@ -293,6 +307,7 @@ const SLIDES: Slide[] = [
   {
     key: 'countdown',
     icon: <Timer className="h-4 w-4" aria-hidden />,
+    tab: 'Deadlines',
     eyebrow: 'Counted against the server, not your device',
     title: 'A deadline that keeps counting',
     body: 'Every task carries a live countdown that ticks down to the minute, then the second in the last hour, then rolls over to “Overdue by…”. It runs off the server’s clock, so a laptop that slept through a deadline wakes up telling the truth.',
@@ -347,6 +362,7 @@ const SLIDES: Slide[] = [
   {
     key: 'reminders',
     icon: <Bell className="h-4 w-4" aria-hidden />,
+    tab: 'Reminders',
     eyebrow: 'Email, scheduled server-side',
     title: 'Reminders in three shapes',
     body: 'One at an exact time, one that repeats every so many days or weeks, or one pinned to the deadline itself — an hour before, a day after. A task can carry any number of them, firing independently.',
@@ -384,6 +400,7 @@ const SLIDES: Slide[] = [
   {
     key: 'filter',
     icon: <SlidersHorizontal className="h-4 w-4" aria-hidden />,
+    tab: 'Filters',
     eyebrow: 'The same control everywhere',
     title: 'Ask what’s overdue, from any list',
     body: 'One pill on every listing — inside a folder, across all tasks, in Starred, on the Tree. Narrow by what a note is, by where its deadline got to, and by tag, with a live count against each answer.',
@@ -430,6 +447,7 @@ const SLIDES: Slide[] = [
   {
     key: 'tree',
     icon: <ListTree className="h-4 w-4" aria-hidden />,
+    tab: 'Tree',
     eyebrow: 'The whole workspace on one screen',
     title: 'The Tree, and the deadline that’s next',
     body: 'Counts for everything you have, the shape of the folder tree underneath, and at the top the nearest unfinished deadline — pulsing harder the closer it is, and a tap away from the note itself.',
@@ -493,6 +511,7 @@ const SLIDES: Slide[] = [
   {
     key: 'find',
     icon: <Search className="h-4 w-4" aria-hidden />,
+    tab: 'Search',
     eyebrow: 'One box',
     title: 'Find it, or just do it',
     body: 'Search runs over folder names, note titles, the text inside notes and checklist items, from wherever you are. The same box takes commands, so the thing you were about to click is often quicker to type.',
@@ -533,6 +552,7 @@ const SLIDES: Slide[] = [
   {
     key: 'history',
     icon: <History className="h-4 w-4" aria-hidden />,
+    tab: 'History',
     eyebrow: 'Written by the database, not by you',
     title: 'Every deadline a task has ever had',
     body: 'A column only ever holds the present. When a deadline moved, whether that email actually went out, when you ticked it off and when you reopened it — each is recorded as it happens, on a log nothing can edit after the fact.',
@@ -564,8 +584,91 @@ const SLIDES: Slide[] = [
     ),
   },
   {
+    key: 'spaces',
+    icon: <Users className="h-4 w-4" aria-hidden />,
+    tab: 'Shared',
+    eyebrow: 'A second kind of workspace',
+    title: 'The same app, held by several people',
+    body: 'A shared space has its own tree, its own notes and its own deadlines, and everyone invited works in them together. Your own notes stay exactly where they were — a space is somewhere you go, not something that happens to them.',
+    points: [
+      'Invited by email, and redeemable only by that address: a forwarded link admits nobody.',
+      'Owner, admin, editor and viewer — enforced by the database rather than by which buttons are drawn.',
+      'Every change recorded as it happens, with who made it and what it was before.',
+    ],
+    mock: (
+      <Mock className="space-y-3">
+        <div className="flex items-center gap-2">
+          <span
+            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-[11px] font-bold text-white"
+            style={{ background: 'var(--cat-teal)' }}
+            aria-hidden
+          >
+            AE
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[12.5px] font-bold text-[var(--color-text)]">
+              Team of Aeres
+            </span>
+            <span className="block text-[10.5px] text-[var(--color-text-muted)]">
+              Owner &middot; 3 people
+            </span>
+          </span>
+          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[var(--color-accent-soft)] px-2 py-0.5 text-[10px] font-bold text-[var(--color-accent)]">
+            <UserPlus className="h-2.5 w-2.5" aria-hidden />
+            Invite
+          </span>
+        </div>
+
+        <div className="space-y-1.5 border-t border-[var(--color-border)] pt-2.5">
+          <MockLabel>Editors 2</MockLabel>
+          {['priya@studio.co', 'sam@studio.co'].map((email) => (
+            <div key={email} className="flex items-center gap-2">
+              <span
+                className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[8px] font-bold text-white"
+                style={{ background: 'linear-gradient(135deg, var(--cat-rose), var(--color-accent))' }}
+                aria-hidden
+              >
+                {email.charAt(0).toUpperCase()}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-[11px] text-[var(--color-text)]">
+                {email}
+              </span>
+              <span className="shrink-0 rounded-full bg-[var(--color-hover)] px-1.5 text-[9.5px] font-semibold text-[var(--color-text-muted)]">
+                Editor
+              </span>
+            </div>
+          ))}
+        </div>
+
+        <div className="space-y-1.5 border-t border-[var(--color-border)] pt-2.5">
+          <MockLabel>Activity</MockLabel>
+          {[
+            { who: 'Priya', did: 'deleted a note', what: 'Old brief', when: '12:04' },
+            { who: 'Sam', did: 'moved a folder', what: 'Q3 → Archive', when: '11:47' },
+          ].map((row) => (
+            <div key={row.what} className="flex items-center gap-1.5">
+              <span className="shrink-0 rounded-full bg-[var(--color-surface-muted)] px-1.5 text-[9.5px] font-bold text-[var(--color-text)]">
+                {row.who}
+              </span>
+              <span className="shrink-0 rounded-full bg-[var(--color-accent-soft)] px-1.5 text-[9.5px] font-semibold text-[var(--color-accent-ink)]">
+                {row.did}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-[10.5px] text-[var(--color-text-muted)]">
+                {row.what}
+              </span>
+              <span className="shrink-0 text-[9.5px] tabular-nums text-[var(--color-text-muted)]">
+                {row.when}
+              </span>
+            </div>
+          ))}
+        </div>
+      </Mock>
+    ),
+  },
+  {
     key: 'yours',
     icon: <Palette className="h-4 w-4" aria-hidden />,
+    tab: 'Yours',
     eyebrow: 'Set it up how you like',
     title: 'Your colours, your layout, your phone',
     body: 'A colour per note or a whole palette left to the app. Notes as list cards or as colourful tiles you can drag and resize. Light or dark. All of it saved to your account and waiting on the next device.',
@@ -621,6 +724,7 @@ const AUTOPLAY_MS = 3000
 
 export function FeatureCarousel() {
   const trackRef = useRef<HTMLDivElement>(null)
+  const tabsRef = useRef<HTMLDivElement>(null)
   const [index, setIndex] = useState(0)
   /**
    * Held still while a pointer is over the track or something inside it has focus.
@@ -650,7 +754,34 @@ export function FeatureCarousel() {
     setRestartKey((key) => key + 1)
   }, [])
 
-  // The active dot follows the scroll position rather than the button that caused it, so a swipe
+  /*
+   * Keep the active tab in view, by moving this row's own scrollLeft.
+   *
+   * Deliberately not scrollIntoView. `block: 'nearest'` scrolls whatever ancestor it has to in the
+   * vertical axis as well — and on first paint this whole section is below the fold, so asking for
+   * tab one would have hauled the page down to the carousel before the visitor had read the hero.
+   * Setting scrollLeft on the row cannot move anything but the row.
+   *
+   * Only nudged when the tab is actually outside, so a tab already on screen is left where it is
+   * rather than being centred on every advance.
+   */
+  useEffect(() => {
+    const tabs = tabsRef.current
+    const active = tabs?.querySelector<HTMLElement>('[data-active]')
+    if (!tabs || !active) {
+      return
+    }
+    const left = active.offsetLeft
+    const right = left + active.offsetWidth
+    const margin = 12
+    if (left < tabs.scrollLeft + margin) {
+      tabs.scrollTo({ left: Math.max(0, left - margin), behavior: 'smooth' })
+    } else if (right > tabs.scrollLeft + tabs.clientWidth - margin) {
+      tabs.scrollTo({ left: right - tabs.clientWidth + margin, behavior: 'smooth' })
+    }
+  }, [index])
+
+  // The active tab follows the scroll position rather than the button that caused it, so a swipe
   // and an arrow report the same thing and a half-finished drag can't desynchronise them.
   useEffect(() => {
     const track = trackRef.current
@@ -746,11 +877,35 @@ export function FeatureCarousel() {
         </div>
       </div>
 
+      {/*
+        * How long this slide has left.
+        *
+        * Auto-advancing without it is a carousel that moves for no visible reason, which reads as a
+        * fault the first time and as an annoyance after that. A line that is plainly running down
+        * makes the same movement expected — and because it stops dead when the deck pauses under a
+        * pointer, it also *shows* that reading a slide holds it, which nothing else on screen did.
+        *
+        * Keyed on the slide and the restart counter so the CSS animation begins again from zero on
+        * every move, by hand or by timer: a remount is the only way to restart a keyframe animation
+        * that has already run.
+        */}
+      <div className="mt-6 h-[3px] overflow-hidden rounded-full bg-[var(--color-border)]">
+        <div
+          key={`${index}-${restartKey}`}
+          className="anim-carousel-dwell h-full rounded-full bg-[var(--color-accent)]"
+          style={{
+            animationDuration: `${AUTOPLAY_MS}ms`,
+            animationPlayState: paused ? 'paused' : 'running',
+          }}
+          aria-hidden
+        />
+      </div>
+
       {/* One slide per viewport width, snapping. .no-scrollbar takes the bar away and nothing
           else: the track still scrolls, still swipes, and still works with the script gone. */}
       <div
         ref={trackRef}
-        className="no-scrollbar mt-6 flex snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain"
+        className="no-scrollbar mt-3 flex snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain"
       >
         {SLIDES.map((slide, slideIndex) => (
           <article
@@ -798,21 +953,40 @@ export function FeatureCarousel() {
         ))}
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center justify-center gap-1.5">
-        {SLIDES.map((slide, dotIndex) => (
+      {/*
+        * Named tabs, not dots.
+        *
+        * Eleven dots are eleven identical marks: they say how many slides there are and nothing
+        * about what is in them, so the only way to find "reminders" was to sit through the ones
+        * before it. The names make the whole set readable at a glance and turn the nav into a
+        * contents page — which on a landing page is most of what somebody scanning actually wants.
+        *
+        * The row scrolls rather than wrapping, so it stays one line on a phone, and the active tab is
+        * scrolled into view when the deck moves on its own.
+        */}
+      <div
+        ref={tabsRef}
+        role="tablist"
+        aria-label="Slides"
+        className="no-scrollbar mt-4 flex gap-1.5 overflow-x-auto pb-1"
+      >
+        {SLIDES.map((slide, tabIndex) => (
           <button
             key={slide.key}
             type="button"
-            aria-label={`Go to ${slide.title}`}
-            aria-current={dotIndex === index}
-            onClick={() => goTo(dotIndex)}
+            role="tab"
+            aria-selected={tabIndex === index}
+            data-active={tabIndex === index || undefined}
+            onClick={() => goTo(tabIndex)}
             className={cn(
-              'h-1.5 rounded-full transition-all duration-300',
-              dotIndex === index
-                ? 'w-6 bg-[var(--color-accent)]'
-                : 'w-1.5 bg-[var(--color-border-strong)] hover:bg-[var(--color-text-muted)]',
+              'anim-press shrink-0 rounded-full border px-3 py-1.5 text-[12.5px] font-semibold transition-colors',
+              tabIndex === index
+                ? 'border-[var(--color-accent)] bg-[var(--color-accent)] text-white'
+                : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-[var(--color-border-strong)] hover:bg-[var(--color-hover)] hover:text-[var(--color-text)]',
             )}
-          />
+          >
+            {slide.tab}
+          </button>
         ))}
       </div>
     </section>

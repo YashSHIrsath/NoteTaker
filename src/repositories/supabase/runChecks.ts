@@ -20,6 +20,9 @@ import { runWorkspaceChecks } from '../../services/workspace/workspaceChecks'
 import { runSpacesChecks } from '../../services/spaces/spacesChecks'
 import { runActivityChecks } from '../../services/spaces/activityChecks'
 import { runAuthFlowChecks } from '../../services/auth/authFlowChecks'
+import { runCalendarChecks } from '../../services/ui/calendarChecks'
+import { runFontChecks } from '../../services/ui/fontChecks'
+import { runSortableChecks } from '../../services/ui/sortableChecks'
 import { PERSONAL_WORKSPACE, spaceWorkspace } from '../../lib/workspace'
 import { runSearchChecks } from '../../services/search/searchChecks'
 import { runSchedulingChecks } from '../../services/scheduling/schedulingChecks'
@@ -767,6 +770,9 @@ export async function runAllRepositoryChecks(): Promise<void> {
   await runSpacesChecks()
   await runActivityChecks()
   runAuthFlowChecks()
+  runCalendarChecks()
+  runSortableChecks()
+  runFontChecks()
   runMissingColumnMessageChecks()
   await runSupabaseApplyChecks()
   await runWorkspaceScopedReadChecks()

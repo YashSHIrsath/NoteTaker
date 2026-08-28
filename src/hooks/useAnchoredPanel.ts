@@ -30,7 +30,27 @@ export interface AnchoredPanel<T extends HTMLElement> {
 /** Below this a panel is too short to be worth opening, so it stops giving space back. */
 const MIN_PANEL_HEIGHT = 160
 
-export function useAnchoredPanel<T extends HTMLElement>(width: number): AnchoredPanel<T> {
+export interface AnchoredPanelOptions {
+  /**
+   * How tall the panel would like to be, in pixels.
+   *
+   * Supply it and the side is chosen from this rather than from the panel's measured height, which
+   * breaks a latch that only shows up on tall panels. The measured height *is* the capped height:
+   * the first pass runs before the panel exists, so it opens downward with maxHeight set to the room
+   * below; the panel then honours that cap, so the second pass measures exactly the space below,
+   * concludes "it fits", and stays there — for good.
+   *
+   * A constant cannot be squeezed by the decision it feeds, so the comparison stays honest. Every
+   * caller today is a short menu that fits either way; this exists for the next one that does not.
+   */
+  preferredHeight?: number
+}
+
+export function useAnchoredPanel<T extends HTMLElement>(
+  width: number,
+  options: AnchoredPanelOptions = {},
+): AnchoredPanel<T> {
+  const { preferredHeight } = options
   const [open, setOpen] = useState(false)
   const [position, setPosition] = useState<AnchoredPanel<T>['position']>(null)
   const anchorRef = useRef<T | null>(null)
@@ -67,7 +87,10 @@ export function useAnchoredPanel<T extends HTMLElement>(width: number): Anchored
        */
       const spaceBelow = window.innerHeight - anchor.bottom - ANCHOR_GAP - VIEWPORT_MARGIN
       const spaceAbove = anchor.top - ANCHOR_GAP - VIEWPORT_MARGIN
-      const openDown = panelHeight === 0 || panelHeight <= spaceBelow || spaceBelow >= spaceAbove
+      // The height that decides the side: what the panel asked for, or what it currently measures.
+      // See preferredHeight for why a measurement alone latches the panel to the wrong side.
+      const wanted = preferredHeight ?? panelHeight
+      const openDown = wanted === 0 || wanted <= spaceBelow || spaceBelow >= spaceAbove
       const maxHeight = Math.max(MIN_PANEL_HEIGHT, openDown ? spaceBelow : spaceAbove)
       const next = {
         top: openDown
@@ -99,7 +122,7 @@ export function useAnchoredPanel<T extends HTMLElement>(width: number): Anchored
       window.removeEventListener('resize', place)
       window.removeEventListener('scroll', place, true)
     }
-  }, [open, width])
+  }, [open, preferredHeight, width])
 
   useEffect(() => {
     if (!open) {
@@ -116,11 +139,21 @@ export function useAnchoredPanel<T extends HTMLElement>(width: number): Anchored
         setOpen(false)
       }
     }
-    window.addEventListener('pointerdown', onPointerDown)
-    window.addEventListener('keydown', onKeyDown)
+    /*
+     * Capture phase, both of them.
+     *
+     * A dialog that portals to the body stops propagation at its own root — it has to, or a click
+     * inside it reaches the card it was opened from and opens the note behind it. React's
+     * stopPropagation stops the *native* event too, so a bubble-phase listener on window never runs:
+     * a panel opened from inside such a dialog would not close when you clicked elsewhere in that
+     * dialog, only when you clicked outside it entirely. Capture runs from window downward, before
+     * anything can stop it.
+     */
+    window.addEventListener('pointerdown', onPointerDown, true)
+    window.addEventListener('keydown', onKeyDown, true)
     return () => {
-      window.removeEventListener('pointerdown', onPointerDown)
-      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('pointerdown', onPointerDown, true)
+      window.removeEventListener('keydown', onKeyDown, true)
     }
   }, [open])
 

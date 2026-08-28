@@ -59,7 +59,7 @@ export function Sidebar({
    * say "Personal workspace" as a literal, which was true right up until spaces existed.
    */
   const workspace = useWorkspace()
-  const { owned, joined, getSpace, invite } = useSpaces()
+  const { owned, joined, invites, getSpace, invite } = useSpaces()
   const navigate = useNavigate()
   const spaces = [...owned, ...joined]
 
@@ -123,15 +123,27 @@ export function Sidebar({
         <div
           className={cn(
             'flex min-w-0 flex-1 items-center gap-2.5',
-            collapsed && 'flex-1 justify-center',
+            collapsed && 'justify-center',
           )}
         >
-          <span
-            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[var(--color-accent-soft)] text-[var(--color-accent)] shadow-[var(--shadow-sm)]"
-            aria-hidden
-          >
-            <ProjectLogo className="h-3.5 w-[19px]" />
-          </span>
+          {/*
+            * The mark, and only while there is room for it.
+            *
+            * Collapsed, this row had two 32px boxes and a 10px gap to fit into 52px — a 76px rail
+            * less its px-3 — so the workspace button was pushed out through the sidebar's own right
+            * edge. Which of the two to drop is not a close call: the header sits directly above this
+            * and already shows the mark *and* the wordmark, so at this width the logo was the second
+            * copy of something 40px away, while the workspace button is the only thing saying whose
+            * notes these are.
+            */}
+          {collapsed ? null : (
+            <span
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[var(--color-accent-soft)] text-[var(--color-accent)] shadow-[var(--shadow-sm)]"
+              aria-hidden
+            >
+              <ProjectLogo className="h-3.5 w-[19px]" />
+            </span>
+          )}
           <WorkspaceSwitcher collapsed={collapsed} className={collapsed ? undefined : 'flex-1'} />
         </div>
         {onToggleCollapsed ? (
@@ -204,47 +216,6 @@ export function Sidebar({
                   </SidebarSection>
                 )
               }
-              if (id === 'spaces') {
-                /*
-                 * The row goes to the spaces page; the chevron opens the spaces themselves.
-                 *
-                 * Two controls, two jobs, and neither pretends to be the other. The row was briefly
-                 * a pure toggle — clicking "Spaces" opened a list instead of going anywhere — which
-                 * left the page it names reachable only through an entry buried in that list. And
-                 * the list then held three kinds of thing: workspaces, a link to a page, and the way
-                 * out of a space. It now holds workspaces only.
-                 */
-                return (
-                  <SidebarSection
-                    key={id}
-                    icon={<Users className="h-4 w-4" aria-hidden />}
-                    label="Spaces"
-                    active={activeNav === 'spaces'}
-                    onSelect={() => onSelectNav('spaces')}
-                    expandable
-                    expanded={spacesExpanded && !collapsed}
-                    onToggleExpand={toggleSpaces}
-                    collapsed={collapsed}
-                  >
-                    {spaces.length === 0 ? (
-                      /* Not a control — an empty dropdown with no explanation reads as broken.
-                         The way to make one is the row above, which is where it belongs. */
-                      <p className="px-2 py-1.5 text-[12px] text-[var(--color-text-muted)]">
-                        No spaces yet
-                      </p>
-                    ) : (
-                      spaces.map((space) => (
-                        <SidebarWorkspaceItem
-                          key={space.id}
-                          space={space}
-                          active={workspace.kind === 'space' && workspace.id === space.id}
-                          onClick={() => navigate(`/s/${space.id}`)}
-                        />
-                      ))
-                    )}
-                  </SidebarSection>
-                )
-              }
               const icon =
                 id === 'tree' ? (
                   <ListTree className="h-4 w-4" aria-hidden />
@@ -264,6 +235,49 @@ export function Sidebar({
                 />
               )
             })}
+
+          {/*
+            * Spaces, always last and never reorderable.
+            *
+            * It was drawn from the same order as everything above, which put a sixth entry in the
+            * reorder list that moved nothing anybody could see: the bottom bar filtered it out, and
+            * dragging it here only decided where this one row sat. A list of workspaces is not one
+            * of the places you work, so it sits below the pages rather than among them, and the
+            * order is now the five things it actually orders.
+            *
+            * The row goes to the spaces page; the chevron opens the spaces themselves. Two controls,
+            * two jobs, and neither pretends to be the other — the row was briefly a pure toggle,
+            * which left the page it names reachable only through an entry buried in its own list.
+            */}
+          <SidebarSection
+            icon={<Users className="h-4 w-4" aria-hidden />}
+            label="Spaces"
+            active={activeNav === 'spaces'}
+            /* Somebody has asked you to join something and is waiting on an answer. It belongs on
+               the row rather than only on the page, because the page is where you would otherwise
+               have to go to find out. */
+            badge={invites.length}
+            onSelect={() => onSelectNav('spaces')}
+            expandable
+            expanded={spacesExpanded && !collapsed}
+            onToggleExpand={toggleSpaces}
+            collapsed={collapsed}
+          >
+            {spaces.length === 0 ? (
+              /* Not a control — an empty dropdown with no explanation reads as broken. The way to
+                 make one is the row above, which is where it belongs. */
+              <p className="px-2 py-1.5 text-[12px] text-[var(--color-text-muted)]">No spaces yet</p>
+            ) : (
+              spaces.map((space) => (
+                <SidebarWorkspaceItem
+                  key={space.id}
+                  space={space}
+                  active={workspace.kind === 'space' && workspace.id === space.id}
+                  onClick={() => navigate(`/s/${space.id}`)}
+                />
+              ))
+            )}
+          </SidebarSection>
         </div>
       </nav>
 
@@ -354,7 +368,8 @@ export function Sidebar({
             <IconButton
               label="Leave this space and go to your account"
               onClick={() => navigate('/profile')}
-              className="h-8 w-8 shrink-0 rounded-lg"
+              box="compact"
+              className="shrink-0 rounded-lg"
             >
               <Home className="h-4 w-4" />
             </IconButton>
@@ -365,7 +380,8 @@ export function Sidebar({
             <IconButton
               label="Sign out"
               onClick={handleSignOut}
-              className="h-8 w-8 shrink-0 rounded-lg hover:bg-[var(--color-danger)]/10 hover:text-[var(--color-danger)]"
+              box="compact"
+              className="shrink-0 rounded-lg hover:bg-[var(--color-danger)]/10 hover:text-[var(--color-danger)]"
             >
               <LogOut className="h-4 w-4" />
             </IconButton>

@@ -13,8 +13,12 @@ export interface InviteMemberDialogProps {
   open: boolean
   spaceName: string
   onClose: () => void
-  /** Resolves to the invitation's token, which is what the shareable link is built from. */
-  onInvite: (email: string, role: SpaceRole) => Promise<string>
+  /**
+   * Resolves to the invitation's token — what the shareable link is built from — and whether the
+   * invitation was actually emailed. The link is the fallback when it was not, so the difference has
+   * to reach this screen rather than being logged and forgotten.
+   */
+  onInvite: (email: string, role: SpaceRole) => Promise<{ token: string; mailed: boolean }>
 }
 
 /** Where an invite link points. Absolute, because the whole point is to paste it somewhere else. */
@@ -41,6 +45,7 @@ export function InviteMemberDialog({
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [token, setToken] = useState<string | null>(null)
+  const [mailed, setMailed] = useState(false)
   const [copied, setCopied] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const titleId = useId()
@@ -89,7 +94,8 @@ export function InviteMemberDialog({
         // The dialog stays open and shows the link rather than closing on success: for someone
         // without an account yet, this link is the only way in, and closing the dialog would be
         // the moment it was lost.
-        setToken(created)
+        setToken(created.token)
+        setMailed(created.mailed)
       })
       .catch((caught: unknown) => {
         setError(caught instanceof Error ? caught.message : 'Could not send the invitation.')
@@ -173,9 +179,16 @@ export function InviteMemberDialog({
                 Invited <span className="font-semibold">{email.trim()}</span> as{' '}
                 {ROLE_LABELS[role].toLowerCase()}.
               </p>
+              {/* What actually happened, rather than a hopeful description of it. An invitation is
+                * emailed now, and the mail says either "sign in and accept" or "make an account with
+                * this address first" depending on whether one exists — a distinction the server
+                * makes, because telling this screen would make it an email-enumeration oracle. The
+                * link stays either way: it is the fallback when the mail did not go, and the thing
+                * you paste into a chat when it is faster than an inbox. */}
               <p className="text-[12.5px] leading-relaxed text-[var(--color-text-muted)]">
-                If they already use Mindstack it's waiting on their Shared spaces page. If not, send
-                them this link — it survives signing up.
+                {mailed
+                  ? "We've emailed them. Nothing is shared until they accept — it'll be waiting in their app either way, and you'll be emailed when they answer."
+                  : "We couldn't send the email, so send them this link instead. It survives signing up, and the invitation still only opens for this address."}
               </p>
               <div className="flex items-center gap-2">
                 <input

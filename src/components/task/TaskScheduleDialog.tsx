@@ -28,6 +28,7 @@ import {
 } from '../../lib/reminders'
 import { serverNowMs } from '../../lib/serverClock'
 import { getSupabaseClient } from '../../lib/supabase'
+import { DateTimeField } from '../ui/DateTimeField'
 import { cn } from '../../lib/cn'
 
 export interface TaskScheduleDialogProps {
@@ -136,7 +137,8 @@ export function TaskScheduleDialog({ open, task, onClose }: TaskScheduleDialogPr
   /** Bumped whenever this dialog does something the log records, so the panel refetches. Those
    *  rows are written by database triggers and never come back through the write that caused them. */
   const [historyKey, setHistoryKey] = useState(0)
-  const dueInputRef = useRef<HTMLInputElement>(null)
+  // The picker's trigger, not an input: the field is a button that opens a panel now.
+  const dueInputRef = useRef<HTMLButtonElement>(null)
   const savingRef = useRef(false)
   const lastDraftRef = useRef<ReminderDraft | null>(null)
   const titleId = useId()
@@ -452,14 +454,14 @@ export function TaskScheduleDialog({ open, task, onClose }: TaskScheduleDialogPr
               >
                 Due date &amp; time
               </label>
-              <input
-                ref={dueInputRef}
+              <DateTimeField
+                triggerRef={dueInputRef}
                 id={`${titleId}-due`}
-                type="datetime-local"
                 value={dueValue}
                 min={dueMin}
-                onChange={(event) => setDueValue(event.target.value)}
-                className="mt-1.5 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 py-2 text-sm text-[var(--color-text)] outline-none transition-colors focus:border-[var(--color-accent)] focus:bg-[var(--color-surface)] focus:ring-2 focus:ring-[var(--color-accent)]/20"
+                invalid={dueIncomplete}
+                onChange={setDueValue}
+                className="mt-1.5"
               />
               {dueIncomplete ? (
                 <Notice tone="danger" className="mt-1.5">

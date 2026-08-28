@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
-import { Check, MoreHorizontal } from 'lucide-react'
+import { Check, MailPlus, MoreHorizontal } from 'lucide-react'
 import { SpaceAvatar } from './SpaceAvatar'
 import { useSpaces } from '../../hooks/useSpaces'
 import { useWorkspace } from '../../hooks/useWorkspace'
@@ -28,7 +28,7 @@ export interface SpacesMenuProps {
 export function SpacesMenu({ open, onClose }: SpacesMenuProps) {
   const navigate = useNavigate()
   const workspace = useWorkspace()
-  const { owned, joined } = useSpaces()
+  const { owned, joined, invites } = useSpaces()
   const spaces = [...owned, ...joined]
   const currentId = workspace.kind === 'space' ? workspace.id : null
 
@@ -86,6 +86,35 @@ export function SpacesMenu({ open, onClose }: SpacesMenuProps) {
           'rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-1.5 shadow-[var(--shadow-lg)]',
         )}
       >
+        {/* First, because it is the only thing in here that somebody else is waiting on — and
+          * because the dot on the button that opened this menu has to be explained by something
+          * inside it. Answering happens on the spaces page, where the invitation says who sent it
+          * and what it would let you do. */}
+        {invites.length > 0 ? (
+          <button
+            type="button"
+            onClick={() => go('/spaces')}
+            className="anim-press mb-1 flex w-full items-center gap-2.5 rounded-xl border border-[var(--color-accent)]/40 bg-[var(--color-accent-soft)] px-2.5 py-2 text-left transition-colors hover:bg-[var(--color-accent-soft-hover)]"
+          >
+            <span
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--color-accent)] text-white"
+              aria-hidden
+            >
+              <MailPlus className="h-4 w-4" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[13.5px] font-semibold text-[var(--color-accent-ink)]">
+                {invites.length === 1
+                  ? `Invitation to ${invites[0]!.spaceName}`
+                  : `${invites.length} invitations waiting`}
+              </span>
+              <span className="block truncate text-[11.5px] text-[var(--color-accent-ink)]/80">
+                Accept or turn down
+              </span>
+            </span>
+          </button>
+        ) : null}
+
         {spaces.length === 0 ? (
           <p className="px-2.5 py-2 text-[13px] text-[var(--color-text-muted)]">No spaces yet</p>
         ) : (

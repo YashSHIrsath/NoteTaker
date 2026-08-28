@@ -377,6 +377,50 @@ export class SupabaseSpacesDataRepository implements SpacesDataRepository {
     }
   }
 
+  /*
+   * ---------------------------------------------------------------- the mail
+   *
+   * An Edge Function rather than anything in the database, for two reasons that both come down to
+   * where the knowledge lives. It has to read auth.users — to tell an address that has an account
+   * from one that does not, which decides whether the message says "sign in" or "sign up" — and
+   * PostgREST does not expose that table to any client. And it holds the mailbox credentials, which
+   * have no business being reachable from a browser.
+   *
+   * Neither of these throws. An invitation that was created correctly is a real invitation whether
+   * or not the mail left the building, and the link still works; turning a mailbox outage into a
+   * failed invite would lose the row that matters. They answer whether the message went, and the
+   * screens say so.
+   */
+  private async sendInviteMail(body: Record<string, unknown>): Promise<boolean> {
+    try {
+      const { data, error } = await this.client.functions.invoke('send-space-invite', { body })
+      if (error) {
+        console.warn('invitation mail was not sent', error)
+        return false
+      }
+      return (data as { sent?: boolean } | null)?.sent === true
+    } catch (caught) {
+      // A function that is not deployed yet, or no network. The invitation stands either way.
+      console.warn('invitation mail was not sent', caught)
+      return false
+    }
+  }
+
+  async notifyInvited(inviteId: string): Promise<boolean> {
+    return this.sendInviteMail({ action: 'invited', inviteId })
+  }
+
+  async notifyAnswered(args: { inviteId?: string; token?: string }): Promise<boolean> {
+    if (!args.inviteId && !args.token) {
+      return false
+    }
+    return this.sendInviteMail({
+      action: 'answered',
+      inviteId: args.inviteId,
+      token: args.token,
+    })
+  }
+
   /**
    * Accept or decline, identified either by the invitation or by the token from a link.
    *

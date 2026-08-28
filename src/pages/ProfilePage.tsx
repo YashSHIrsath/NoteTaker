@@ -14,6 +14,7 @@ import {
   LogOut,
   Monitor,
   Sparkles,
+  Type,
   User as UserIcon,
   Users,
 } from 'lucide-react'
@@ -37,6 +38,7 @@ import {
   useDisplaySettingsWriter,
 } from '../hooks/useDisplaySettings'
 import { Notice } from '../components/ui/Notice'
+import { FontSettings } from '../components/settings/FontSettings'
 import { NavigationSettings } from '../components/settings/NavigationSettings'
 import { SpaceAvatar } from '../components/space/SpaceAvatar'
 import { SpaceSettingsPanel } from '../components/space/SpaceSettingsPanel'
@@ -661,8 +663,21 @@ export function ProfilePage() {
           <NavigationSettings />
         </Card>
 
-        {/* --------------------------------------------------------- notes style */}
+        {/* ---------------------------------------------------------- typography
+          *
+          * Personal, and never a space's. Two people in a shared space read the same notes, but which
+          * face those are easier to read in is a property of the reader — unlike the tab order and the
+          * note style above and below it, which describe the workspace and are shared.
+          */}
         <Card order={cardOrder(3)}>
+          <CardTitle icon={<Type className="h-3.5 w-3.5" aria-hidden />} category="rose">
+            Typography
+          </CardTitle>
+          <FontSettings />
+        </Card>
+
+        {/* --------------------------------------------------------- notes style */}
+        <Card order={cardOrder(4)}>
           <CardTitle icon={<ClipboardList className="h-3.5 w-3.5" aria-hidden />} category="indigo">
             Notes style
           </CardTitle>
@@ -732,7 +747,7 @@ export function ProfilePage() {
         </Card>
 
         {/* ------------------------------------------------------- smallest card */}
-        <Card order={cardOrder(4)}>
+        <Card order={cardOrder(5)}>
           <CardTitle icon={<LayoutGrid className="h-3.5 w-3.5" aria-hidden />} category="teal">
             Cards per row
           </CardTitle>
@@ -828,7 +843,7 @@ export function ProfilePage() {
             workspace is not the thing you came to this screen for, and it is one tap further on.
             Outside one it is the sign out, the one destructive thing here, in an outline that
             fills on hover rather than shouting every time the page opens. */}
-        <Card order={cardOrder(5)} className="flex flex-wrap items-center justify-between gap-3">
+        <Card order={cardOrder(6)} className="flex flex-wrap items-center justify-between gap-3">
           {currentSpace ? (
             <>
               <span className="text-[13px] text-[var(--color-text-muted)]">

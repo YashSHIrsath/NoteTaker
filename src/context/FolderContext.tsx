@@ -64,6 +64,7 @@ import { persistUiState, normalizeUiState } from '../repositories/supabase/uiSta
 import { detectDocumentType, isAcceptedImageFile, isAcceptedPdfFile } from '../services/attachments'
 import { NotesDeletionService } from '../services/deletion/notesDeletionService'
 import { ItemDndProvider } from './ItemDndContext'
+import { SortableProvider } from './SortableContext'
 import { useAuth } from './AuthContext'
 import { useWorkspace } from '../hooks/useWorkspace'
 import { summariseIntents, WRITE_INTENT } from '../lib/writeIntent'
@@ -1884,7 +1885,12 @@ export function FolderProvider({ children }: { children: ReactNode }) {
             Saving…
           </div>
         ) : null}
-        <ItemDndProvider>{children}</ItemDndProvider>
+        {/* Two drag systems, deliberately. SortableProvider reorders lists by pointer — folders,
+          * and anything else sortable — while ItemDndProvider still carries the one drag that is not
+          * a reorder: a task card dragged from one folder column to another on the board. */}
+        <ItemDndProvider>
+          <SortableProvider>{children}</SortableProvider>
+        </ItemDndProvider>
       </div>
     </FolderContext.Provider>
   )

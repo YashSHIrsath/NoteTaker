@@ -27,6 +27,8 @@ export function FolderActions({ folderId, folderName, compact = false }: FolderA
       <IconButton
         label={`Folder actions for ${folderName}`}
         aria-expanded={menu.open}
+        // See TaskActionsMenu: sized to its row, so the default responsive box is opted out of.
+        box="none"
         className={cn(compact ? 'h-6 w-6' : 'h-7 w-7')}
         onClick={(event) => {
           event.preventDefault()

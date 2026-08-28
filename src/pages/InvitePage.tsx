@@ -47,6 +47,10 @@ export function InvitePage() {
     void repository
       .respondToInvite({ accept: true, token })
       .then((spaceId) => {
+        // The inviter hears back from this route too. It is the same notification the in-app card
+        // sends — this page answers by token rather than through SpacesContext, and leaving it out
+        // meant an invitation accepted from a link was one the admin never heard about.
+        void repository.notifyAnswered({ token })
         clearPendingInvite()
         navigate(`/s/${spaceId}`, { replace: true })
       })

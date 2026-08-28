@@ -67,8 +67,10 @@ export function TaskStatusBadge({
         'anim-press inline-flex items-center gap-1.5 rounded-full border font-medium transition-colors hover:brightness-95',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/20',
         iconOnly
-          // 24px, the same box as the colour swatch and the actions menu it shares a row with.
-          ? 'h-6 w-6 justify-center'
+          // 22px, the same box as the colour swatch and the actions menu it shares a capsule with —
+          // see TaskCardControls, whose halves are 24px, so this sits inside with a pixel either side
+          // rather than filling it to the edge.
+          ? 'h-[22px] w-[22px] justify-center'
           : compact
             ? 'px-2 py-0.5 text-[11px]'
             : 'px-2.5 py-1 text-[12.5px]',

@@ -1,5 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { NAV_DESTINATIONS, navIdForPath } from '../../lib/navOrder'
+import {
+  DEFAULT_NAV_ORDER,
+  defaultPageUpdate,
+  NAV_DESTINATIONS,
+  navIdForPath,
+  readDefaultPage,
+  readNavOrder,
+} from '../../lib/navOrder'
 import { clearPendingInvite, readPendingInvite, stashPendingInvite } from '../../lib/pendingInvite'
 import { spaceAccentStyle, spaceColorFor, SPACE_COLORS } from '../../lib/spaceColor'
 import { roleCanManageMembers, roleCanWrite, ROLE_LABELS } from '../../lib/spaceRoles'
@@ -27,8 +34,16 @@ interface RpcCall {
   args: Record<string, unknown> | undefined
 }
 
+interface FunctionCall {
+  name: string
+  body: Record<string, unknown> | undefined
+}
+
 interface SpacesMock {
   rpcs: RpcCall[]
+  /** Edge Function invocations — the invitation mail is the only one so far. Named apart from the
+   *  client's own `functions`, which is the API being recorded rather than the recording. */
+  functionCalls: FunctionCall[]
   updates: Array<{ table: string; row: Record<string, unknown> }>
   deletes: string[]
   /** Whether a read scoped itself is only visible in the query it sent, never in the result. */
@@ -40,8 +55,11 @@ function createSpacesMock(options: {
   tables?: Record<string, unknown>
   /** Rows a delete or update reports back, so "did that actually happen" can be exercised. */
   affected?: Array<{ user_id: string }>
+  /** What the mail function answers. An error stands in for a mailbox being down. */
+  invokeResult?: { data: unknown; error: unknown }
 }): SupabaseClient {
   const rpcs: RpcCall[] = []
+  const functionCalls: FunctionCall[] = []
   const updates: SpacesMock['updates'] = []
   const deletes: string[] = []
   const filters: SpacesMock['filters'] = []
@@ -64,6 +82,7 @@ function createSpacesMock(options: {
 
   const client = {
     rpcs,
+    functionCalls,
     updates,
     deletes,
     filters,
@@ -74,6 +93,12 @@ function createSpacesMock(options: {
     rpc: (name: string, args?: Record<string, unknown>) => {
       rpcs.push({ name, args })
       return Promise.resolve({ data: options.rpc?.[name] ?? null, error: null })
+    },
+    functions: {
+      invoke: (name: string, init?: { body?: Record<string, unknown> }) => {
+        functionCalls.push({ name, body: init?.body })
+        return Promise.resolve(options.invokeResult ?? { data: { sent: true }, error: null })
+      },
     },
     from(table: string) {
       return {
@@ -199,6 +224,74 @@ function checkSpacesNav(): void {
   assert(NAV_DESTINATIONS.spaces.path === '/spaces', 'the spaces tab points at /spaces')
   assert(navIdForPath('/spaces') === 'spaces', '/spaces is the spaces section')
   assert(navIdForPath('/tree') !== 'spaces', 'and nothing else is')
+
+  /*
+   * Spaces has a page but is not one of the ordered tabs.
+   *
+   * Both halves matter and they pull opposite ways. It must still resolve from its path, or its
+   * sidebar row never lights up and its page slides in from an arbitrary side. And it must never
+   * appear in the order, or the reorder list grows a sixth entry that moves nothing anyone can see —
+   * the bar does not draw it and the sidebar pins its row regardless.
+   */
+  assert(
+    !DEFAULT_NAV_ORDER.includes('spaces'),
+    'the reorderable order holds only the five tabs that exist',
+  )
+  assert(DEFAULT_NAV_ORDER.length === 5, 'which is five of them')
+  assert(
+    !readNavOrder({ nav_order: 'tree,spaces,mynotes,important,tasks,profile' }).includes('spaces'),
+    'an order stored by an older build is repaired rather than drawn',
+  )
+  assert(
+    readNavOrder({ nav_order: 'tree,spaces,mynotes,important,tasks,profile' }).length === 5,
+    'and repairing it leaves the bar with no hole in it',
+  )
+}
+
+/**
+ * Where you land is per workspace, and the two do not leak into each other.
+ *
+ * One value used to answer for the whole account: choosing to open a shared space on Tasks moved
+ * your own notes there too, and the settings screen — the same component in both — showed the other
+ * workspace's answer as though it were this one's.
+ */
+function checkDefaultPagePerWorkspace(): void {
+  const metadata = {
+    default_page: 'tasks',
+    default_page_spaces: `${SPACE_A}:tree,${SPACE_B}:mynotes`,
+  }
+
+  assert(readDefaultPage(metadata) === 'tasks', 'the personal choice is the personal one')
+  assert(readDefaultPage(metadata, SPACE_A) === 'tree', 'and each space has its own')
+  assert(readDefaultPage(metadata, SPACE_B) === 'mynotes', 'independently of the others')
+
+  // The important negative: a space nobody has set falls back to Starred, not to what you chose for
+  // your own notes. Falling back to that is exactly the linkage being removed.
+  assert(
+    readDefaultPage(metadata, 'ffffffff-ffff-4fff-8fff-ffffffffffff') === 'important',
+    'an unset space opens on Starred rather than inheriting the personal choice',
+  )
+  assert(readDefaultPage({}) === 'important', 'and an account that never chose opens there too')
+
+  // Writing one space's choice must not lose the others, since they share a single stored string.
+  const patch = defaultPageUpdate('tasks', SPACE_A, metadata)
+  const rewritten = { default_page_spaces: patch.default_page_spaces }
+  assert(readDefaultPage(rewritten, SPACE_A) === 'tasks', 'the change lands')
+  assert(readDefaultPage(rewritten, SPACE_B) === 'mynotes', 'and the other space is untouched')
+  assert(
+    patch.default_page === undefined,
+    'writing a space never writes the personal key — that is the leak, in the other direction',
+  )
+
+  // A hand-edited or truncated value cannot produce a page the app has no route for.
+  assert(
+    readDefaultPage({ default_page_spaces: `${SPACE_A}:nonsense` }, SPACE_A) === 'important',
+    'an unknown page falls back rather than being trusted',
+  )
+  assert(
+    readDefaultPage({ default_page_spaces: 'garbage' }, SPACE_A) === 'important',
+    'and so does a value with no pair in it at all',
+  )
 }
 
 /** What the repository sends, and what it makes of what comes back. */
@@ -374,7 +467,15 @@ async function checkDisplaySettings(): Promise<void> {
   })
   const [shared] = await new SupabaseSpacesDataRepository(withSettings).listSpaces()
   assert(shared?.navOrder?.[0] === 'tasks', "the space's own tab order is read")
-  assert(shared?.navOrder?.length === 6, 'all six destinations survive the round trip')
+  // The repository hands back what is stored, unrepaired — including a 'spaces' entry written by an
+  // older build. Dropping it is readNavOrder's job, on the way to the bar (see useDisplaySettings),
+  // so that a space's stored order is never silently rewritten by whoever happens to read it.
+  assert(shared?.navOrder?.length === 6, 'every stored entry survives the round trip verbatim')
+  assert(shared?.navOrder?.includes('spaces') === true, 'this one included, unrepaired')
+  assert(
+    !readNavOrder({ nav_order: shared!.navOrder!.join(',') }).includes('spaces'),
+    'and it is the read on the way to the bar that drops it',
+  )
   assert(shared?.viewStyle === 'clipboard', "and the space's note style")
 
   const unset = createSpacesMock({
@@ -491,12 +592,87 @@ async function checkSpaceProfile(): Promise<void> {
   )
 }
 
+/**
+ * The invitation mail: sent, and never able to take the invitation down with it.
+ *
+ * The mail is an Edge Function call after the row exists, which makes two failure modes possible
+ * that the row-only version did not have. It could throw, and lose an invitation that was correctly
+ * created — a link that works is still a way in, so that must never happen. And it could silently
+ * not send while the screen said it had, which is worse than saying so: the admin would wait for an
+ * acceptance that nobody was ever told to give.
+ */
+async function checkInviteMail(): Promise<void> {
+  const inviting = createSpacesMock({
+    rpc: {
+      invite_to_space: {
+        id: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+        space_id: SPACE_A,
+        email: 'Sam@Example.com',
+        role: 'editor',
+        token: 'tok',
+        status: 'pending',
+        created_at: '2026-08-28T00:00:00Z',
+        expires_at: '2026-09-11T00:00:00Z',
+      },
+    },
+  })
+  const repository = new SupabaseSpacesDataRepository(inviting)
+  const created = await repository.invite(SPACE_A, 'Sam@Example.com', 'editor')
+  assert(mockOf(inviting).rpcs[0]?.name === 'invite_to_space', 'the row comes first')
+
+  const mailed = await repository.notifyInvited(created.id)
+  const call = mockOf(inviting).functionCalls[0]
+  assert(call?.name === 'send-space-invite', 'the mail is an Edge Function, not a database write')
+  assert(call?.body?.action === 'invited', 'and says which of the two messages it is')
+  assert(call?.body?.inviteId === created.id, 'identified by the invitation, not by an address')
+  assert(mailed, 'a successful send reports back as sent, so the dialog can say so')
+
+  /*
+   * A mailbox that is down, or a function not deployed yet. The invitation still stands, and the
+   * screen falls back to "send them this link".
+   *
+   * The warning the repository logs is muted for the length of this one assertion. It is the correct
+   * behaviour being exercised, and left on it prints a stack trace into every clean check run —
+   * which is how a real warning stops being noticed.
+   */
+  const broken = createSpacesMock({
+    invokeResult: { data: null, error: new Error('smtp is down') },
+  })
+  const warn = console.warn
+  console.warn = () => undefined
+  let failedSend: boolean
+  try {
+    failedSend = await new SupabaseSpacesDataRepository(broken).notifyInvited('any')
+  } finally {
+    console.warn = warn
+  }
+  assert(!failedSend, 'a failed send reports false rather than throwing')
+
+  // Answering notifies by whichever handle the answer was given with — the in-app card has the id,
+  // a link out of an inbox only ever has the token.
+  const answered = createSpacesMock({})
+  const answeredRepository = new SupabaseSpacesDataRepository(answered)
+  await answeredRepository.notifyAnswered({ token: 'tok' })
+  const answeredCall = mockOf(answered).functionCalls[0]
+  assert(answeredCall?.body?.action === 'answered', 'the inviter is told separately')
+  assert(answeredCall?.body?.token === 'tok', 'by token, for the link route')
+
+  // Nothing to identify means nothing to send, and no call at all — an Edge Function invocation
+  // that could only ever 400 is a round trip bought for nothing.
+  const nothing = createSpacesMock({})
+  const noHandle = await new SupabaseSpacesDataRepository(nothing).notifyAnswered({})
+  assert(!noHandle, 'no invitation named means nothing sent')
+  assert(mockOf(nothing).functionCalls.length === 0, 'and no call made')
+}
+
 export async function runSpacesChecks(): Promise<void> {
   checkSpaceColor()
   checkRoles()
   checkPendingInvite()
   checkSpacesNav()
+  checkDefaultPagePerWorkspace()
   await checkRepository()
   await checkDisplaySettings()
   await checkSpaceProfile()
+  await checkInviteMail()
 }

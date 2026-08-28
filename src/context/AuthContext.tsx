@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react'
@@ -11,6 +12,7 @@ import type { Session, User } from '@supabase/supabase-js'
 import { getAuthEmailRedirectTo } from '../lib/authRedirect'
 import { getSupabaseClient } from '../lib/supabase'
 import { tilesPerRowUpdate, type TileBandId, type TilesPerRow, type ViewStyle } from '../lib/viewStyle'
+import { fontUpdate, type FontRole } from '../lib/fonts'
 import { defaultPageUpdate, navOrderUpdate, type NavId } from '../lib/navOrder'
 import type { SidebarNavId } from '../types'
 
@@ -29,7 +31,11 @@ export interface ProfileUpdate {
   /** The bottom bar's tab order. Also decides which side a page slides in from. */
   navOrder?: NavId[]
   /** Which page a cold start opens on. */
+  /** A font id from lib/fonts, for one of the two roles. */
+  font?: { role: FontRole; id: string }
   defaultPage?: SidebarNavId
+  /** Which workspace that choice is for. Absent or null means the personal one. */
+  defaultPageSpaceId?: string | null
   /** Which screen size the tilesPerRow above applies to. Required alongside it. */
   tilesPerRowBand?: TileBandId
 }
@@ -73,6 +79,16 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const client = getSupabaseClient()
   const [session, setSession] = useState<Session | null>(null)
+  /*
+   * The session, readable from a callback that outlives the render it was built in.
+   *
+   * updateProfile depends on `client` alone, which never changes, so it is created once — before
+   * there is a session at all. Anything it needs from the session has to come from here or it reads
+   * the first render's answer for the life of the app. Written during render deliberately: a callback
+   * fired between a render and an effect must not see the previous value.
+   */
+  const sessionRef = useRef<Session | null>(session)
+  sessionRef.current = session
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -196,11 +212,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (update.viewStyle !== undefined) {
       data.view_style = update.viewStyle
     }
+    if (update.font !== undefined) {
+      Object.assign(data, fontUpdate(update.font.role, update.font.id))
+    }
     if (update.navOrder !== undefined) {
       Object.assign(data, navOrderUpdate(update.navOrder))
     }
     if (update.defaultPage !== undefined) {
-      Object.assign(data, defaultPageUpdate(update.defaultPage))
+      /*
+       * The current metadata goes in because a space's choice is merged into a single string holding
+       * every space's — writing it blind would drop the others.
+       *
+       * Read through the ref, not from the closure. This callback's dependency is `client`, which
+       * never changes, so it is built once — on the first render, when there is no session yet. A
+       * captured `session` would therefore be null forever, `readSpaceDefaults` would see nothing,
+       * and setting one space's page would silently wipe every other space's.
+       */
+      Object.assign(
+        data,
+        defaultPageUpdate(
+          update.defaultPage,
+          update.defaultPageSpaceId ?? null,
+          sessionRef.current?.user?.user_metadata as Record<string, unknown> | undefined,
+        ),
+      )
     }
     if (update.tilesPerRow !== undefined && update.tilesPerRowBand !== undefined) {
       // One key per screen size (see tilesPerRowUpdate). The legacy account-wide key is left

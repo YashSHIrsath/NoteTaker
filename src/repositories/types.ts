@@ -138,6 +138,17 @@ export interface SpacesDataRepository {
       actions?: SpaceActivityAction[]
     },
   ): Promise<SpaceActivityEntry[]>
+  /**
+   * Email the invited address, and email the inviter back when it is answered.
+   *
+   * Separate calls rather than something invite_to_space and respond_to_space_invite do themselves,
+   * because sending mail is not a database transaction: a mailbox being down must not roll back an
+   * invitation that was correctly created, and a link that works is still a way in. So both resolve
+   * to whether the message went, and neither throws — the caller decides what to say about a
+   * failure, which for an invitation is "share this link instead".
+   */
+  notifyInvited(inviteId: string): Promise<boolean>
+  notifyAnswered(args: { inviteId?: string; token?: string }): Promise<boolean>
   /** One item's own history — the note in front of you rather than the whole space. */
   listEntityHistory(entityType: SpaceActivityEntity, entityId: string): Promise<SpaceActivityEntry[]>
 }

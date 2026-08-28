@@ -97,7 +97,10 @@ export function WorkspaceSwitcher({ collapsed = false, className }: WorkspaceSwi
             'anim-press flex min-w-0 items-center gap-1.5 rounded-lg px-1 py-0.5 transition-colors',
             'hover:bg-[var(--color-hover)]',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/20',
-            collapsed && 'justify-center px-0',
+            // A 32px box collapsed, matching the collapse toggle stacked under it: in a 76px rail
+            // those two are the whole header, and one at 24px beside one at 32 reads as a mistake
+            // rather than as a hierarchy.
+            collapsed && 'h-8 w-8 justify-center px-0',
           )}
         >
           {collapsed ? (

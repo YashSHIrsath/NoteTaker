@@ -34,7 +34,12 @@ export interface SpacesContextValue {
   unavailable: boolean
   refresh: () => Promise<void>
   createSpace: (name: string, color: string | null) => Promise<SpaceSummary>
-  invite: (spaceId: string, email: string, role: SpaceRole) => Promise<string>
+  /** Resolves to the token the link is built from, and whether the invitation was emailed. */
+  invite: (
+    spaceId: string,
+    email: string,
+    role: SpaceRole,
+  ) => Promise<{ token: string; mailed: boolean }>
   respondToInvite: (args: { accept: boolean; inviteId?: string; token?: string }) => Promise<string>
   leaveSpace: (spaceId: string) => Promise<void>
   /** Display settings the whole space shares. Folded straight into the list, so the bar and the
@@ -182,12 +187,26 @@ export function SpacesProvider({ children }: { children: ReactNode }) {
   )
 
   const invite = useCallback(
-    async (spaceId: string, email: string, role: SpaceRole): Promise<string> => {
+    async (
+      spaceId: string,
+      email: string,
+      role: SpaceRole,
+    ): Promise<{ token: string; mailed: boolean }> => {
       if (!repository) {
         throw new RepositoryError('Shared spaces need a server connection.')
       }
       const created = await repository.invite(spaceId, email, role)
-      return created.token
+      /*
+       * Created first, then emailed — and awaited rather than fired off.
+       *
+       * The order is not negotiable: the mail is built from the row, so there is nothing to send
+       * until it exists. Awaiting it costs the invite dialog a second, and buys the honest sentence
+       * — "we've emailed them" or "we couldn't, send this link" — which is the difference between an
+       * invitation that arrives and one that sits in a row nobody knows about. notifyInvited does
+       * not throw, so a mailbox outage cannot lose the invitation.
+       */
+      const mailed = await repository.notifyInvited(created.id)
+      return { token: created.token, mailed }
     },
     [repository],
   )
@@ -198,6 +217,10 @@ export function SpacesProvider({ children }: { children: ReactNode }) {
         throw new RepositoryError('Shared spaces need a server connection.')
       }
       const spaceId = await repository.respondToInvite(args)
+      // The inviter hears back. Answered, not answering: the notification is built from the row's
+      // new status, so it can only be sent once the answer is recorded — and if it fails, the
+      // membership is still correct, which is the part that matters.
+      void repository.notifyAnswered({ inviteId: args.inviteId, token: args.token })
       // Answering an invitation changes both lists — the invitation leaves and, on accept, a space
       // arrives — so this is the one place a full re-read is cheaper than reasoning about it.
       await load()

@@ -3,6 +3,7 @@ import { Navigate, Outlet, useParams } from 'react-router-dom'
 import { FolderProvider } from '../context/FolderContext'
 import { SpacesProvider } from '../context/SpacesContext'
 import { WorkspaceProvider } from '../context/WorkspaceContext'
+import { useAppFonts } from '../hooks/useAppFonts'
 import { useSpaces } from '../hooks/useSpaces'
 import { getSupabaseClient } from '../lib/supabase'
 import { spaceAccentStyle } from '../lib/spaceColor'
@@ -55,6 +56,9 @@ function useSpaceTheme(spaceId: string | null, color: TaskPaletteColor | null): 
  * time you move between them.
  */
 export function SpacesShell() {
+  // The chosen faces go on <html> from here: this wraps every signed-in route and nothing else, so
+  // the landing page keeps the ones it was written in. See useAppFonts.
+  useAppFonts()
   return (
     <SpacesProvider>
       <Outlet />

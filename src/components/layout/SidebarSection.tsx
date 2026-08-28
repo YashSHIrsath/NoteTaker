@@ -11,6 +11,14 @@ export interface SidebarSectionProps {
   expanded?: boolean
   onToggleExpand?: () => void
   collapsed?: boolean
+  /**
+   * A count that wants answering — pending invitations on Spaces, today.
+   *
+   * Not a decoration and not a total: this is for things addressed to *you* that are waiting, which
+   * is why it is absent rather than zero when there is nothing. Collapsed, it becomes a dot, since
+   * there is no room for a number and the point is only that something is there.
+   */
+  badge?: number
   children?: ReactNode
 }
 
@@ -37,14 +45,17 @@ export function SidebarSection({
   expanded = false,
   onToggleExpand,
   collapsed = false,
+  badge,
   children,
 }: SidebarSectionProps) {
+  const badgeCount = badge && badge > 0 ? badge : 0
+
   if (collapsed) {
     return (
       <button
         type="button"
-        title={label}
-        aria-label={label}
+        title={badgeCount ? `${label} — ${badgeCount} waiting` : label}
+        aria-label={badgeCount ? `${label}, ${badgeCount} waiting` : label}
         onClick={onSelect}
         className={cn(
           'flex h-11 w-full items-center justify-center rounded-xl transition-colors',
@@ -54,7 +65,16 @@ export function SidebarSection({
             : 'text-[var(--color-text-muted)] hover:bg-[var(--color-hover)] hover:text-[var(--color-text)]',
         )}
       >
-        {icon}
+        {/* relative on the wrapper, so the dot rides the glyph rather than the 44px row. */}
+        <span className="relative inline-flex">
+          {icon}
+          {badgeCount ? (
+            <span
+              aria-hidden
+              className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-[var(--color-accent)] ring-2 ring-[var(--color-surface)]"
+            />
+          ) : null}
+        </span>
       </button>
     )
   }
@@ -102,6 +122,11 @@ export function SidebarSection({
           >
             {label}
           </span>
+          {badgeCount ? (
+            <span className="inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-[var(--color-accent)] px-1 text-[10.5px] font-bold tabular-nums text-white">
+              {badgeCount > 9 ? '9+' : badgeCount}
+            </span>
+          ) : null}
         </button>
 
         {expandable ? (

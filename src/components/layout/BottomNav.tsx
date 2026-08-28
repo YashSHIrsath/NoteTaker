@@ -55,20 +55,29 @@ export function BottomNav({ activeNav, profileActive = false, onSelectNav, onOpe
   /*
    * Five tabs: the four pages you work in, and the account.
    *
-   * Spaces is filtered out rather than removed from the order, because the order is also the
-   * sidebar's — where Spaces is a row with its own list under it. Down here it was a sixth item and
-   * the odd one out: a list of workspaces sitting beside the pages inside one. It is the button in
-   * the header now, which is where a workspace switcher belongs.
+   * Spaces is not one of them and is no longer in the order at all — a list of workspaces is not one
+   * of the places you work. It is the button in the header down here and a pinned row in the
+   * sidebar, so this reads the order as given rather than filtering it.
    *
    * Inside a space the last tab is that space's own page, so it wears the space's face rather than
    * yours. Below `lg` this bar and the header are the only chrome on screen, and the tinted grounds
    * say you are in *a* space — this says which one.
    */
   const items = navOrder
-    .filter((id) => id !== 'spaces')
     .map((id) => ({
       id,
-      label: id === 'profile' && currentSpace ? currentSpace.name : NAV_DESTINATIONS[id].label,
+      /*
+       * "Space", not the space's name.
+       *
+       * The name went here first and it is the wrong thing for a 70px slot: "Team Of Aeres" at 10px
+       * is twice the width of the four labels beside it, so it either overflows or truncates to
+       * "Team Of A…" — noise in a row whose other entries are one short word each. The avatar to its
+       * left already says *which* space, and the header and the tinted grounds say it again; this
+       * label only has to say what the tab is.
+       */
+      label: id === 'profile' && currentSpace ? 'Space' : NAV_DESTINATIONS[id].label,
+      /** The full name still reaches a screen reader, and a long-press tooltip. */
+      title: id === 'profile' && currentSpace ? currentSpace.name : NAV_DESTINATIONS[id].label,
       icon:
         id === 'profile' && currentSpace ? (
           <SpaceAvatar
@@ -216,9 +225,17 @@ export function BottomNav({ activeNav, profileActive = false, onSelectNav, onOpe
           <span
             aria-hidden
             className={cn(
-              // Width comes from the number of tabs, not a literal: the bar grew a sixth
-              // destination with Shared Spaces, and a hardcoded fifth left the indicator wider than
-              // its slot and drifting further from it with every step across the bar.
+              /*
+               * Width comes from the number of tabs, not a literal: the bar grew a sixth
+               * destination with Shared Spaces, and a hardcoded fifth left the indicator wider than
+               * its slot and drifting further from it with every step across the bar.
+               *
+               * This assumes the tabs are equal, which is why the labels above are clipped to their
+               * tab rather than allowed to size it. A single long label — a space called "Team Of
+               * Aeres" — made its tab wider than a fifth and every other one narrower, and the
+               * indicator then sat between two of them, pointing at neither. Equal slots are a
+               * requirement of this element, not a coincidence of the labels.
+               */
               'absolute inset-y-1 left-1 rounded-full',
               'bg-[var(--color-accent-soft)] ring-1 ring-inset ring-[var(--color-accent)]/25',
               // One transition for travel and stretch alike, on an overshooting curve so it
@@ -255,6 +272,8 @@ export function BottomNav({ activeNav, profileActive = false, onSelectNav, onOpe
                 }
               }}
               type="button"
+              title={item.title}
+              aria-label={item.title}
               aria-current={active ? 'page' : undefined}
               onClick={() => {
                 // A drag ends with a click on whichever tab it finished over; the drag has already
@@ -265,7 +284,11 @@ export function BottomNav({ activeNav, profileActive = false, onSelectNav, onOpe
                 selectIndex(items.indexOf(item))
               }}
               className={cn(
-                'anim-press relative z-10 flex flex-1 flex-col items-center gap-0.5 rounded-full px-1 py-1.5',
+                // min-w-0: a flex item's floor is its content width unless told otherwise, so
+                // without this `flex-1` is a *minimum* and a long label makes its tab wider than
+                // its share — which is how one long space name pushed the last tab past the end of
+                // the bar and took the rest of the row with it.
+                'anim-press relative z-10 flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-full px-1 py-1.5',
                 'text-[10px] font-semibold transition-colors',
                 active ? 'text-[var(--color-accent-ink)]' : 'text-[var(--color-text-muted)]',
               )}
@@ -302,7 +325,15 @@ export function BottomNav({ activeNav, profileActive = false, onSelectNav, onOpe
                   item.icon
                 )}
               </span>
-              <span className="truncate">{item.label}</span>
+              {/*
+                * w-full, or `truncate` has nothing to truncate against.
+                *
+                * In a column flex with `items-center` the cross-axis size of an item is its own
+                * content, so this span was always exactly as wide as its text — overflow-hidden
+                * clipped at a box that was never too small, and the text simply ran out of the tab.
+                * Given the tab's full width it clips where it should, and centres within it.
+                */}
+              <span className="w-full truncate text-center">{item.label}</span>
             </button>
           )
         })}

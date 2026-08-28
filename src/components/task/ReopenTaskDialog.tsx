@@ -9,7 +9,7 @@ import { useServerNow } from '../../hooks/useServerNow'
 import { formatDueDate } from '../../lib/dueDate'
 import { isoToLocalInput, localInputToIso } from '../../lib/reminders'
 import { taskLifecycle } from '../../lib/taskLifecycle'
-import { cn } from '../../lib/cn'
+import { DateTimeField } from '../ui/DateTimeField'
 
 /**
  * What happens between clicking the tick on a finished task and it becoming unfinished.
@@ -128,21 +128,16 @@ export function ReopenTaskDialog({ open, task, onCancel, onConfirm }: ReopenTask
         >
           New deadline
         </label>
-        <input
+        {/* The picker greys out whole days before the floor. It is still a courtesy and not the
+          * check — today is selectable when the floor is later today, so a time in the past remains
+          * reachable, which is what chosenInPast below is for. */}
+        <DateTimeField
           id={fieldId}
-          type="datetime-local"
           value={dueValue}
-          // The browser's own floor. It is a courtesy, not the check — a typed value can still
-          // land in the past, which is what chosenInPast below is for.
           min={minValue}
-          onChange={(event) => setDueValue(event.target.value)}
-          className={cn(
-            'mt-1.5 w-full rounded-lg border bg-[var(--color-surface-muted)] px-3 py-2 text-sm text-[var(--color-text)] outline-none transition-colors',
-            'focus:bg-[var(--color-surface)] focus:ring-2',
-            chosenInPast
-              ? 'border-[var(--color-danger)] focus:border-[var(--color-danger)] focus:ring-[var(--color-danger)]/20'
-              : 'border-[var(--color-border)] focus:border-[var(--color-accent)] focus:ring-[var(--color-accent)]/20',
-          )}
+          invalid={chosenInPast}
+          onChange={setDueValue}
+          className="mt-1.5"
         />
         {chosenInPast ? (
           <Notice tone="danger" className="mt-1.5">
