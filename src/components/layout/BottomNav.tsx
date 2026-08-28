@@ -1,6 +1,7 @@
 import { ClipboardList, Folder, ListTree, Star } from 'lucide-react'
-import { useLayoutEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react'
 import type { SidebarNavId } from '../../types'
+import { NAV_DESTINATIONS, resolveNavOrder, type NavId } from '../../lib/navOrder'
 import { useAuth } from '../../hooks/useAuth'
 import {
   INDICATOR_STRETCH_PER_SLOT,
@@ -9,30 +10,17 @@ import {
 } from '../../hooks/useDragIndicator'
 import { cn } from '../../lib/cn'
 
-type BottomNavId = SidebarNavId | 'profile'
+type BottomNavId = NavId
 
-interface BottomNavItem {
-  id: BottomNavId
-  label: string
-  icon: ReactNode
+/** The glyph for each destination. The order the tabs appear in is the account's, not this file's
+ *  — see lib/navOrder. Profile's icon is the account's own avatar, filled in below. */
+const ICONS: Record<NavId, ReactNode> = {
+  tree: <ListTree className="h-[18px] w-[18px]" aria-hidden />,
+  mynotes: <Folder className="h-[18px] w-[18px]" aria-hidden />,
+  important: <Star className="h-[18px] w-[18px]" aria-hidden />,
+  tasks: <ClipboardList className="h-[18px] w-[18px]" aria-hidden />,
+  profile: null,
 }
-
-/**
- * The five tabs, in bar order.
- *
- * Starred sits in the middle because Starred is "/" — it is what a cold start, a dead deep link
- * and the catch-all route all land on. The home tab belongs under the thumb at the centre of the
- * bar, not fourth along where it was; and the centre slot is the one the indicator travels
- * shortest to from either side.
- */
-const ITEMS: BottomNavItem[] = [
-  { id: 'tree', label: 'Tree', icon: <ListTree className="h-[18px] w-[18px]" aria-hidden /> },
-  { id: 'mynotes', label: 'Notes', icon: <Folder className="h-[18px] w-[18px]" aria-hidden /> },
-  { id: 'important', label: 'Starred', icon: <Star className="h-[18px] w-[18px]" aria-hidden /> },
-  { id: 'tasks', label: 'Tasks', icon: <ClipboardList className="h-[18px] w-[18px]" aria-hidden /> },
-  // profile's icon is the account's own avatar, filled in below
-  { id: 'profile', label: 'You', icon: null },
-]
 
 export interface BottomNavProps {
   activeNav?: SidebarNavId
@@ -52,13 +40,18 @@ export interface BottomNavProps {
 export function BottomNav({ activeNav, profileActive = false, onSelectNav, onOpenProfile }: BottomNavProps) {
   const { user } = useAuth()
   const metadata = (user?.user_metadata ?? {}) as { full_name?: string; avatar_url?: string }
+  // Rebuilt from the account's order every render, so reordering in settings moves the tabs and
+  // the page-transition direction together — they read the same list.
+  const items = resolveNavOrder(user?.user_metadata as Record<string, unknown> | undefined).map(
+    (id) => ({ id, label: NAV_DESTINATIONS[id].label, icon: ICONS[id] }),
+  )
   const initial = (metadata.full_name?.trim() || user?.email || 'Y').charAt(0).toUpperCase()
 
   const activeId: BottomNavId | undefined = profileActive ? 'profile' : activeNav
-  const activeIndex = ITEMS.findIndex((item) => item.id === activeId)
+  const activeIndex = items.findIndex((item) => item.id === activeId)
 
   const selectIndex = (index: number) => {
-    const item = ITEMS[index]
+    const item = items[index]
     if (!item) {
       return
     }
@@ -70,29 +63,92 @@ export function BottomNav({ activeNav, profileActive = false, onSelectNav, onOpe
   }
 
   // Tap a tab or drag the blob — both come through here (see useDragIndicator).
-  const indicator = useDragIndicator(ITEMS.length, activeIndex, selectIndex)
+  const indicator = useDragIndicator(items.length, activeIndex, selectIndex)
 
   // The bar is fixed, so it takes no space in the layout and anything that has to sit clear of it
   // (the folders sheet) needs its height. Measured rather than declared: the height follows the
   // font metrics and the avatar, and a hard-coded guess drifts the moment either changes. Written
   // straight to the root as a CSS variable so it costs no re-render — see --bottom-nav-h.
   const barRef = useRef<HTMLDivElement>(null)
+
+  /**
+   * Animates the tabs when the bar is reordered.
+   *
+   * Reordering swaps keyed elements, which React does by re-inserting the DOM nodes — instant, and
+   * nothing a transition can catch. So this is FLIP: remember where every tab was, and the moment
+   * the new arrangement is laid out, offset each one back to where it used to be and release it.
+   * The browser then animates a transform, which it can, rather than a reflow, which it can't.
+   *
+   * Runs on every layout, but does nothing unless a tab actually moved — selecting a tab or
+   * resizing the bar leaves every left edge where it was.
+   */
+  const tabRefs = useRef(new Map<BottomNavId, HTMLButtonElement>())
+  const tabLefts = useRef(new Map<BottomNavId, number>())
+  const flipFrames = useRef<number[]>([])
   useLayoutEffect(() => {
-    const bar = barRef.current
-    if (!bar) {
+    const previous = tabLefts.current
+    const next = new Map<BottomNavId, number>()
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    const moved: Array<[HTMLButtonElement, number]> = []
+
+    for (const [id, element] of tabRefs.current) {
+      /*
+       * offsetLeft, not getBoundingClientRect().left.
+       *
+       * A bounding rect includes the transform this very effect applies, so a re-render while the
+       * slide was still running measured the tab where it was *animating*, decided it had moved
+       * again, and started a second animation over the first. Saving a preference renders twice —
+       * once from updateUser, once from the USER_UPDATED event behind it — so that happened every
+       * time, which is the double hit. offsetLeft reports the laid-out position and ignores
+       * transforms, so the second render measures exactly what the first did and does nothing.
+       */
+      const left = element.offsetLeft
+      next.set(id, left)
+      const before = previous.get(id)
+      if (before !== undefined && before !== left && !reduced) {
+        moved.push([element, before - left])
+      }
+    }
+    tabLefts.current = next
+
+    if (moved.length === 0) {
       return
     }
-    const apply = () => {
-      document.documentElement.style.setProperty('--bottom-nav-h', `${bar.offsetHeight}px`)
+
+    // Any frames still queued belong to a slide that is being superseded.
+    for (const frame of flipFrames.current) {
+      cancelAnimationFrame(frame)
     }
-    apply()
-    const observer = new ResizeObserver(apply)
-    observer.observe(bar)
-    return () => {
-      observer.disconnect()
-      document.documentElement.style.removeProperty('--bottom-nav-h')
+    flipFrames.current = []
+
+    for (const [element, offset] of moved) {
+      element.style.transition = 'none'
+      element.style.transform = `translateX(${offset}px)`
     }
-  }, [])
+    // Two frames: one to let the inverted position paint, then the transition that removes it. In
+    // one frame the browser coalesces both style changes and nothing moves.
+    flipFrames.current.push(
+      requestAnimationFrame(() => {
+        flipFrames.current.push(
+          requestAnimationFrame(() => {
+            for (const [element] of moved) {
+              element.style.transition = 'transform 380ms cubic-bezier(0.22, 0.61, 0.36, 1)'
+              element.style.transform = ''
+            }
+          }),
+        )
+      }),
+    )
+  })
+
+  useEffect(
+    () => () => {
+      for (const frame of flipFrames.current) {
+        cancelAnimationFrame(frame)
+      }
+    },
+    [],
+  )
 
   return (
     <nav
@@ -143,11 +199,18 @@ export function BottomNav({ activeNav, profileActive = false, onSelectNav, onOpe
           />
         ) : null}
 
-        {ITEMS.map((item) => {
+        {items.map((item) => {
           const active = activeId === item.id
           return (
             <button
               key={item.id}
+              ref={(element) => {
+                if (element) {
+                  tabRefs.current.set(item.id, element)
+                } else {
+                  tabRefs.current.delete(item.id)
+                }
+              }}
               type="button"
               aria-current={active ? 'page' : undefined}
               onClick={() => {
@@ -156,7 +219,7 @@ export function BottomNav({ activeNav, profileActive = false, onSelectNav, onOpe
                 if (indicator.wasDragged()) {
                   return
                 }
-                selectIndex(ITEMS.indexOf(item))
+                selectIndex(items.indexOf(item))
               }}
               className={cn(
                 'anim-press relative z-10 flex flex-1 flex-col items-center gap-0.5 rounded-full px-1 py-1.5',

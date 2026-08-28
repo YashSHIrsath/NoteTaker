@@ -41,6 +41,12 @@ const LEGACY_GRID_COLS = 24
  *  scope added to the type is read as soon as it is added here. */
 export const GRID_SCOPES: readonly TaskGridScope[] = ['folder', 'tasks', 'important']
 
+/** Whether this note is pinned in the listing being drawn. Pinning is per-listing — see
+ *  Task.pinnedScopes — so every caller has to say which listing it is asking about. */
+export function isPinnedIn(task: Task, scope: TaskGridScope): boolean {
+  return task.pinnedScopes.includes(scope)
+}
+
 /**
  * What this listing remembers about a card, in today's units.
  *

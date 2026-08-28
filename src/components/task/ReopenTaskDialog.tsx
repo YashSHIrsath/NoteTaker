@@ -1,4 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { CalendarClock, RotateCcw } from 'lucide-react'
 import type { Task } from '../../types'
 import { Button } from '../ui/Button'
@@ -161,8 +162,19 @@ export function ReopenTaskDialog({ open, task, onCancel, onConfirm }: ReopenTask
       </>
     )
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+  return createPortal(
+    /*
+     * Portalled and event-guarded for the same reason as ConfirmDialog: this is opened from a note
+     * card, cards sit on a grid canvas that positions them with a transform, and `position: fixed`
+     * resolves against a transformed ancestor rather than the viewport. Unportalled it renders
+     * squeezed inside the one card instead of over the screen.
+     */
+    <div
+      className="fixed inset-0 z-[110] flex items-center justify-center p-4"
+      onClick={(event) => event.stopPropagation()}
+      onPointerDown={(event) => event.stopPropagation()}
+      onKeyDown={(event) => event.stopPropagation()}
+    >
       <button
         type="button"
         aria-label="Close dialog"
@@ -195,6 +207,7 @@ export function ReopenTaskDialog({ open, task, onCancel, onConfirm }: ReopenTask
         </div>
         {body}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Outlet, useLocation, useMatch, useNavigate } from 'react-router-dom'
 import { Header } from '../components/layout/Header'
 import { Sidebar } from '../components/layout/Sidebar'
@@ -6,6 +6,8 @@ import { BottomNav } from '../components/layout/BottomNav'
 import { useFolders } from '../hooks/useFolders'
 import type { SidebarNavId } from '../types'
 import { useTrackNavSection } from '../hooks/usePageEnterDirection'
+import { useAuth } from '../hooks/useAuth'
+import { NAV_DESTINATIONS, resolveDefaultPage } from '../lib/navOrder'
 
 const SIDEBAR_COLLAPSED_KEY = 'mynotes-sidebar-collapsed'
 
@@ -34,6 +36,35 @@ export function AppLayout() {
   // The pages that animate their arrival can only see one section back, and only the sections
   // that ask — so the asking has to happen for all of them, in one place.
   useTrackNavSection()
+
+  /**
+   * Opens the page the account chose, once per load.
+   *
+   * "/" is Starred and also the catch-all every cold start, dead link and reload lands on, so the
+   * preference is applied by redirecting away from it rather than by changing what "/" renders —
+   * which keeps the URL honest about which page you are actually looking at, and keeps Starred
+   * reachable at the address it has always had.
+   *
+   * Guarded by a ref rather than by the pathname: without it, navigating back to Starred on
+   * purpose would be read as another cold start and bounce you straight out again.
+   */
+  const { user } = useAuth()
+  const appliedDefaultPage = useRef(false)
+  useEffect(() => {
+    if (appliedDefaultPage.current || !user) {
+      return
+    }
+    appliedDefaultPage.current = true
+    if (location.pathname !== '/') {
+      return
+    }
+    const target = NAV_DESTINATIONS[resolveDefaultPage(user.user_metadata as Record<string, unknown>)]
+    if (target.path !== '/') {
+      navigate(target.path, { replace: true })
+    }
+    // Runs on the first render that has a signed-in account; the ref makes it once-only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user])
 
   const activeNav: SidebarNavId | undefined =
     location.pathname === '/'

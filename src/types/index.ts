@@ -62,7 +62,11 @@ export interface TaskGridLayout {
  * All folder views share the 'folder' scope deliberately: a card is one card in its folder, and
  * that folder is the only listing it appears in under this scope.
  */
-export type TaskGridScope = 'folder' | 'tasks' | 'important'
+export type TaskListScope = 'folder' | 'tasks' | 'important'
+
+/** The grid's name for the same three listings. Card size, card order and pinning are all
+ *  per-listing for the same reason, so they share one set of scopes. */
+export type TaskGridScope = TaskListScope
 
 /**
  * What one listing remembers about one card.
@@ -98,8 +102,14 @@ export interface Task {
   folderId: string
   content: string
   isImportant: boolean
-  /** Pinned tasks surface in a dedicated section at the top of their folder's task list. */
-  isPinned: boolean
+  /**
+   * The listings this note is pinned to the top of.
+   *
+   * Per-listing rather than a single flag, for the same reason card size is (see TaskListScope):
+   * a note sits among different neighbours in its folder, in Tasks and in Starred, so "keep this
+   * one first" is a different answer in each. Empty means pinned nowhere.
+   */
+  pinnedScopes: TaskListScope[]
   sortOrder: number
   /**
    * Saved size and place on the resizable grid, per listing the card appears in (see

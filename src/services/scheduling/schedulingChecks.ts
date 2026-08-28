@@ -2,6 +2,7 @@ import type { Reminder, ReminderDraft, Task } from '../../types'
 import { countdownLabel, countdownIntervalMs, countdownParts } from '../../lib/countdown'
 import { isTaskComplete, lifecycleStyle, taskLifecycle } from '../../lib/taskLifecycle'
 import {
+  FOLLOW_UP_SUGGESTIONS,
   MAX_OFFSET_MINUTES,
   defaultReminderMessage,
   describeReminder,
@@ -10,11 +11,13 @@ import {
   isPastOneTime,
   isoToLocalInput,
   joinOffset,
+  leadTimeSuggestions,
   localInputToIso,
   normalizeDraft,
   splitOffset,
 } from '../../lib/reminders'
 import { migrateSnapshot } from '../storage/migrate'
+import { NOTES_STORAGE_VERSION } from '../storage/types'
 
 function assert(condition: boolean, message: string): void {
   if (!condition) {
@@ -32,7 +35,7 @@ function task(overrides: Partial<Task> = {}): Task {
     folderId: 'folder-1',
     content: '',
     isImportant: false,
-    isPinned: false,
+    pinnedScopes: [],
     noteKind: 'note',
     dueAt: null,
     completed: false,
@@ -294,7 +297,7 @@ function runStorageMigrationChecks(): void {
     version: 10,
     folders: [],
     tasks: [
-      { id: 'a', title: 'Plain', dueAt: null, status: null },
+      { id: 'a', title: 'Plain', dueAt: null, status: null, isPinned: true },
       { id: 'b', title: 'Had a deadline', dueAt: '2026-08-30T18:00:00.000Z', status: 'pending' },
       { id: 'c', title: 'Was ongoing', dueAt: '2026-08-30T18:00:00.000Z', status: 'ongoing' },
       { id: 'd', title: 'Was complete', dueAt: '2026-08-30T18:00:00.000Z', status: 'complete' },
@@ -304,7 +307,10 @@ function runStorageMigrationChecks(): void {
     uiState: {},
   }) as { version: number; tasks: Array<Record<string, unknown>> }
 
-  assert(migrated.version === 11, 'the document reaches the current version')
+  assert(
+    migrated.version === NOTES_STORAGE_VERSION,
+    'the document reaches whatever the current version is',
+  )
   const [plain, hadDeadline, wasOngoing, wasComplete] = migrated.tasks
 
   assert(plain.noteKind === 'note' && plain.dueAt === null, 'a note without a deadline stays a note')
@@ -324,6 +330,19 @@ function runStorageMigrationChecks(): void {
   assert(
     (plain as { title: string }).title === 'Plain',
     'nothing else about a task is touched by the migration',
+  )
+
+  // Pinning became per-listing. One flag used to mean "pinned everywhere", so that is what it has
+  // to become — reading it as "pinned nowhere" would silently unpin every card someone had pinned.
+  assert(
+    Array.isArray(plain.pinnedScopes) &&
+      (plain.pinnedScopes as string[]).length === 3,
+    'a pinned note comes through pinned in all three listings',
+  )
+  assert(
+    Array.isArray(hadDeadline.pinnedScopes) &&
+      (hadDeadline.pinnedScopes as string[]).length === 0,
+    'and an unpinned one is pinned nowhere',
   )
 }
 
@@ -449,6 +468,109 @@ function runDueCompletenessChecks(): void {
   )
 }
 
+/**
+ * The offers made once a deadline has already gone.
+ *
+ * "15 minutes before" cannot be answered then, so these are anchored to now instead. Every one has
+ * to land in the future — an offer that resolves to the past would send the instant it was
+ * accepted, which is precisely the trap this whole set of prompts exists to avoid.
+ */
+function runFollowUpChecks(): void {
+  // A Friday evening, deliberately: late enough that "this evening" has already gone, and a
+  // weekday that makes "next Monday" a short hop rather than a week.
+  const friday = new Date(2026, 7, 28, 19, 30, 0)
+
+  for (const suggestion of FOLLOW_UP_SUGGESTIONS) {
+    const at = suggestion.at(friday)
+    assert(
+      at.getTime() > friday.getTime(),
+      `follow-up "${suggestion.label}" lands in the future`,
+    )
+  }
+
+  const byKey = (key: string) => FOLLOW_UP_SUGGESTIONS.find((entry) => entry.key === key)!
+
+  const hour = byKey('hour').at(friday)
+  assert(hour.getHours() === 20 && hour.getMinutes() === 30, '"In 1 hour" is exactly an hour on')
+
+  // 19:30 is past six, so there is no evening left to point at.
+  const evening = byKey('evening').at(friday)
+  assert(
+    evening.getDate() === 29 && evening.getHours() === 18,
+    '"This evening" rolls to tomorrow once the evening has gone',
+  )
+  const morning = new Date(2026, 7, 28, 9, 0, 0)
+  assert(
+    byKey('evening').at(morning).getDate() === 28,
+    'and stays today when asked in the morning',
+  )
+
+  const tomorrow = byKey('tomorrow').at(friday)
+  assert(
+    tomorrow.getDate() === 29 && tomorrow.getHours() === 9,
+    '"Tomorrow, 9 AM" is the next day at nine',
+  )
+
+  // 2026-08-28 is a Friday, so the next Monday is the 31st.
+  const monday = byKey('monday').at(friday)
+  assert(
+    monday.getDay() === 1 && monday.getDate() === 31 && monday.getHours() === 9,
+    '"Next Monday" finds the coming Monday',
+  )
+  // Asked on a Monday it must mean the following one, never twenty minutes ago.
+  const onAMonday = new Date(2026, 7, 31, 14, 0, 0)
+  const fromMonday = byKey('monday').at(onAMonday)
+  assert(
+    fromMonday.getDate() === 7 && fromMonday.getMonth() === 8,
+    '"Next Monday" asked on a Monday means the one after',
+  )
+}
+
+/**
+ * The lead times offered for a deadline, which depend entirely on how far away it is.
+ *
+ * The bug these exist for: a fixed "15 minutes before" on something due in five minutes is a
+ * reminder ten minutes in the past, and the scheduler sends those at once.
+ */
+function runLeadTimeChecks(): void {
+  const MIN = 60_000
+
+  // Every offer, at any distance, has to leave time on the clock.
+  for (const remaining of [3 * MIN, 20 * MIN, 90 * MIN, 8 * 60 * MIN, 8 * 24 * 60 * MIN]) {
+    for (const lead of leadTimeSuggestions(remaining)) {
+      assert(
+        remaining - lead * MIN > MIN,
+        `a ${lead}m lead still leaves time when ${remaining / MIN}m remain`,
+      )
+      assert(
+        lead * MIN <= remaining / 2,
+        `a ${lead}m lead is at most halfway when ${remaining / MIN}m remain`,
+      )
+    }
+  }
+
+  assert(
+    leadTimeSuggestions(5 * MIN).length === 0,
+    'five minutes out, no lead time is worth offering — only the due time itself is left',
+  )
+  assert(
+    !leadTimeSuggestions(20 * MIN).includes(15),
+    'twenty minutes out, "15 minutes before" is past halfway and is not offered',
+  )
+  assert(leadTimeSuggestions(20 * MIN).includes(10), 'but ten minutes before is fine there')
+
+  const week = leadTimeSuggestions(8 * 24 * 60 * MIN)
+  assert(week.length === 3, 'a distant deadline offers a full set')
+  assert(
+    week[0] > week[1] && week[1] > week[2],
+    'and reads largest first — a day out, then an hour, then minutes',
+  )
+  assert(
+    !week.includes(10080),
+    '"1 week before" is not offered on something due in eight days: it would arrive immediately',
+  )
+}
+
 export function runSchedulingChecks(): void {
   runLifecycleChecks()
   runCountdownChecks()
@@ -458,6 +580,8 @@ export function runSchedulingChecks(): void {
   runPastReminderChecks()
   runMessageChecks()
   runDueCompletenessChecks()
+  runFollowUpChecks()
+  runLeadTimeChecks()
   runTimezoneChecks()
   runStorageMigrationChecks()
 }

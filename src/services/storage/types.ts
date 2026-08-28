@@ -1,6 +1,6 @@
 import type { Folder, Subtask, Tag, Task } from '../../types'
 
-export const NOTES_STORAGE_VERSION = 11
+export const NOTES_STORAGE_VERSION = 12
 
 export interface UiState {
   myNotesSidebarExpanded: boolean

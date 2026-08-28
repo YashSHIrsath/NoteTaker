@@ -11,6 +11,8 @@ import type { Session, User } from '@supabase/supabase-js'
 import { getAuthEmailRedirectTo } from '../lib/authRedirect'
 import { getSupabaseClient } from '../lib/supabase'
 import { tilesPerRowUpdate, type TileBandId, type TilesPerRow, type ViewStyle } from '../lib/viewStyle'
+import { defaultPageUpdate, navOrderUpdate, type NavId } from '../lib/navOrder'
+import type { SidebarNavId } from '../types'
 
 export interface ProfileUpdate {
   fullName?: string
@@ -24,6 +26,10 @@ export interface ProfileUpdate {
    * against one screen size, not the account as a whole. `tilesPerRowBand` says which.
    */
   tilesPerRow?: TilesPerRow
+  /** The bottom bar's tab order. Also decides which side a page slides in from. */
+  navOrder?: NavId[]
+  /** Which page a cold start opens on. */
+  defaultPage?: SidebarNavId
   /** Which screen size the tilesPerRow above applies to. Required alongside it. */
   tilesPerRowBand?: TileBandId
 }
@@ -134,6 +140,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     if (update.viewStyle !== undefined) {
       data.view_style = update.viewStyle
+    }
+    if (update.navOrder !== undefined) {
+      Object.assign(data, navOrderUpdate(update.navOrder))
+    }
+    if (update.defaultPage !== undefined) {
+      Object.assign(data, defaultPageUpdate(update.defaultPage))
     }
     if (update.tilesPerRow !== undefined && update.tilesPerRowBand !== undefined) {
       // One key per screen size (see tilesPerRowUpdate). The legacy account-wide key is left

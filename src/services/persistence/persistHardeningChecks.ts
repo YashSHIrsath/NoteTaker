@@ -44,7 +44,7 @@ function sampleSnapshot(name: string): AppSnapshot {
         folderId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
         content: 'hello',
         isImportant: false,
-        isPinned: false,
+        pinnedScopes: [],
         noteKind: 'note',
         dueAt: null,
         completed: false,

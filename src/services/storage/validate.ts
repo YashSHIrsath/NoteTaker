@@ -29,7 +29,10 @@ function isTask(value: unknown): value is Task {
     typeof value.folderId === 'string' &&
     typeof value.content === 'string' &&
     typeof value.isImportant === 'boolean' &&
-    typeof value.isPinned === 'boolean' &&
+    Array.isArray(value.pinnedScopes) &&
+    value.pinnedScopes.every(
+      (scope) => scope === 'folder' || scope === 'tasks' || scope === 'important',
+    ) &&
     typeof value.sortOrder === 'number' &&
     (value.noteKind === 'note' || value.noteKind === 'due_task') &&
     (value.dueAt === null || typeof value.dueAt === 'string') &&

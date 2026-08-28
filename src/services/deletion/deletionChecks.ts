@@ -26,7 +26,7 @@ const tasks: Task[] = [
     folderId: 'nested',
     content: '',
     isImportant: true,
-    isPinned: false,
+    pinnedScopes: [],
     noteKind: 'note',
     dueAt: null,
     completed: false,

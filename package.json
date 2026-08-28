@@ -13,7 +13,8 @@
     "preview": "vite preview",
     "db:push": "supabase db push",
     "android:icons": "node scripts/android-icons.mjs",
-    "build:native": "tsc -b && vite build --mode native"
+    "build:native": "tsc -b && vite build --mode native",
+    "email:logo": "node scripts/gen-email-logo.mjs"
   },
   "dependencies": {
     "@blocknote/core": "^0.54.0",

@@ -5,6 +5,7 @@ import type {
   Folder,
   Subtask,
   NoteKind,
+  TaskListScope,
   Tag,
   Task,
   TaskGridLayouts,
@@ -29,6 +30,7 @@ export interface TaskRow {
   content: string
   is_important: boolean
   is_pinned: boolean
+  pinned_scopes: string[]
   sort_order: number
   note_kind: string
   due_at: string | null
@@ -88,6 +90,23 @@ function toNoteKind(value: string): NoteKind {
   return value === 'due_task' ? 'due_task' : 'note'
 }
 
+/**
+ * The listings this note is pinned in.
+ *
+ * Falls back to the old single flag when the column is absent or empty on a row written before
+ * pinning was per-listing: one flag meant "pinned everywhere", so that is what it becomes. Reading
+ * it as "pinned nowhere" would silently unpin every card on the first load after deploying.
+ */
+function toPinnedScopes(value: unknown, legacyFlag: boolean): TaskListScope[] {
+  const scopes = Array.isArray(value)
+    ? GRID_SCOPES.filter((scope) => (value as unknown[]).includes(scope))
+    : []
+  if (scopes.length > 0) {
+    return [...scopes]
+  }
+  return legacyFlag ? [...GRID_SCOPES] : []
+}
+
 export function taskFromRow(row: TaskRow): Task {
   return {
     id: row.id,
@@ -95,7 +114,7 @@ export function taskFromRow(row: TaskRow): Task {
     folderId: row.folder_id,
     content: row.content,
     isImportant: row.is_important,
-    isPinned: row.is_pinned,
+    pinnedScopes: toPinnedScopes(row.pinned_scopes, row.is_pinned),
     sortOrder: row.sort_order,
     noteKind: toNoteKind(row.note_kind),
     dueAt: row.due_at,
@@ -114,7 +133,10 @@ export function taskToRow(task: Task): TaskRow {
     title: task.title,
     content: task.content,
     is_important: task.isImportant,
-    is_pinned: task.isPinned,
+    // Derived by the database too (see the per-scope pinning migration); sent so the row is
+    // complete, and so a client reading only the old flag still sees the truth.
+    is_pinned: task.pinnedScopes.length > 0,
+    pinned_scopes: task.pinnedScopes,
     sort_order: task.sortOrder,
     note_kind: task.noteKind,
     due_at: task.dueAt,

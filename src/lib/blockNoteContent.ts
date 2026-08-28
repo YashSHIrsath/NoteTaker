@@ -93,6 +93,59 @@ function isBlankBlock(block: StoredBlock): boolean {
 }
 
 /**
+ * The note's own words, flattened to one line.
+ *
+ * For list rows, where the folder a note sits in says far less about it than its first sentence
+ * does. Deliberately shallow work: runs of text joined in document order, children included,
+ * whitespace collapsed, stopped once there is comfortably more than any row will show — a note can
+ * be thousands of blocks long and this runs for every row on screen.
+ *
+ * Blocks that carry no prose contribute nothing: an image or a file block has a filename in its
+ * props, and "photo.png" is not what the note says. A checklist item is prose and does count.
+ */
+export function contentSnippet(content: string, maxLength = 140): string {
+  const trimmed = content.trim()
+  if (!trimmed) {
+    return ''
+  }
+  if (!isBlockNoteContent(trimmed)) {
+    // A note written before the block editor: already plain text.
+    return trimmed.replace(/\s+/g, ' ').slice(0, maxLength).trim()
+  }
+
+  let blocks: StoredBlock[]
+  try {
+    blocks = JSON.parse(trimmed) as StoredBlock[]
+  } catch {
+    return ''
+  }
+
+  const parts: string[] = []
+  let length = 0
+
+  const walk = (list: StoredBlock[]): void => {
+    for (const block of list) {
+      if (length > maxLength) {
+        return
+      }
+      for (const run of block.content ?? []) {
+        const text = (run.text ?? '').trim()
+        if (text) {
+          parts.push(text)
+          length += text.length + 1
+        }
+      }
+      if (block.children?.length) {
+        walk(block.children)
+      }
+    }
+  }
+  walk(blocks)
+
+  return parts.join(' ').replace(/\s+/g, ' ').slice(0, maxLength).trim()
+}
+
+/**
  * True when a note has nothing in it yet.
  *
  * Used to decide which way a note opens: there is nothing to read in an empty one, so it opens

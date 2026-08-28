@@ -13,15 +13,19 @@ import { useDialogFocus } from '../../hooks/useDialogFocus'
 import { useFolders } from '../../hooks/useFolders'
 import { useAuth } from '../../hooks/useAuth'
 import { useServerNow } from '../../hooks/useServerNow'
-import { countdownLabel } from '../../lib/countdown'
+import { countdownParts, formatDuration, sendLabel } from '../../lib/countdown'
 import {
+  FOLLOW_UP_SUGGESTIONS,
   currentTimezone,
+  humanizeMinutes,
+  leadTimeSuggestions,
   defaultReminderMessage,
   describeReminder,
   emptyDraft,
   isoToLocalInput,
   localInputToIso,
 } from '../../lib/reminders'
+import { serverNowMs } from '../../lib/serverClock'
 import { getSupabaseClient } from '../../lib/supabase'
 import { cn } from '../../lib/cn'
 
@@ -31,17 +35,12 @@ export interface TaskScheduleDialogProps {
   onClose: () => void
 }
 
-/** The lead times offered the moment a deadline is set. Three, not eight: this is a prompt, and
- *  anything else is one tap further into the full editor. */
-const DUE_REMINDER_SUGGESTIONS = [
-  { minutes: 15, label: '15 min before' },
-  { minutes: 60, label: '1 hour before' },
-  { minutes: 1440, label: '1 day before' },
-]
-
 /** How often to re-check while a reminder is overdue for its send. The sweep runs every minute,
  *  so this only has to be fine enough that the list settles shortly after it does. */
 const SWEEP_POLL_MS = 15_000
+
+const SUGGESTION_CLASS =
+  'anim-press rounded-full border border-[var(--color-accent)]/40 bg-[var(--color-surface)] px-2.5 py-1 text-[11.5px] font-semibold text-[var(--color-accent)] transition-colors hover:bg-[var(--color-accent-soft-hover)]'
 
 const MODES: Array<{ kind: NoteKind; label: string; hint: string }> = [
   { kind: 'note', label: 'Normal note', hint: 'No deadline. Keeps its own colour.' },
@@ -59,12 +58,10 @@ const MODES: Array<{ kind: NoteKind; label: string; hint: string }> = [
 function PendingReminderRow({
   reminder,
   hasDueDate,
-  onToggle,
   onDelete,
 }: {
   reminder: Reminder
   hasDueDate: boolean
-  onToggle: (isActive: boolean) => void
   onDelete: () => void
 }) {
   const armed = reminder.nextRunAt !== null && reminder.isActive
@@ -91,31 +88,16 @@ function PendingReminderRow({
           <p className="text-[11.5px] text-[var(--color-text-muted)]">Turned off.</p>
         ) : reminder.nextRunAt ? (
           <p className="text-[11.5px] font-medium tabular-nums text-[var(--color-accent)]">
-            Sends in {countdownLabel(new Date(reminder.nextRunAt).getTime(), now).replace(' remaining', '')}
+            {sendLabel(new Date(reminder.nextRunAt).getTime(), now)}
           </p>
         ) : null}
       </div>
-      <div className="flex shrink-0 items-center gap-0.5">
-        {/* A 14px checkbox is a miss on a phone. The box stays small; the label around it is what
-          *  the finger lands on. */}
-        <label
-          className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full transition-colors hover:bg-[var(--color-hover)]"
-          title={reminder.isActive ? 'Turn off' : 'Turn on'}
-        >
-          <span className="sr-only">
-            {reminder.isActive ? 'Turn off reminder' : 'Turn on reminder'}
-          </span>
-          <input
-            type="checkbox"
-            checked={reminder.isActive}
-            onChange={(event) => onToggle(event.target.checked)}
-            className="h-4 w-4 accent-[var(--color-accent)]"
-          />
-        </label>
-        <IconButton label="Delete reminder" onClick={onDelete}>
-          <Trash2 className="h-3.5 w-3.5" />
-        </IconButton>
-      </div>
+      {/* Delete is the only control. Pausing was a third state to reason about — a reminder that
+        *  exists but will not fire — for something that is one tap to remake, and both the making
+        *  and the removing are recorded in the history either way. */}
+      <IconButton label={`Delete reminder: ${describeReminder(reminder)}`} onClick={onDelete}>
+        <Trash2 className="h-3.5 w-3.5" />
+      </IconButton>
     </li>
   )
 }
@@ -138,7 +120,6 @@ export function TaskScheduleDialog({ open, task, onClose }: TaskScheduleDialogPr
     updateTaskSchedule,
     getRemindersForTask,
     addReminder,
-    setReminderActive,
     deleteReminder,
     refreshReminders,
     reminderError,
@@ -192,7 +173,12 @@ export function TaskScheduleDialog({ open, task, onClose }: TaskScheduleDialogPr
   const armedRunTimes = reminders
     .filter((reminder) => reminder.isActive && reminder.nextRunAt)
     .map((reminder) => new Date(reminder.nextRunAt as string).getTime())
-  const now = useServerNow(open && armedRunTimes.length > 0)
+  // Also ticks while a deadline is pending, because the lead times on offer are derived from how
+  // long is left — "1 hour before" has to stop being offered once an hour is no longer there.
+  const pendingDueAt = localInputToIso(dueValue)
+  const now = useServerNow(
+    open && (armedRunTimes.length > 0 || (mode === 'due_task' && pendingDueAt !== null)),
+  )
   const awaitingSweep = armedRunTimes.some((runAt) => runAt <= now)
 
   useEffect(() => {
@@ -224,9 +210,49 @@ export function TaskScheduleDialog({ open, task, onClose }: TaskScheduleDialogPr
     return null
   }
 
-  const parsedDue = localInputToIso(dueValue)
+  const parsedDue = pendingDueAt
   const dueIncomplete = mode === 'due_task' && !parsedDue
   const hasDueDate = mode === 'due_task' && Boolean(parsedDue)
+  /**
+   * Whether "before / after due" is worth offering.
+   *
+   * Needs a deadline, and needs that deadline to still be ahead: an offset from a moment that has
+   * already gone lands in the past, which the scheduler reads as overdue and sends at once. Once
+   * and Repeats remain, and they can say anything a past deadline needs said.
+   */
+  const allowRelative = hasDueDate && new Date(parsedDue as string).getTime() > serverNowMs()
+  /** A finished task can only be given a deadline that hasn't happened yet — anything earlier
+   *  would claim it was completed before a moment still to come. Picking one reopens it. */
+  const dueMin = task.completed ? isoToLocalInput(new Date(serverNowMs()).toISOString()) : undefined
+
+  /**
+   * The task as Done would leave it.
+   *
+   * The panel is a preview, and it was previewing half a state: the new deadline was already on
+   * screen while completion still read from the saved row. On a finished task moved into the
+   * future that produced two contradictions at once — "Completed on time" against a date that
+   * hasn't happened, and "nothing left to remind you about" exactly where the lead-time offers
+   * belong, for a task that is about to be reopened.
+   *
+   * Everything below reads from this instead, so what the dialog shows is what pressing Done does.
+   */
+  const willReopen =
+    task.completed &&
+    parsedDue !== null &&
+    parsedDue !== task.dueAt &&
+    new Date(parsedDue).getTime() > serverNowMs()
+  const previewCompleted = task.completed && !willReopen
+  const remainingMs = parsedDue ? new Date(parsedDue).getTime() - now : 0
+  /** Derived from the gap, not a constant — see leadTimeSuggestions. Empty when the deadline is
+   *  too close for any warning to be worth offering, which leaves "at the due time". */
+  const leadOffers = allowRelative ? leadTimeSuggestions(remainingMs) : []
+  const previewTask: Task = {
+    ...task,
+    noteKind: mode,
+    dueAt: mode === 'due_task' ? parsedDue : null,
+    completed: previewCompleted,
+    completedAt: previewCompleted ? task.completedAt : null,
+  }
   const scheduleDirty = mode !== task.noteKind || (mode === 'due_task' && parsedDue !== task.dueAt)
 
   /**
@@ -260,7 +286,16 @@ export function TaskScheduleDialog({ open, task, onClose }: TaskScheduleDialogPr
   }
 
   const startAdd = () => {
-    setDraft(emptyDraft(hasDueDate ? 'relative' : 'one_time'))
+    setDraft(emptyDraft(allowRelative ? 'relative' : 'one_time'))
+  }
+
+  /** A one-time reminder at a computed instant, for a deadline that has already gone. */
+  const startFollowUp = (at: Date) => {
+    setDraft({
+      ...emptyDraft('one_time'),
+      atUtc: at.toISOString(),
+      message: `${task.title.trim() || 'This task'} is past its deadline and still open.`,
+    })
   }
 
   const startDueReminder = (offsetMinutes: number) => {
@@ -311,10 +346,22 @@ export function TaskScheduleDialog({ open, task, onClose }: TaskScheduleDialogPr
    */
   const pending = reminders.filter((reminder) => reminder.nextRunAt !== null || !reminder.isActive)
   const spentCount = reminders.length - pending.length
-  const shouldOfferReminder = hasDueDate && pending.length === 0 && !draft
+  const shouldOfferReminder = hasDueDate && pending.length === 0 && !draft && !previewCompleted
 
   return createPortal(
-    <div className="fixed inset-0 z-[100] flex items-end justify-center px-3 pb-[calc(var(--bottom-nav-inset)+0.5rem)] sm:items-center sm:p-4">
+    <div className="fixed inset-0 z-[100] flex items-end justify-center px-3 pb-[calc(var(--bottom-nav-inset)+0.5rem)] sm:items-center sm:p-4"
+      /*
+       * A portal renders into <body>, but React still routes events up the *component* tree — so a
+       * click in here reaches the card this dialog was opened from, and that card's job is to open
+       * the note. Hence a note opening behind the dialog the moment you touched anything in it.
+       *
+       * Stopped at the dialog's own root rather than on each control inside. Escape still works:
+       * that listener is on window, which is the DOM tree and unaffected.
+       */
+      onClick={(event) => event.stopPropagation()}
+      onPointerDown={(event) => event.stopPropagation()}
+      onKeyDown={(event) => event.stopPropagation()}
+    >
       <button
         type="button"
         aria-label="Close dialog"
@@ -409,6 +456,7 @@ export function TaskScheduleDialog({ open, task, onClose }: TaskScheduleDialogPr
                 id={`${titleId}-due`}
                 type="datetime-local"
                 value={dueValue}
+                min={dueMin}
                 onChange={(event) => setDueValue(event.target.value)}
                 className="mt-1.5 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 py-2 text-sm text-[var(--color-text)] outline-none transition-colors focus:border-[var(--color-accent)] focus:bg-[var(--color-surface)] focus:ring-2 focus:ring-[var(--color-accent)]/20"
               />
@@ -421,7 +469,7 @@ export function TaskScheduleDialog({ open, task, onClose }: TaskScheduleDialogPr
                 *  is visible before Done commits it. */}
               {parsedDue ? (
                 <div className="mt-2">
-                  <TaskCountdown task={{ ...task, noteKind: 'due_task', dueAt: parsedDue }} />
+                  <TaskCountdown task={previewTask} />
                 </div>
               ) : null}
             </div>
@@ -462,22 +510,54 @@ export function TaskScheduleDialog({ open, task, onClose }: TaskScheduleDialogPr
               </Notice>
             ) : null}
 
+            {/* The offer reads the situation rather than always asking the same thing. Ahead of the
+              *  deadline, lead times. Past it, "before" is meaningless, so it offers somewhere to
+              *  put the task instead. Finished, it says nothing at all — there is nothing left to
+              *  be reminded about, and asking would just be noise on a job well done. */}
             <Collapse open={shouldOfferReminder}>
               <div className="mt-2 rounded-xl border border-[var(--color-accent)]/25 bg-[var(--color-accent-soft)]/50 px-3 py-2.5">
                 <p className="text-[12.5px] font-medium text-[var(--color-text)]">
-                  Want an email reminder for this deadline?
+                  {!allowRelative
+                    ? 'This deadline has passed. Want a nudge to come back to it?'
+                    : leadOffers.length > 0
+                      ? `Due in ${formatDuration(countdownParts(new Date(parsedDue as string).getTime(), now))} — want an email reminder?`
+                      : 'That is very soon. Want the email as it falls due?'}
                 </p>
                 <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                  {DUE_REMINDER_SUGGESTIONS.map((suggestion) => (
-                    <button
-                      key={suggestion.minutes}
-                      type="button"
-                      onClick={() => startDueReminder(suggestion.minutes)}
-                      className="anim-press rounded-full border border-[var(--color-accent)]/40 bg-[var(--color-surface)] px-2.5 py-1 text-[11.5px] font-semibold text-[var(--color-accent)] transition-colors hover:bg-[var(--color-accent-soft-hover)]"
-                    >
-                      {suggestion.label}
-                    </button>
-                  ))}
+                  {allowRelative ? (
+                    <>
+                      {leadOffers.map((minutes) => (
+                        <button
+                          key={minutes}
+                          type="button"
+                          onClick={() => startDueReminder(minutes)}
+                          className={SUGGESTION_CLASS}
+                        >
+                          {humanizeMinutes(minutes)} before
+                        </button>
+                      ))}
+                      {/* Always valid while the deadline is ahead, and the only thing left to
+                        *  offer once it is too close for any warning. */}
+                      <button
+                        type="button"
+                        onClick={() => startDueReminder(0)}
+                        className={SUGGESTION_CLASS}
+                      >
+                        At the due time
+                      </button>
+                    </>
+                  ) : (
+                    FOLLOW_UP_SUGGESTIONS.map((suggestion) => (
+                      <button
+                        key={suggestion.key}
+                        type="button"
+                        onClick={() => startFollowUp(suggestion.at(new Date(serverNowMs())))}
+                        className={SUGGESTION_CLASS}
+                      >
+                        {suggestion.label}
+                      </button>
+                    ))
+                  )}
                   <button
                     type="button"
                     onClick={startAdd}
@@ -493,6 +573,13 @@ export function TaskScheduleDialog({ open, task, onClose }: TaskScheduleDialogPr
               <p className="mt-2 text-[12.5px] text-[var(--color-text-muted)]">
                 Set the due date and time above, then add reminders for it.
               </p>
+            ) : previewCompleted && pending.length === 0 && !draft ? (
+              // Finished. Nothing to chase, so this says so instead of asking whether you would
+              // like to be chased about it.
+              <p className="mt-2 text-[12.5px] text-[var(--color-text-muted)]">
+                This one is done — nothing left to remind you about.
+                {spentCount > 0 ? ' Everything it sent is in the history below.' : ''}
+              </p>
             ) : pending.length === 0 && !draft && !shouldOfferReminder ? (
               <p className="mt-2 text-[12.5px] text-[var(--color-text-muted)]">
                 {spentCount > 0
@@ -507,9 +594,6 @@ export function TaskScheduleDialog({ open, task, onClose }: TaskScheduleDialogPr
                   key={reminder.id}
                   reminder={reminder}
                   hasDueDate={hasDueDate}
-                  onToggle={(isActive) =>
-                    void setReminderActive(reminder.id, isActive).catch(() => undefined)
-                  }
                   onDelete={() =>
                     void deleteReminder(reminder.id)
                       .then(() => setHistoryKey((key) => key + 1))
@@ -524,7 +608,7 @@ export function TaskScheduleDialog({ open, task, onClose }: TaskScheduleDialogPr
                 <div className="pt-2">
                   <ReminderEditor
                     draft={addingDraft}
-                    hasDueDate={hasDueDate}
+                    allowRelative={allowRelative}
                     taskTitle={task.title}
                     onChange={setDraft}
                     onSave={() => void saveDraft()}

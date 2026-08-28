@@ -28,6 +28,7 @@ import {
 } from '../../lib/taskFilters'
 import { categoryVar, getRootCategoryForFolder, scatterCategoryForId } from '../../lib/folderColor'
 import { taskColorStyle } from '../../lib/taskColor'
+import { isPinnedIn } from '../../lib/taskGrid'
 import { focusTaskTitle } from '../../lib/focusTaskTitle'
 import { readViewStyle } from '../../lib/viewStyle'
 import {
@@ -131,14 +132,14 @@ export function FolderView({
   // Board columns don't split into a separate "Pinned" section like list mode does, so a
   // pinned task needs to sort to the top of its own column instead.
   const pinnedFirst = <T extends Task>(list: T[]): T[] =>
-    [...list].sort((a, b) => Number(b.isPinned) - Number(a.isPinned))
+    [...list].sort((a, b) => Number(isPinnedIn(b, 'folder')) - Number(isPinnedIn(a, 'folder')))
   const filteredTasksByFolderId = Object.fromEntries(
     Object.entries(tasksByFolderId).map(([id, list]) => [id, pinnedFirst(byActiveTag(list))]),
   )
 
   const visibleTasks = byActiveTag(tasks)
-  const pinnedTasks = visibleTasks.filter((task) => task.isPinned)
-  const otherTasks = visibleTasks.filter((task) => !task.isPinned)
+  const pinnedTasks = visibleTasks.filter((task) => isPinnedIn(task, 'folder'))
+  const otherTasks = visibleTasks.filter((task) => !isPinnedIn(task, 'folder'))
 
   const renderTaskGrid = (taskList: Task[]) =>
     viewStyle === 'clipboard' ? (
@@ -150,6 +151,7 @@ export function FolderView({
       >
         {(task) => (
           <AllTaskTile
+            scope="folder"
             key={task.id}
             taskId={task.id}
             category={scatterCategoryForId(task.id)}
@@ -162,6 +164,7 @@ export function FolderView({
       <TaskGridCanvas tasks={taskList} scope="folder" className="mt-3">
         {(task) => (
           <TaskCard
+            scope="folder"
               taskId={task.id}
               title={task.title}
               category={category}

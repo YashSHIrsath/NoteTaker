@@ -29,6 +29,7 @@ import type {
   TaskColor,
   TaskGridPlacement,
   TaskGridScope,
+  TaskListScope,
 } from '../types'
 import { getTaskById, getTasksByFolder, nextTaskSortOrder, reorderSiblingTasks as applyTaskReorder } from '../lib/tasks'
 import { getSubtasksByTask } from '../lib/subtasks'
@@ -52,7 +53,7 @@ import {
   type UiState,
 } from '../repositories'
 import { normalizeDraft } from '../lib/reminders'
-import { syncServerClock } from '../lib/serverClock'
+import { serverNowMs, syncServerClock } from '../lib/serverClock'
 import { persistUiState, normalizeUiState } from '../repositories/supabase/uiStateStore'
 import { detectDocumentType, isAcceptedImageFile, isAcceptedPdfFile } from '../services/attachments'
 import { NotesDeletionService } from '../services/deletion/notesDeletionService'
@@ -110,7 +111,8 @@ interface FolderContextValue {
   updateTaskTitle: (taskId: string, title: string) => void
   deleteTask: (taskId: string) => Promise<{ folderId: string; deletedTaskIds: string[] }>
   toggleTaskImportant: (taskId: string) => void
-  toggleTaskPinned: (taskId: string) => void
+  /** Pins or unpins in one listing only — see Task.pinnedScopes. */
+  toggleTaskPinned: (taskId: string, scope: TaskListScope) => void
   /**
    * The note/task switch and the deadline, written together.
    *
@@ -124,8 +126,6 @@ interface FolderContextValue {
   /** This task's reminders, newest last. Empty for a note that has none. */
   getRemindersForTask: (taskId: string) => Reminder[]
   addReminder: (taskId: string, draft: ReminderDraft) => Promise<void>
-  updateReminder: (reminderId: string, taskId: string, draft: ReminderDraft) => Promise<void>
-  setReminderActive: (reminderId: string, isActive: boolean) => Promise<void>
   deleteReminder: (reminderId: string) => Promise<void>
   /** Re-reads every reminder from the server. The scheduler writes last_run_at and next_run_at
    *  from outside this app entirely, so a reminder that fires while a page is open only becomes
@@ -717,7 +717,7 @@ export function FolderProvider({ children }: { children: ReactNode }) {
         folderId,
         content: '',
         isImportant: false,
-        isPinned: false,
+        pinnedScopes: [],
         noteKind: 'note',
         dueAt: null,
         completed: false,
@@ -910,12 +910,20 @@ export function FolderProvider({ children }: { children: ReactNode }) {
   )
 
   const toggleTaskPinned = useCallback(
-    (taskId: string) => {
+    (taskId: string, scope: TaskListScope) => {
       applyNotes({
         folders: foldersRef.current,
-        tasks: tasksRef.current.map((task) =>
-          task.id === taskId ? { ...task, isPinned: !task.isPinned } : task,
-        ),
+        tasks: tasksRef.current.map((task) => {
+          if (task.id !== taskId) {
+            return task
+          }
+          // Only this listing moves. Pinning in Starred says nothing about where the same note
+          // should sit inside its folder.
+          const pinnedScopes = task.pinnedScopes.includes(scope)
+            ? task.pinnedScopes.filter((entry) => entry !== scope)
+            : [...task.pinnedScopes, scope]
+          return { ...task, pinnedScopes }
+        }),
         subtasks: subtasksRef.current,
       })
       void persistNotes().catch(() => undefined)
@@ -937,7 +945,17 @@ export function FolderProvider({ children }: { children: ReactNode }) {
           if (noteKind === 'note') {
             return { ...task, noteKind, dueAt: null, completed: false, completedAt: null }
           }
-          return { ...task, noteKind, dueAt }
+          // A finished task given a deadline that hasn't happened yet is work to do again, not
+          // work already done — the database enforces this (see the reopen migration); mirroring
+          // it here is what stops the card showing "completed on time" for a frame first.
+          const reopen =
+            task.completed &&
+            dueAt !== null &&
+            dueAt !== task.dueAt &&
+            new Date(dueAt).getTime() > serverNowMs()
+          return reopen
+            ? { ...task, noteKind, dueAt, completed: false, completedAt: null }
+            : { ...task, noteKind, dueAt }
         }),
         subtasks: subtasksRef.current,
       })
@@ -1002,30 +1020,6 @@ export function FolderProvider({ children }: { children: ReactNode }) {
       await runReminderWrite(async () => {
         const created = await remindersRepository.create(taskId, normalizeDraft(draft))
         setReminders((current) => [...current, created])
-      })
-    },
-    [remindersRepository, runReminderWrite],
-  )
-
-  const updateReminder = useCallback(
-    async (reminderId: string, taskId: string, draft: ReminderDraft) => {
-      await runReminderWrite(async () => {
-        const saved = await remindersRepository.update(reminderId, normalizeDraft(draft), taskId)
-        setReminders((current) =>
-          current.map((reminder) => (reminder.id === reminderId ? saved : reminder)),
-        )
-      })
-    },
-    [remindersRepository, runReminderWrite],
-  )
-
-  const setReminderActive = useCallback(
-    async (reminderId: string, isActive: boolean) => {
-      await runReminderWrite(async () => {
-        const saved = await remindersRepository.setActive(reminderId, isActive)
-        setReminders((current) =>
-          current.map((reminder) => (reminder.id === reminderId ? saved : reminder)),
-        )
       })
     },
     [remindersRepository, runReminderWrite],
@@ -1480,8 +1474,6 @@ export function FolderProvider({ children }: { children: ReactNode }) {
       setTaskCompleted,
       getRemindersForTask,
       addReminder,
-      updateReminder,
-      setReminderActive,
       deleteReminder,
       refreshReminders,
       reminderError,
@@ -1547,8 +1539,6 @@ export function FolderProvider({ children }: { children: ReactNode }) {
       setTaskCompleted,
       getRemindersForTask,
       addReminder,
-      updateReminder,
-      setReminderActive,
       deleteReminder,
       refreshReminders,
       reminderError,

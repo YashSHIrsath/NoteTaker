@@ -1,7 +1,18 @@
 // Triggered every minute by pg_cron (see the reminder-cron migrations). Finds reminders whose
-// next_run_at has arrived, emails the owning user via their own Gmail account over SMTP, and asks
-// the database to re-arm each one. Deployed with --no-verify-jwt since the caller is our own cron
-// job, not a signed-in user; a shared header secret guards it instead.
+// next_run_at has arrived, emails the owning user from the project's Gmail account over SMTP, and
+// asks the database to re-arm each one. Deployed with --no-verify-jwt since the caller is our own
+// cron job, not a signed-in user; a shared header secret guards it instead.
+//
+// Who the mail comes from is entirely two Supabase function secrets, GMAIL_USER and
+// GMAIL_APP_PASSWORD — no address is written down here. Changing the sender is
+// `supabase secrets set GMAIL_USER=... GMAIL_APP_PASSWORD=...` and nothing else.
+//
+// The two have to move together. Gmail's SMTP will not send as an address it did not authenticate
+// as: give it a From that isn't the account (or one of its verified aliases) and it silently
+// rewrites the header back to the account, so a half-done switch looks like it worked and doesn't.
+//
+// This is only the reminder mail. Confirmation and password-reset messages are sent by Supabase
+// Auth, which has its own SMTP settings in the dashboard and never reaches this file.
 //
 // What changed when reminders became their own table:
 //
@@ -21,6 +32,8 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 const GMAIL_USER = Deno.env.get('GMAIL_USER') ?? ''
 const GMAIL_APP_PASSWORD = Deno.env.get('GMAIL_APP_PASSWORD') ?? ''
+/** The name beside the address in an inbox. Overridable, but it should almost always be the app. */
+const MAIL_FROM_NAME = Deno.env.get('MAIL_FROM_NAME') ?? 'Mindstack'
 const CRON_SECRET = Deno.env.get('CRON_SECRET') ?? ''
 const APP_URL = Deno.env.get('APP_URL') ?? ''
 
@@ -37,6 +50,7 @@ interface TaskEmailRow {
   folder_id: string
   user_id: string
   lifecycle: Lifecycle
+  has_reminders: boolean
 }
 
 interface DueReminderRow {
@@ -125,83 +139,248 @@ function escapeHtml(value: string): string {
 }
 
 /**
+ * A span of time as a person would describe it: "2 days 4 hours", "18 minutes".
+ *
+ * Distinct from humanizeMinutes, which names a lead time someone chose from a list and so is
+ * always a whole number of days, hours or minutes. This measures a gap nobody picked — the
+ * distance between when something was due and when it was actually finished — so it has to carry
+ * a remainder. Minutes are dropped once the gap runs to days, where they are noise.
+ */
+function humanizeGap(ms: number): string {
+  const totalMinutes = Math.round(Math.abs(ms) / 60_000)
+  if (totalMinutes < 1) {
+    return 'less than a minute'
+  }
+  const days = Math.floor(totalMinutes / 1440)
+  const hours = Math.floor((totalMinutes % 1440) / 60)
+  const minutes = totalMinutes % 60
+
+  const parts: string[] = []
+  if (days > 0) {
+    parts.push(`${days} day${days === 1 ? '' : 's'}`)
+  }
+  if (hours > 0) {
+    parts.push(`${hours} hour${hours === 1 ? '' : 's'}`)
+  }
+  if (minutes > 0 && days === 0) {
+    parts.push(`${minutes} minute${minutes === 1 ? '' : 's'}`)
+  }
+  return parts.join(' ') || 'less than a minute'
+}
+
+/**
  * What each of the two task emails says.
  *
  * Returns null where there is nothing worth sending: a deadline arriving on a task nobody
  * finished is not news — the reminders already covered that, and the app is showing it in red.
  * The row is still marked handled by the caller, which is what keeps the queue draining.
  */
+interface EmailContent {
+  eyebrow: string
+  body: string
+  metaLabel: string | null
+  metaValue: string | null
+}
+
 function taskEmailContent(
   row: TaskEmailRow,
   dueLabel: string | null,
-): { eyebrow: string; body: string } | null {
+  completedLabel: string | null,
+): EmailContent | null {
+  // How far from the deadline the tick actually landed. "Before" and "after" are already settled
+  // by the lifecycle, so only the size of the gap is needed here.
+  const gap =
+    row.due_at && row.completed_at
+      ? humanizeGap(new Date(row.completed_at).getTime() - new Date(row.due_at).getTime())
+      : null
+
   if (row.reason === 'completed') {
     if (row.lifecycle === 'completed_on_time') {
       return {
         eyebrow: 'Completed on time',
-        body: dueLabel
-          ? `Nice — you finished ${row.title} before it was due on ${dueLabel}.`
+        body: gap
+          ? `Nice — you finished ${row.title} ${gap} before it was due.`
           : `Nice — you finished ${row.title} on time.`,
+        metaLabel: 'Completed',
+        metaValue: completedLabel,
       }
     }
     return {
       eyebrow: 'Completed late',
-      body: dueLabel
-        ? `${row.title} is done. It was due ${dueLabel}, so this one came in late.`
+      body: gap
+        ? `${row.title} is done — ${gap} after it was due.`
         : `${row.title} is done, after its deadline.`,
+      metaLabel: 'Completed',
+      metaValue: completedLabel,
     }
   }
 
-  // The deadline has arrived. Worth saying only when it was beaten.
+  // The deadline has arrived.
   if (row.lifecycle === 'completed_on_time') {
     return {
       eyebrow: 'Deadline reached',
-      body: `${row.title} was due ${dueLabel ?? 'now'} — and you had already finished it. Nicely done.`,
+      body: gap
+        ? `${row.title} is due now — and you finished it ${gap} ahead. Nicely done.`
+        : `${row.title} is due now — and you had already finished it. Nicely done.`,
+      metaLabel: 'Due',
+      metaValue: dueLabel,
+    }
+  }
+
+  // Unfinished. Its own reminders are the notification where it has any; where it has none, this
+  // is the only thing that will ever say the deadline came and went.
+  if (!row.has_reminders) {
+    return {
+      eyebrow: 'Due now',
+      body: dueLabel
+        ? `${row.title} was due ${dueLabel} and is still open.`
+        : `${row.title} is due now and is still open.`,
+      metaLabel: 'Due',
+      metaValue: dueLabel,
     }
   }
   return null
 }
 
-function buildReminderEmailHtml(
-  title: string,
-  body: string,
-  dueLabel: string | null,
-  taskLink: string | null,
-  eyebrow = 'Reminder',
-): string {
+/**
+ * The one envelope every message is rendered into.
+ *
+ * A white header with the wordmark rather than a solid indigo band: the colour now does one job —
+ * the label, the meta rule and the button — instead of shouting from the top of every message.
+ *
+ * Still inline styles only, still no <style> block, still nothing dangling at the end of a line
+ * (see escapeHtml's note). The logo bars are inline-block spans with a background colour, which is
+ * the one drawing primitive Gmail reliably keeps; an inline SVG would be stripped.
+ */
+/**
+ * The one envelope every message is rendered into.
+ *
+ * Brand assets are the real ones, not approximations. The mark is public/email-logo.png — the same
+ * seven-bar logo the app draws, flattened to the brand indigo and rasterised, because Gmail does
+ * not render SVG in an <img> at all and an earlier attempt to rebuild it from styled spans
+ * produced four evenly spaced bars that also broke onto their own line. The header is a table for
+ * the same reason: it is the one layout primitive every client agrees on.
+ *
+ * The typefaces are the app's own — Sansita for display, Inter for text. The @import reaches the
+ * clients that honour a <style> block (Apple Mail, iOS); Gmail strips it and falls through to the
+ * stacks, which is why every family below still names real fallbacks.
+ */
+/**
+ * Where the mark is fetched from.
+ *
+ * Supabase Storage rather than the web app's own public/ folder: this pipeline runs entirely
+ * inside Supabase, and pinning the logo to a Vercel deploy would mean a reminder sent on Tuesday
+ * losing its branding because a front-end deploy slipped to Wednesday. Derived from SUPABASE_URL
+ * so it follows the project rather than being written down twice.
+ */
+const LOGO_URL = SUPABASE_URL
+  ? `${SUPABASE_URL.replace(/\/$/, '')}/storage/v1/object/public/brand/email-logo.png`
+  : null
+
+const DISPLAY_FONT = "'Sansita','Iowan Old Style',Georgia,serif"
+const BODY_FONT = "'Inter','Segoe UI','Helvetica Neue',Arial,sans-serif"
+
+function buildReminderEmailHtml(args: {
+  title: string
+  body: string
+  eyebrow: string
+  /** The small caps word before the dot, e.g. "Due" or "Completed". */
+  metaLabel: string | null
+  metaValue: string | null
+  taskLink: string | null
+  /** Something that differs between any two messages — see the preheader below. */
+  traceId: string
+}): string {
+  const { title, body, eyebrow, metaLabel, metaValue, taskLink, traceId } = args
+  const logoSrc = LOGO_URL
+
   const rows = [
-    '<div style="background-color:#f8f9fb;padding:32px 16px;">',
-    '<div style="max-width:480px;margin:0 auto;background-color:#ffffff;border:1px solid #e6e8ec;border-radius:16px;overflow:hidden;font-family:-apple-system,Segoe UI,Helvetica Neue,Arial,sans-serif;">',
-    '<div style="background-color:#4f46e5;padding:20px 28px;">',
-    '<span style="color:#ffffff;font-size:18px;font-weight:700;letter-spacing:-0.01em;">Mindstack</span>',
+    "<style>@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sansita:wght@700;800&display=swap');</style>",
+
+    /*
+     * The preheader: the line an inbox shows beside the subject, and the reason Gmail stops
+     * folding these away.
+     *
+     * Two jobs in one hidden block. It gives the list preview a real sentence instead of whatever
+     * visible text happens to come first. And it carries a value that differs between any two
+     * messages, which is what defeats Gmail's "trimmed content" heuristic — that collapses a
+     * message whose markup matches one already shown in the same thread, and every one of these
+     * shares a byte-identical header and footer, so a second reminder on the same note arrived
+     * with everything below the logo hidden behind a "..." button.
+     *
+     * The zero-width joiners after it stop the body text being pulled into the preview alongside.
+     */
+    '<div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;">',
+    escapeHtml(body),
+    `<span>&#8204;&#847;&nbsp;${escapeHtml(traceId)}</span>`,
+    '&#8204;&nbsp;'.repeat(60),
     '</div>',
-    '<div style="padding:32px 28px 28px 28px;">',
-    `<p style="margin:0 0 6px 0;font-size:13px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:#6b7180;">${escapeHtml(eyebrow)}</p>`,
-    `<h1 style="margin:0 0 14px 0;font-size:26px;line-height:1.3;font-weight:700;color:#14161a;">${escapeHtml(title)}</h1>`,
-    `<p style="margin:0 0 22px 0;font-size:16px;line-height:1.55;color:#3b4048;">${escapeHtml(body)}</p>`,
-    dueLabel
-      ? `<div style="display:inline-block;background-color:#eef1ff;color:#372f9e;font-size:15px;font-weight:600;padding:8px 16px;border-radius:999px;margin-bottom:26px;">Due ${escapeHtml(dueLabel)}</div>`
+    '<div style="background-color:#f0f0f4;padding:32px 16px;">',
+    `<div style="max-width:520px;margin:0 auto;background-color:#ffffff;border:1px solid #e4e4ec;border-radius:14px;overflow:hidden;font-family:${BODY_FONT};">`,
+
+    // Header: the mark and the wordmark on one row. A table, because inline-block spans wrapped.
+    '<div style="padding:18px 28px;border-bottom:1px solid #ececf2;">',
+    '<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>',
+    logoSrc
+      // alt is empty on purpose: the wordmark sits right beside it, so a blocked image should
+      // leave the name once rather than printing it twice.
+      ? `<td style="vertical-align:middle;padding-right:9px;"><img src="${logoSrc}" width="29" height="20" alt="" style="display:block;border:0;outline:none;text-decoration:none;"></td>`
       : '',
+    `<td style="vertical-align:middle;"><span style="font-family:${DISPLAY_FONT};font-size:20px;font-weight:800;letter-spacing:-0.01em;color:#14161a;">Mindstack</span></td>`,
+    '</tr></table>',
+    '</div>',
+
+    '<div style="padding:26px 28px 28px 28px;">',
+
+    // The label, dotted, in the accent. This is the same word the subject line starts with.
+    `<p style="margin:0 0 10px 0;font-family:${BODY_FONT};font-size:11.5px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#4f46e5;">`,
+    '<span style="display:inline-block;width:5px;height:5px;border-radius:50%;background-color:#4f46e5;vertical-align:middle;margin-right:7px;"></span>',
+    escapeHtml(eyebrow),
+    '</p>',
+
+    `<h1 style="margin:0 0 12px 0;font-family:${DISPLAY_FONT};font-size:28px;line-height:1.25;font-weight:800;letter-spacing:-0.01em;color:#14161a;">${escapeHtml(title)}</h1>`,
+    `<p style="margin:0 0 20px 0;font-family:${BODY_FONT};font-size:15.5px;line-height:1.55;color:#434852;">${escapeHtml(body)}</p>`,
+
+    // A quiet rule of facts rather than a filled pill — the sentence above already carries the
+    // message, so the date is reference rather than emphasis.
+    metaLabel && metaValue
+      ? `<p style="margin:0 0 24px 0;font-family:${BODY_FONT};font-size:13px;line-height:1.5;letter-spacing:0.02em;color:#8a8fa0;">${escapeHtml(metaLabel)} &middot; ${escapeHtml(metaValue)}</p>`
+      : '',
+
     taskLink
-      ? `<div><a href="${taskLink}" style="display:inline-block;background-color:#4f46e5;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;padding:12px 24px;border-radius:10px;">Open in Mindstack</a></div>`
+      ? `<div><a href="${taskLink}" style="display:inline-block;font-family:${BODY_FONT};background-color:#4f46e5;color:#ffffff;font-size:14.5px;font-weight:600;text-decoration:none;padding:12px 24px;border-radius:999px;">Open in Mindstack &rarr;</a></div>`
       : '',
     '</div>',
-    '<div style="border-top:1px solid #e6e8ec;padding:16px 28px;">',
-    '<p style="margin:0;font-size:12.5px;color:#6b7180;">You\'re getting this because you set a reminder for this note in Mindstack.</p>',
+
+    '<div style="border-top:1px solid #ececf2;padding:14px 28px;">',
+    '<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr>',
+    // Four of the five messages are not reminders at all: a completion note, or a deadline
+    // arriving, is sent because of the deadline rather than because anyone set a reminder.
+    `<td style="font-family:${BODY_FONT};font-size:12px;color:#8a8fa0;">You&rsquo;re getting this because of a task in Mindstack.</td>`,
+    taskLink
+      ? `<td align="right" style="font-family:${BODY_FONT};font-size:12px;white-space:nowrap;"><a href="${taskLink}" style="color:#8a8fa0;">Manage reminders</a></td>`
+      : '',
+    '</tr></table>',
     '</div>',
+
     '</div>',
     '</div>',
   ]
   return rows.join('')
 }
 
-function buildReminderEmailText(body: string, dueLabel: string | null, taskLink: string | null): string {
-  const lines = [body]
-  if (dueLabel) {
-    lines.push(`Due ${dueLabel}.`)
+function buildReminderEmailText(args: {
+  body: string
+  metaLabel: string | null
+  metaValue: string | null
+  taskLink: string | null
+}): string {
+  const lines = [args.body]
+  if (args.metaLabel && args.metaValue) {
+    lines.push(`${args.metaLabel} - ${args.metaValue}`)
   }
-  if (taskLink) {
-    lines.push(`Open in Mindstack: ${taskLink}`)
+  if (args.taskLink) {
+    lines.push(`Open in Mindstack: ${args.taskLink}`)
   }
   return lines.join('\n')
 }
@@ -235,7 +414,7 @@ Deno.serve(async (req) => {
   // connection is opened so a run with nothing to do never opens one.
   const { data: taskRows, error: taskError } = await supabase
     .from('pending_task_emails')
-    .select('task_id,reason,title,due_at,completed_at,folder_id,user_id,lifecycle')
+    .select('task_id,reason,title,due_at,completed_at,folder_id,user_id,lifecycle,has_reminders')
     .limit(100)
 
   if (taskError) {
@@ -251,14 +430,42 @@ Deno.serve(async (req) => {
     })
   }
 
-  const client = new SMTPClient({
-    connection: {
-      hostname: 'smtp.gmail.com',
-      port: 465,
-      tls: true,
-      auth: { username: GMAIL_USER, password: GMAIL_APP_PASSWORD },
-    },
-  })
+  /*
+   * "Mindstack <support@…>" rather than the bare address.
+   *
+   * The account this authenticates as is a support mailbox, not a person, and an inbox showing a
+   * raw gmail address next to a subject line reads like something that escaped rather than
+   * something the app sent. The address still has to be GMAIL_USER — see the note at the top
+   * about Gmail rewriting a From it did not authenticate as — so only the display name is ours to
+   * choose. Quoted, because a name carrying a comma or a full stop is not a valid bare atom and
+   * would split the header.
+   */
+  const mailFrom = `"${MAIL_FROM_NAME.replace(/["\\]/g, '')}" <${GMAIL_USER}>`
+
+  /**
+   * The mail connection, opened on the first message that actually needs it.
+   *
+   * It used to be opened as soon as either queue had a row, which is not the same thing: a
+   * deadline passing on a task that warrants no email still puts a row in the queue, so the
+   * function dialled Gmail, sent nothing and hung up. Every one of those runs logged a real
+   * error — "Interrupted: operation canceled at Object.pull" — because the isolate wound down
+   * while the SMTP socket still had a read pending.
+   *
+   * Connecting only when there is something to send makes those runs do nothing at all, which is
+   * what they were always meant to do.
+   */
+  let client: SMTPClient | null = null
+  const smtp = (): SMTPClient => {
+    client ??= new SMTPClient({
+      connection: {
+        hostname: 'smtp.gmail.com',
+        port: 465,
+        tls: true,
+        auth: { username: GMAIL_USER, password: GMAIL_APP_PASSWORD },
+      },
+    })
+    return client
+  }
 
   interface UserInfo {
     email: string | null
@@ -302,12 +509,21 @@ Deno.serve(async (req) => {
     const body = reminderMessage(reminder, dueLabel)
 
     try {
-      await client.send({
-        from: GMAIL_USER,
+      await smtp().send({
+        from: mailFrom,
         to: email,
         subject: `Reminder: ${reminder.title}`,
-        content: buildReminderEmailText(body, dueLabel, taskLink),
-        html: buildReminderEmailHtml(reminder.title, body, dueLabel, taskLink),
+        content: buildReminderEmailText({ body, metaLabel: 'Due', metaValue: dueLabel, taskLink }),
+        html: buildReminderEmailHtml({
+          title: reminder.title,
+          body,
+          eyebrow: 'Reminder',
+          metaLabel: 'Due',
+          metaValue: dueLabel,
+          taskLink,
+          // The reminder and the moment it fired: two sends of the same reminder still differ.
+          traceId: `${reminder.id}:${reminder.next_run_at}`,
+        }),
       })
       // Records the send and computes the next occurrence in one statement. A failure here means
       // the mail went out but the reminder is still armed, so it is reported rather than
@@ -340,7 +556,8 @@ Deno.serve(async (req) => {
   for (const row of taskEmails) {
     const { email, timezone } = await getUserInfo(row.user_id)
     const dueLabel = row.due_at ? formatDue(row.due_at, timezone) : null
-    const content = taskEmailContent(row, dueLabel)
+    const completedLabel = row.completed_at ? formatDue(row.completed_at, timezone) : null
+    const content = taskEmailContent(row, dueLabel, completedLabel)
 
     if (!email || !content) {
       const { error: markError } = await supabase.rpc('mark_task_email_sent', {
@@ -358,12 +575,25 @@ Deno.serve(async (req) => {
     const taskLink = APP_URL ? `${APP_URL.replace(/\/$/, '')}/task/${row.task_id}` : null
 
     try {
-      await client.send({
-        from: GMAIL_USER,
+      await smtp().send({
+        from: mailFrom,
         to: email,
         subject: `${content.eyebrow}: ${row.title}`,
-        content: buildReminderEmailText(content.body, dueLabel, taskLink),
-        html: buildReminderEmailHtml(row.title, content.body, dueLabel, taskLink, content.eyebrow),
+        content: buildReminderEmailText({
+          body: content.body,
+          metaLabel: content.metaLabel,
+          metaValue: content.metaValue,
+          taskLink,
+        }),
+        html: buildReminderEmailHtml({
+          title: row.title,
+          body: content.body,
+          eyebrow: content.eyebrow,
+          metaLabel: content.metaLabel,
+          metaValue: content.metaValue,
+          taskLink,
+          traceId: `${row.task_id}:${row.reason}:${row.completed_at ?? row.due_at ?? ''}`,
+        }),
       })
       const { error: markError } = await supabase.rpc('mark_task_email_sent', {
         p_task_id: row.task_id,
@@ -381,7 +611,15 @@ Deno.serve(async (req) => {
     }
   }
 
-  await client.close()
+  // Only if one was ever opened — and a failure to hang up cleanly is not a failure to deliver.
+  // By this point the mail has been accepted by Gmail and marked as sent.
+  if (client) {
+    try {
+      await client.close()
+    } catch {
+      /* The connection is being discarded anyway. */
+    }
+  }
 
   return new Response(
     JSON.stringify({

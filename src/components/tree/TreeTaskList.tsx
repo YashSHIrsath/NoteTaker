@@ -1,10 +1,12 @@
 import { useState } from 'react'
-import { AlarmClock, CheckCircle2, ChevronDown, Clock, FileText, Star } from 'lucide-react'
+import { AlarmClock, CheckCircle2, ChevronDown, ChevronRight, Clock, FileText, Star } from 'lucide-react'
 import type { ComponentType } from 'react'
 import type { Task, TaskLifecycle } from '../../types'
 import { useFolders } from '../../hooks/useFolders'
 import { folderPathLabel } from '../../lib/folders'
+import { categoryVar, getRootCategoryForFolder } from '../../lib/folderColor'
 import { taskLifecycle } from '../../lib/taskLifecycle'
+import { contentSnippet } from '../../lib/blockNoteContent'
 import { TaskCountdown } from '../task/TaskCountdown'
 import { cn } from '../../lib/cn'
 
@@ -79,6 +81,24 @@ function previewOrder(tasks: Task[], nowMs: number): Task[] {
 
 /** The Tree page's task counterpart to the folder structure below it: a short, ranked peek at the
  *  workspace's notes, with every row saying where it stands. */
+/** Memoised across renders: this parses a JSON document per row, and the list re-renders on every
+ *  tick of the clock the countdowns run on. Keyed by the content itself, so an edit invalidates it. */
+const snippetCache = new Map<string, string>()
+
+function snippet(task: Task): string {
+  const cached = snippetCache.get(task.content)
+  if (cached !== undefined) {
+    return cached
+  }
+  const value = contentSnippet(task.content, 120)
+  // A note is edited far more often than the cache is worth growing for.
+  if (snippetCache.size > 300) {
+    snippetCache.clear()
+  }
+  snippetCache.set(task.content, value)
+  return value
+}
+
 export function TreeTaskList({
   tasks,
   nowMs,
@@ -102,35 +122,68 @@ export function TreeTaskList({
 
   return (
     <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-2 shadow-[var(--shadow-sm)] sm:p-2.5">
-      <ul className="flex flex-col gap-0.5">
-        {visible.map((task) => {
+      {/* Flush rows with hairlines between them, rather than floating rows with gaps: at two lines
+        *  each the gaps stopped reading as separation and the whole list ran together as one block.
+        *  The rule is inset to where the text starts, so it divides the writing and leaves the
+        *  column of discs unbroken — which is what keeps it a list of notes rather than a table. */}
+      <ul className="flex flex-col">
+        {visible.map((task, index) => {
           const lifecycle = taskLifecycle(task, nowMs)
-          const mark = LIFECYCLE_MARK[lifecycle]
+          const base = LIFECYCLE_MARK[lifecycle]
+          // A note has no state to report, so its disc says where it lives instead — the same
+          // colour its folder carries everywhere else in the app.
+          const category = getRootCategoryForFolder(folders, task.folderId)
+          const mark =
+            lifecycle === 'note'
+              ? { ...base, color: categoryVar(category, 'ink'), soft: categoryVar(category, 'soft') }
+              : base
           const Icon = mark.icon
           return (
-            <li key={task.id}>
+            <li
+              key={task.id}
+              className={cn(
+                'group relative',
+                index > 0 &&
+                  'before:pointer-events-none before:absolute before:inset-x-0 before:left-[3.25rem] before:top-0 before:h-px before:bg-[var(--color-border)]',
+              )}
+            >
               <button
                 type="button"
                 onClick={() => onOpenTask(task.id)}
                 className={cn(
-                  'flex w-full min-w-0 items-center gap-2.5 rounded-xl px-2 py-1.5 text-left transition-colors',
+                  'flex w-full min-w-0 items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors',
                   'hover:bg-[var(--color-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/20',
                 )}
               >
+                {/*
+                  * The disc carries the row's colour, and what that colour means depends on the
+                  * row: a deadline state where there is one, the note's own folder where there
+                  * isn't. Everything used to be the same grey, so a list of notes had no colour at
+                  * all and the two rows that did carry a state didn't stand out from it either.
+                  */}
                 <span
-                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
+                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl"
                   style={{ background: mark.soft, color: mark.color }}
                   aria-hidden
                 >
-                  <Icon className="h-3.5 w-3.5" aria-hidden />
+                  <Icon className="h-4 w-4" aria-hidden />
                 </span>
 
-                <span className="flex min-w-0 flex-1 flex-col">
+                {/*
+                  * Two lines on every row, not on some.
+                  *
+                  * The state used to be a second line that only tasks had, so rows were two
+                  * different heights and the list had no rhythm. Every row carries a second line
+                  * now and there is always something in it — the deadline where there is one, and
+                  * where the note lives otherwise, which is the thing a list on the Tree page is
+                  * most often being scanned for.
+                  */}
+                <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                   <span className="flex min-w-0 items-center gap-1.5">
                     <span
                       className={cn(
-                        'min-w-0 truncate text-[13.5px] text-[var(--color-text)]',
-                        task.isImportant && 'font-semibold',
+                        'min-w-0 truncate text-[13.5px] leading-tight text-[var(--color-text)]',
+                        task.isImportant ? 'font-semibold' : 'font-medium',
                       )}
                     >
                       {task.title.trim() || 'Untitled'}
@@ -142,27 +195,30 @@ export function TreeTaskList({
                       />
                     ) : null}
                   </span>
-                  {/* The countdown and the trail share the second line. The trail is the half
-                      that yields on a phone: where a note is filed is the tree's own job, and a
-                      deadline is why this row is near the top at all. */}
-                  <span className="flex min-w-0 items-center gap-1.5">
-                    <TaskCountdown task={task} compact />
-                    {lifecycle !== 'note' ? (
-                      <span
-                        aria-hidden
-                        className="hidden text-[10px] text-[var(--color-text-muted)] opacity-40 sm:inline"
-                      >
+
+                  <span className="flex min-w-0 items-center gap-1.5 leading-tight">
+                    {lifecycle === 'note' ? null : <TaskCountdown task={task} compact />}
+                    {lifecycle === 'note' ? null : (
+                      <span aria-hidden className="text-[10px] text-[var(--color-text-muted)] opacity-40">
                         ·
                       </span>
-                    ) : null}
-                    <span className="hidden min-w-0 truncate text-[11px] text-[var(--color-text-muted)] sm:inline">
-                      {folderPathLabel(folders, task.folderId)}
+                    )}
+                    {/*
+                      * The note's own first words, and the folder only when it has none.
+                      *
+                      * A path is the same for every note in a folder, so a list of six from the
+                      * same place read as six copies of one line. What the note actually says is
+                      * the thing that tells them apart — and on the Tree page the folder is
+                      * already drawn directly underneath.
+                      */}
+                    <span className="min-w-0 truncate text-[11px] text-[var(--color-text-muted)]">
+                      {snippet(task) || folderPathLabel(folders, task.folderId)}
                     </span>
                   </span>
                 </span>
 
                 {task.tags.length > 0 ? (
-                  <span className="hidden shrink-0 gap-1 lg:flex">
+                  <span className="hidden shrink-0 gap-1 sm:flex">
                     {task.tags.slice(0, 2).map((tag) => (
                       <span
                         key={tag}
@@ -173,6 +229,11 @@ export function TreeTaskList({
                     ))}
                   </span>
                 ) : null}
+
+                <ChevronRight
+                  className="h-3.5 w-3.5 shrink-0 text-[var(--color-text-muted)] opacity-0 transition-opacity group-hover:opacity-100"
+                  aria-hidden
+                />
               </button>
             </li>
           )

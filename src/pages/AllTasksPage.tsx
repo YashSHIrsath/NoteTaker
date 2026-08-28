@@ -24,6 +24,7 @@ import {
 } from '../hooks/useFloatingHeader'
 import { getRootCategoryForFolder, scatterCategoryForId } from '../lib/folderColor'
 import { taskColorStyle } from '../lib/taskColor'
+import { isPinnedIn } from '../lib/taskGrid'
 import { focusTaskTitle } from '../lib/focusTaskTitle'
 import { readViewStyle } from '../lib/viewStyle'
 import { usePageEnter } from '../hooks/usePageEnterDirection'
@@ -64,8 +65,8 @@ export function AllTasksPage() {
   const allTagsInScope = Array.from(new Set(tasks.flatMap((task) => task.tags))).sort()
   const byTag = activeTag ? tasks.filter((task) => task.tags.includes(activeTag)) : tasks
   const visibleTasks = applyTaskFilters(byTag, kindFilter, statusFilter, now)
-  const pinnedTasks = visibleTasks.filter((task) => task.isPinned)
-  const otherTasks = visibleTasks.filter((task) => !task.isPinned)
+  const pinnedTasks = visibleTasks.filter((task) => isPinnedIn(task, 'tasks'))
+  const otherTasks = visibleTasks.filter((task) => !isPinnedIn(task, 'tasks'))
 
   const folderNameFor = (folderId: string) => folders.find((item) => item.id === folderId)?.name
 
@@ -79,6 +80,7 @@ export function AllTasksPage() {
       >
         {(task) => (
           <AllTaskTile
+            scope="tasks"
             key={task.id}
             taskId={task.id}
             category={scatterCategoryForId(task.id)}
@@ -92,6 +94,7 @@ export function AllTasksPage() {
       <TaskGridCanvas tasks={taskList} scope="tasks" className="mt-3">
         {(task) => (
           <TaskCard
+              scope="tasks"
               taskId={task.id}
               title={task.title}
               // This page mixes folders, so a card takes the color of its own folder's root

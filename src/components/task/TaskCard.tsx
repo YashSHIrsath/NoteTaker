@@ -1,20 +1,17 @@
 import { useLayoutEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
-import { CalendarClock, FileText, FolderInput, Pin } from 'lucide-react'
-import type { Attachment } from '../../types'
+import { FileText, Pin } from 'lucide-react'
+import type { Attachment, TaskListScope } from '../../types'
 import { cn } from '../../lib/cn'
 import { formatDueDate } from '../../lib/dueDate'
 import { taskLifecycle, lifecycleStyle } from '../../lib/taskLifecycle'
-import { nextReminderAt } from '../../lib/reminders'
-import { countdownLabel } from '../../lib/countdown'
+import { nextReminderAt, scheduledReminders } from '../../lib/reminders'
+import { sendLabel } from '../../lib/countdown'
 import { useServerNow } from '../../hooks/useServerNow'
 import { useFolders } from '../../hooks/useFolders'
-import { StarButton } from '../common/StarButton'
-import { PinButton } from '../common/PinButton'
-import { RowDeleteButton } from '../common/RowDeleteButton'
-import { useDeleteTask } from '../../hooks/useDeleteTask'
 import { useTaskCompletion } from '../../hooks/useTaskCompletion'
 import type { FolderCategory } from '../../lib/folderColor'
 import { taskColorStyle } from '../../lib/taskColor'
+import { isPinnedIn } from '../../lib/taskGrid'
 import { findBlockAttachmentId, referencedAttachmentIds } from '../../lib/blockNoteContent'
 import { AttachmentPreviewDialog } from '../attachment/AttachmentPreviewDialog'
 import { AttachmentTypeIcon, attachmentSortRank } from '../attachment/AttachmentTypeIcon'
@@ -22,14 +19,15 @@ import { TaskContentPreview } from './TaskContentPreview'
 import { TaskTagsPill } from './TaskTagsPill'
 import { TaskStatusBadge, ReminderCountPill } from './TaskStatusBadge'
 import { TaskCountdown } from './TaskCountdown'
-import { MoveTaskDialog } from './MoveTaskDialog'
-import { TaskScheduleDialog } from './TaskScheduleDialog'
+import { TaskActionsMenu } from './TaskActionsMenu'
 
 /** Chips that fit a card's width; the rest become a "+N" counter rather than being clipped. */
 const ATTACHMENT_CHIP_LIMIT = 2
 
 export interface TaskCardProps {
   taskId: string
+  /** The listing this card is drawn in — pinning and grid placement are both per-listing. */
+  scope: TaskListScope
   title: string
   category?: FolderCategory
   onOpen: () => void
@@ -41,6 +39,7 @@ export interface TaskCardProps {
 
 export function TaskCard({
   taskId,
+  scope,
   title,
   category = 'indigo',
   onOpen,
@@ -49,33 +48,25 @@ export function TaskCard({
 }: TaskCardProps) {
   const {
     getTask,
-    toggleTaskImportant,
-    toggleTaskPinned,
     getRemindersForTask,
     getAttachmentsForTask,
   } = useFolders()
-  const { requestTaskDelete, dialog } = useDeleteTask()
   const { toggleCompleted, dialog: reopenDialog } = useTaskCompletion()
   const [isOverflowing, setIsOverflowing] = useState(false)
   const [previewAttachment, setPreviewAttachment] = useState<Attachment | null>(null)
-  const [moveOpen, setMoveOpen] = useState(false)
-  const [scheduleOpen, setScheduleOpen] = useState(false)
   const bodyRef = useRef<HTMLDivElement>(null)
 
   const task = getTask(taskId)
-  const folderId = task?.folderId ?? null
   const isTracked = task?.noteKind === 'due_task' && task.dueAt !== null
   const now = useServerNow(isTracked && !task?.completed)
   const lifecycle = task ? taskLifecycle(task, now) : 'note'
   const taskReminders = getRemindersForTask(taskId)
-  const reminderCount = taskReminders.filter((reminder) => reminder.isActive).length
-  // The clock button says when the next email actually goes out, not just that reminders exist.
+  const reminderCount = scheduledReminders(taskReminders).length
+  // Not just "there are reminders" — when the next one actually goes out.
   const nextReminder = nextReminderAt(taskReminders)
-  const scheduleHint = nextReminder
-    ? `Next reminder ${countdownLabel(new Date(nextReminder).getTime(), now).replace(' remaining', '')}`
-    : isTracked
-      ? 'Due date & reminders'
-      : 'Add due date or reminder'
+  const reminderHint = nextReminder
+    ? sendLabel(new Date(nextReminder).getTime(), now).toLowerCase()
+    : undefined
   /**
    * A due-date task's colour is its status, and it is not up for negotiation.
    *
@@ -86,8 +77,7 @@ export function TaskCard({
    */
   const statusColors = lifecycleStyle(lifecycle)
   const colors = statusColors ?? taskColorStyle(task?.color ?? null, category)
-  const important = task?.isImportant ?? false
-  const pinned = task?.isPinned ?? false
+  const pinned = task ? isPinnedIn(task, scope) : false
   // Pinned already has its own strong accent treatment — colorful only takes over the plain case.
   // A due-date task ignores both: its status colour is a readout, so it paints in every view style
   // rather than only in the colourful one. It outranks the pinned accent too: `pinned` stays true
@@ -336,65 +326,22 @@ export function TaskCard({
               <span className="min-w-0 flex-1 truncate" title={formatDueDate(task.dueAt)}>
                 <TaskCountdown task={task} compact />
               </span>
-              <ReminderCountPill count={reminderCount} compact />
+              <ReminderCountPill count={reminderCount} compact hint={reminderHint} />
             </div>
           ) : reminderCount > 0 ? (
             <div className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden">
-              <ReminderCountPill count={reminderCount} compact />
+              <ReminderCountPill count={reminderCount} compact hint={reminderHint} />
             </div>
           ) : (
             <span />
           )}
-          <div className="flex shrink-0 items-center gap-0.5">
-            {/* Dragging a card now places it on the canvas, so this is how a note changes folder. */}
-            {folderId ? (
-              <button
-                type="button"
-                aria-label={`Move ${title} to another folder`}
-                title="Move to folder"
-                onClick={(event) => {
-                  event.stopPropagation()
-                  setMoveOpen(true)
-                }}
-                className="anim-press inline-flex h-7 w-7 items-center justify-center rounded-full text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-hover)] hover:text-[var(--color-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/20"
-              >
-                <FolderInput className="h-3.5 w-3.5" aria-hidden />
-              </button>
-            ) : null}
-            {/* Deadlines and reminders without opening the note. This is the only way to turn a
-              *  note into a due-date task from a listing, and it is where people actually are —
-              *  burying it inside the editor meant opening a note to say when it was due. */}
-            <button
-              type="button"
-              aria-label={
-                isTracked ? `Edit schedule for ${title}` : `Add a due date or reminder to ${title}`
-              }
-              title={scheduleHint}
-              onClick={(event) => {
-                event.stopPropagation()
-                setScheduleOpen(true)
-              }}
-              className={cn(
-                'anim-press inline-flex h-7 w-7 items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/20',
-                isTracked || reminderCount > 0
-                  ? 'text-[var(--color-accent)] hover:bg-[var(--color-hover)]'
-                  : 'text-[var(--color-text-muted)] hover:bg-[var(--color-hover)] hover:text-[var(--color-text)]',
-              )}
-            >
-              <CalendarClock className="h-3.5 w-3.5" aria-hidden />
-            </button>
-            <PinButton pinned={pinned} compact onToggle={() => toggleTaskPinned(taskId)} />
-            <StarButton important={important} compact onToggle={() => toggleTaskImportant(taskId)} />
-            <RowDeleteButton compact label={`Delete ${title}`} onClick={() => requestTaskDelete(taskId)} />
-          </div>
+          {/* One button for every action. The left of this row reports state; this end changes
+            *  it. Five icons here used to leave a fixed-width card with almost no room for the
+            *  countdown beside them. */}
+          {task ? <TaskActionsMenu task={task} scope={scope} compact /> : null}
         </div>
       </div>
 
-      <MoveTaskDialog open={moveOpen} taskId={taskId} onClose={() => setMoveOpen(false)} />
-      {task ? (
-        <TaskScheduleDialog open={scheduleOpen} task={task} onClose={() => setScheduleOpen(false)} />
-      ) : null}
-      {dialog}
       {reopenDialog}
       <AttachmentPreviewDialog attachment={previewAttachment} onClose={() => setPreviewAttachment(null)} />
     </div>

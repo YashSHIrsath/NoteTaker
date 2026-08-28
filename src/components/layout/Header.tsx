@@ -1,8 +1,6 @@
-import { Moon, Star, Sun, LogOut } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { Moon, Sun, LogOut } from 'lucide-react'
 import { IconButton } from '../ui/IconButton'
 import { ProjectLogo } from '../brand/ProjectLogo'
-import { DevMigrateNotesButton } from '../dev/DevMigrateNotesButton'
 import { GlobalSearch } from '../search/GlobalSearch'
 import { useAuth } from '../../hooks/useAuth'
 import { useTheme } from '../../hooks/useTheme'
@@ -17,7 +15,6 @@ export interface HeaderProps {
 export function Header({ className }: HeaderProps) {
   const { signOut } = useAuth()
   const { theme, toggleTheme } = useTheme()
-  const navigate = useNavigate()
   const themePopping = useToggleFeedback(theme === 'dark')
 
   const handleSignOut = () => {
@@ -68,14 +65,14 @@ export function Header({ className }: HeaderProps) {
           )}
         </IconButton>
 
-        <IconButton label="Important" onClick={() => navigate('/')} className="hidden lg:inline-flex">
-          <Star className="h-5 w-5" />
-        </IconButton>
-        {import.meta.env.DEV ? (
-          <div className="hidden sm:block">
-            <DevMigrateNotesButton />
-          </div>
-        ) : null}
+        {/* A Starred shortcut used to sit here, shown from lg. Which is precisely where the
+            sidebar is — with Starred already in it, as a labelled row. The header was offering a
+            second, unlabelled way to the same page in the one layout that least needed it. */}
+        {/* The one-off "move my local notes into Supabase" button used to sit here, behind a DEV
+            guard. That migration has been run, so in development — the only place it ever showed —
+            it was a button occupying the header for a job already finished. Its component and the
+            service behind it are still in the tree and still covered by the checks; putting it
+            back is one <DevMigrateNotesButton /> in this slot. */}
 
         {/* From lg, sign out lives in the sidebar's account row, beside the face and name it
             signs out of. Below lg there's no sidebar, so it sits here — as the button itself. It

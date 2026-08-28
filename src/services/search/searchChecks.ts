@@ -26,7 +26,7 @@ export function runSearchChecks(): void {
       folderId: 'react-folder',
       content: 'Building a React application',
       isImportant: true,
-      isPinned: false,
+      pinnedScopes: [],
       noteKind: 'note',
       dueAt: null,
       completed: false,

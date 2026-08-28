@@ -250,6 +250,31 @@ function migrateV10ToV11(value: Record<string, unknown>): Record<string, unknown
   }
 }
 
+/**
+ * Pinning becomes per-listing.
+ *
+ * A note appears in its folder, in Tasks and in Starred, and one flag meant pinning it in any of
+ * them pinned it in all three. Anything pinned today was pinned under that rule, so it carries
+ * across as all three — the change is invisible until someone unpins somewhere.
+ */
+function migrateV11ToV12(value: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...value,
+    version: 12,
+    tasks: Array.isArray(value.tasks)
+      ? value.tasks.map((task) => {
+          if (!isRecord(task)) {
+            return task
+          }
+          return {
+            ...task,
+            pinnedScopes: task.isPinned === true ? ['folder', 'tasks', 'important'] : [],
+          }
+        })
+      : value.tasks,
+  }
+}
+
 /** Brings stored snapshots up to the current schema without dropping user data. */
 export function migrateSnapshot(value: unknown): unknown {
   if (!isRecord(value) || typeof value.version !== 'number') {
@@ -287,6 +312,9 @@ export function migrateSnapshot(value: unknown): unknown {
   }
   if (current.version === 10) {
     current = migrateV10ToV11(current)
+  }
+  if (current.version === 11) {
+    current = migrateV11ToV12(current)
   }
 
   return current

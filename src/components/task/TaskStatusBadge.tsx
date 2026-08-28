@@ -67,7 +67,8 @@ export function TaskStatusBadge({
         'anim-press inline-flex items-center gap-1.5 rounded-full border font-medium transition-colors hover:brightness-95',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/20',
         iconOnly
-          ? 'h-5 w-5 justify-center'
+          // 24px, the same box as the colour swatch and the actions menu it shares a row with.
+          ? 'h-6 w-6 justify-center'
           : compact
             ? 'px-2 py-0.5 text-[11px]'
             : 'px-2.5 py-1 text-[12.5px]',
@@ -85,14 +86,25 @@ export function TaskStatusBadge({
 
 /** The bell a card shows when a note has reminders on it. Not a control — the count is the point,
  *  and the reminders themselves are edited in the schedule dialog. */
-export function ReminderCountPill({ count, compact = false }: { count: number; compact?: boolean }) {
+export function ReminderCountPill({
+  count,
+  compact = false,
+  hint,
+}: {
+  count: number
+  compact?: boolean
+  /** When the next one goes out. Carried here now that the clock button it used to live on is gone
+   *  — the count says there are reminders, this says when to expect one. */
+  hint?: string
+}) {
   if (count <= 0) {
     return null
   }
+  const label = `${count} reminder${count === 1 ? '' : 's'}`
   return (
     <span
-      title={`${count} reminder${count === 1 ? '' : 's'}`}
-      aria-label={`${count} reminder${count === 1 ? '' : 's'}`}
+      title={hint ? `${label} — ${hint}` : label}
+      aria-label={hint ? `${label}, ${hint}` : label}
       className={cn(
         'inline-flex shrink-0 items-center gap-0.5 rounded-full bg-[var(--color-hover)] font-medium text-[var(--color-text-muted)]',
         compact ? 'px-1.5 py-0.5 text-[10px]' : 'px-2 py-0.5 text-[11px]',

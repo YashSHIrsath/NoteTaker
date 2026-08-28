@@ -28,6 +28,8 @@ DO $t$
 DECLARE
   v_occurrence timestamptz;
   v_due timestamptz := '2026-08-30 18:00:00+00';
+  v_folder uuid;
+  v_task uuid;
 BEGIN
   -- ---------------------------------------------------------------- one-time
   --
@@ -116,6 +118,30 @@ BEGIN
     public.reminder_next_run('recurring','America/New_York',NULL,'day',1,NULL,'09:00','2026-10-01',NULL,NULL,
       NULL, NULL, '2026-11-01 12:00:00-05'),
     (DATE '2026-11-02' + TIME '09:00') AT TIME ZONE 'America/New_York');
+
+  -- ---------------------------------------------------------------- reopening
+  --
+  -- A finished task given a deadline that hasn't happened yet is work to do again. Moving one past
+  -- deadline to another past one is correcting a record, and must leave the tick alone.
+  -- Trigger-level, so it needs a real row; the whole file rolls back.
+
+  SELECT id INTO v_folder FROM public.folders ORDER BY created_at LIMIT 1;
+  IF v_folder IS NOT NULL THEN
+    INSERT INTO public.tasks (folder_id, title, sort_order, note_kind, due_at)
+    VALUES (v_folder, 'CHECK reopen', 99799, 'due_task', now() - interval '2 hours')
+    RETURNING id INTO v_task;
+    UPDATE public.tasks SET completed = true WHERE id = v_task;
+
+    UPDATE public.tasks SET due_at = now() - interval '3 hours' WHERE id = v_task;
+    INSERT INTO results VALUES ('reopen: past deadline corrected to another past one stays done',
+      (SELECT completed FROM public.tasks WHERE id = v_task), '');
+
+    UPDATE public.tasks SET due_at = now() + interval '1 day' WHERE id = v_task;
+    INSERT INTO results VALUES ('reopen: deadline moved into the future clears the tick',
+      (SELECT NOT completed AND completed_at IS NULL FROM public.tasks WHERE id = v_task), '');
+    INSERT INTO results VALUES ('reopen: and it is recorded in the history',
+      EXISTS (SELECT 1 FROM public.task_events WHERE task_id = v_task AND kind = 'reopened'), '');
+  END IF;
 
   -- ---------------------------------------------------------------- task emails
   --

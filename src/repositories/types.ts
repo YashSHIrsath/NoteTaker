@@ -41,8 +41,6 @@ export interface RemindersDataRepository {
   /** Every reminder the signed-in account owns; the UI groups them by task itself. */
   listAll(): MaybePromise<Reminder[]>
   create(taskId: string, draft: ReminderDraft): MaybePromise<Reminder>
-  update(reminderId: string, draft: ReminderDraft, taskId: string): MaybePromise<Reminder>
-  setActive(reminderId: string, isActive: boolean): MaybePromise<Reminder>
   remove(reminderId: string): MaybePromise<void>
   /** One task's history, newest first. Read on demand rather than with the notes document: it is
    *  only ever looked at for the note whose panel is open, and it grows without bound. */

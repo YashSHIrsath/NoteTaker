@@ -1,25 +1,21 @@
 import { useState } from 'react'
-import { CalendarClock, ChevronDown, ChevronUp, Check, GripVertical, Pencil } from 'lucide-react'
+import { ChevronDown, ChevronUp, Check, GripVertical, Pencil } from 'lucide-react'
 import type { Attachment, Folder, Task } from '../../types'
 import { FolderBreadcrumb } from '../folder/FolderBreadcrumb'
 import { TaskBlockNoteEditor } from './TaskBlockNoteEditor'
 import { TaskTitleEditor } from './TaskTitleEditor'
 import { SaveStatusLabel } from './SaveStatusLabel'
-import { TaskScheduleDialog } from './TaskScheduleDialog'
 import { TaskStatusBadge, ReminderCountPill } from './TaskStatusBadge'
+import { TaskActionsMenu } from './TaskActionsMenu'
 import { TaskCountdown } from './TaskCountdown'
 import { TaskTagInput } from './TaskTagInput'
 import { AttachmentPreviewDialog } from '../attachment/AttachmentPreviewDialog'
 import { AttachmentTypeIcon, attachmentSortRank } from '../attachment/AttachmentTypeIcon'
 import { useFolders } from '../../hooks/useFolders'
-import { StarButton } from '../common/StarButton'
-import { PinButton } from '../common/PinButton'
-import { RowDeleteButton } from '../common/RowDeleteButton'
-import { useDeleteTask } from '../../hooks/useDeleteTask'
 import { useTaskCompletion } from '../../hooks/useTaskCompletion'
 import { cn } from '../../lib/cn'
-import { formatDueDate } from '../../lib/dueDate'
 import { taskLifecycle } from '../../lib/taskLifecycle'
+import { scheduledReminders } from '../../lib/reminders'
 import { useServerNow } from '../../hooks/useServerNow'
 import { useBlockHandles, useCollapseImages } from '../../hooks/useBlockHandles'
 import { isEmptyDocument } from '../../lib/blockNoteContent'
@@ -33,8 +29,6 @@ export interface TaskEditorProps {
 
 export function TaskEditor({ task, folderPath, showActions = true }: TaskEditorProps) {
   const {
-    toggleTaskImportant,
-    toggleTaskPinned,
     updateTaskTitle,
     updateTaskContent,
     getRemindersForTask,
@@ -42,9 +36,7 @@ export function TaskEditor({ task, folderPath, showActions = true }: TaskEditorP
     getAttachmentsForTask,
     saveStatus,
   } = useFolders()
-  const { requestTaskDelete, dialog: taskDeleteDialog } = useDeleteTask()
   const { toggleCompleted, dialog: reopenDialog } = useTaskCompletion()
-  const [dueDialogOpen, setDueDialogOpen] = useState(false)
   const { enabled: blockHandles, toggle: toggleBlockHandles } = useBlockHandles()
   const { collapsed: imagesCollapsed, toggle: toggleImages } = useCollapseImages()
   const [previewAttachment, setPreviewAttachment] = useState<Attachment | null>(null)
@@ -72,8 +64,7 @@ export function TaskEditor({ task, folderPath, showActions = true }: TaskEditorP
   const isTracked = task.noteKind === 'due_task' && task.dueAt !== null
   const now = useServerNow(isTracked && !task.completed)
   const lifecycle = taskLifecycle(task, now)
-  const overdue = lifecycle === 'overdue'
-  const reminderCount = getRemindersForTask(task.id).filter((reminder) => reminder.isActive).length
+  const reminderCount = scheduledReminders(getRemindersForTask(task.id)).length
   // Every file attached to the note. Not filtered by what the text still references: documents
   // aren't inserted into the text any more (they live here), so that filter would hide the very
   // files this bar exists for.
@@ -81,6 +72,39 @@ export function TaskEditor({ task, folderPath, showActions = true }: TaskEditorP
     (a, b) => attachmentSortRank(a) - attachmentSortRank(b),
   )
   const hasImage = attachments.some((attachment) => attachment.isImage)
+
+  /**
+   * The two toggles that only make sense inside an open note, as menu rows.
+   *
+   * Each is conditional for the same reason it always was: there is nothing to collapse without a
+   * picture, and nothing for a drag handle to do while reading.
+   */
+  const viewToggles = [
+    ...(hasImage
+      ? [
+          {
+            key: 'images',
+            label: imagesCollapsed ? 'Show images' : 'Collapse images',
+            icon: imagesCollapsed ? (
+              <ChevronDown className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            ) : (
+              <ChevronUp className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            ),
+            onSelect: toggleImages,
+          },
+        ]
+      : []),
+    ...(editing
+      ? [
+          {
+            key: 'handles',
+            label: blockHandles ? 'Hide block handles' : 'Show block handles',
+            icon: <GripVertical className="h-3.5 w-3.5 shrink-0" aria-hidden />,
+            onSelect: toggleBlockHandles,
+          },
+        ]
+      : []),
+  ]
 
   return (
     <div className="mx-auto flex h-full min-h-0 max-w-3xl flex-col">
@@ -130,101 +154,43 @@ export function TaskEditor({ task, folderPath, showActions = true }: TaskEditorP
             {editing ? 'Done' : 'Edit'}
           </button>
 
-          <button
-            type="button"
-            onClick={() => setDueDialogOpen(true)}
-            className={cn(
-              'anim-press inline-flex h-5 min-w-0 items-center gap-1 rounded-full border px-2 text-[10px] font-medium transition-colors',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/20',
-              isTracked
-                ? overdue
-                  ? 'border-[var(--color-danger)]/30 bg-[var(--color-danger)]/10 text-[var(--color-danger)] hover:bg-[var(--color-danger)]/15'
-                  : 'border-[var(--color-accent)]/30 bg-[var(--color-accent-soft)] text-[var(--color-accent)] hover:bg-[var(--color-accent-soft-hover)]'
-                : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:bg-[var(--color-hover)] hover:text-[var(--color-text)]',
-            )}
-          >
-            <CalendarClock className="h-2.5 w-2.5 shrink-0" aria-hidden />
-            <span className="truncate">
-              {isTracked && task.dueAt ? formatDueDate(task.dueAt) : 'Schedule'}
-            </span>
-          </button>
-
-          {/* Symbol only: the icon already says pending / ongoing / complete, and the word was the
-              widest thing in the row. The label lives on as the tooltip and the accessible name. */}
-          {isTracked ? (
+          {/*
+            * One thing about the deadline, not two.
+            *
+            * The badge and the countdown were both here, and on a finished task they said the same
+            * sentence twice — a tick in a circle beside "✓ Completed on time", two checkmarks and
+            * one fact. So a completed task shows the badge alone, which already carries that label
+            * and is also the control that undoes it.
+            *
+            * While it is still open they are genuinely different questions: the circle is "mark
+            * this done", the countdown is "how long is left". Both earn their place then.
+            */}
+          {isTracked && task.completed ? (
             <TaskStatusBadge
               lifecycle={lifecycle}
-              completed={task.completed}
-              iconOnly
+              completed
+              compact
               onToggle={() => toggleCompleted(task.id)}
             />
+          ) : isTracked ? (
+            <>
+              <TaskStatusBadge
+                lifecycle={lifecycle}
+                completed={false}
+                iconOnly
+                onToggle={() => toggleCompleted(task.id)}
+              />
+              <TaskCountdown task={task} compact />
+            </>
           ) : null}
-
-          {/* The live countdown, right where the deadline is. It ticks on its own — nothing on
-              this screen needs reloading for a task to become overdue while you are reading it. */}
-          {isTracked ? <TaskCountdown task={task} compact /> : null}
 
           <ReminderCountPill count={reminderCount} compact />
 
-          {/* Pictures shown or collapsed to their filename. Same chip shape as the controls
-              beside it, and it only appears when the note actually has an image to collapse. */}
-          {hasImage ? (
-            <button
-              type="button"
-              aria-pressed={imagesCollapsed}
-              onClick={toggleImages}
-              title={imagesCollapsed ? 'Show images' : 'Collapse images'}
-              aria-label={imagesCollapsed ? 'Show images' : 'Collapse images'}
-              className={cn(
-                'anim-press inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-colors',
-                imagesCollapsed
-                  ? 'border-[var(--color-accent)]/30 bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
-                  : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:bg-[var(--color-hover)] hover:text-[var(--color-text)]',
-              )}
-            >
-              {imagesCollapsed ? (
-                <ChevronDown className="h-3 w-3" aria-hidden />
-              ) : (
-                <ChevronUp className="h-3 w-3" aria-hidden />
-              )}
-            </button>
-          ) : null}
+          {showActions ? <SaveStatusLabel status={saveStatus} /> : null}
 
-          {/* Gutter controls on/off. Off is the default: the "+" and drag handle need a 54px
-              margin the text would rather have, and "/" does the same job inline. Hidden while
-              reading, where there is nothing for a "+" or a drag handle to do. */}
-          {editing ? (
-          <button
-            type="button"
-            aria-pressed={blockHandles}
-            onClick={toggleBlockHandles}
-            title={blockHandles ? 'Hide block handles (use / instead)' : 'Show block handles'}
-            aria-label={blockHandles ? 'Hide block handles' : 'Show block handles'}
-            className={cn(
-              'anim-press inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-colors',
-              blockHandles
-                ? 'border-[var(--color-accent)]/30 bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
-                : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:bg-[var(--color-hover)] hover:text-[var(--color-text)]',
-            )}
-          >
-            <GripVertical className="h-3 w-3" aria-hidden />
-          </button>
-          ) : null}
-
-          {/* The full-page route has no dialog header to put these in; the dialog renders its own,
-              alongside the save state. */}
-          {showActions ? (
-            <>
-              <PinButton pinned={task.isPinned} compact onToggle={() => toggleTaskPinned(task.id)} />
-              <StarButton important={task.isImportant} compact onToggle={() => toggleTaskImportant(task.id)} />
-              <RowDeleteButton
-                compact
-                label={`Delete ${task.title.trim() || 'Untitled'}`}
-                onClick={() => requestTaskDelete(task.id)}
-              />
-              <SaveStatusLabel status={saveStatus} />
-            </>
-          ) : null}
+          {/* An open note is not one of the three listings, so its pin acts on the folder the note
+              lives in — the listing it is unambiguously part of. */}
+          <TaskActionsMenu task={task} scope="folder" compact extraItems={viewToggles} />
         </div>
       </div>
 
@@ -283,9 +249,7 @@ export function TaskEditor({ task, folderPath, showActions = true }: TaskEditorP
 
       <AttachmentPreviewDialog attachment={previewAttachment} onClose={() => setPreviewAttachment(null)} />
 
-      <TaskScheduleDialog open={dueDialogOpen} task={task} onClose={() => setDueDialogOpen(false)} />
       {reopenDialog}
-      {showActions ? taskDeleteDialog : null}
     </div>
   )
 }

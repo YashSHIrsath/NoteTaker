@@ -33,6 +33,96 @@ export type OffsetUnit = (typeof OFFSET_UNITS)[number]['key']
  *  in the field rather than rejected by the database after a round trip. */
 export const MAX_OFFSET_MINUTES = 5_256_000
 
+/**
+ * Where to put a reminder when the deadline is already behind you.
+ *
+ * "15 minutes before" is meaningless once the moment has gone, so a passed deadline needs offers
+ * anchored to *now* instead — the question stops being "warn me in time" and becomes "when should
+ * I be made to look at this again". These are absolute instants, which is why they are one-time
+ * reminders rather than offsets.
+ *
+ * Each computes from a passed-in `now` rather than reading the clock itself, so the same list can
+ * be tested at a fixed instant.
+ */
+export interface FollowUpSuggestion {
+  key: string
+  label: string
+  at: (now: Date) => Date
+}
+
+/** The next occurrence of a weekday, strictly in the future, at a whole hour. Asking for Monday on
+ *  a Monday means the Monday after this one — "next Monday" never means "twenty minutes ago". */
+function nextWeekdayAt(now: Date, weekday: number, hour: number): Date {
+  const date = new Date(now)
+  date.setHours(hour, 0, 0, 0)
+  const shift = (weekday - date.getDay() + 7) % 7
+  date.setDate(date.getDate() + (shift === 0 ? 7 : shift))
+  return date
+}
+
+export const FOLLOW_UP_SUGGESTIONS: FollowUpSuggestion[] = [
+  {
+    key: 'hour',
+    label: 'In 1 hour',
+    at: (now) => {
+      const date = new Date(now.getTime() + 3_600_000)
+      date.setSeconds(0, 0)
+      return date
+    },
+  },
+  {
+    key: 'evening',
+    label: 'This evening',
+    at: (now) => {
+      const date = new Date(now)
+      date.setHours(18, 0, 0, 0)
+      // Past six already: there is no evening left to point at, so it becomes tomorrow's.
+      if (date.getTime() <= now.getTime()) {
+        date.setDate(date.getDate() + 1)
+      }
+      return date
+    },
+  },
+  {
+    key: 'tomorrow',
+    label: 'Tomorrow, 9 AM',
+    at: (now) => {
+      const date = new Date(now)
+      date.setDate(date.getDate() + 1)
+      date.setHours(9, 0, 0, 0)
+      return date
+    },
+  },
+  { key: 'monday', label: 'Next Monday, 9 AM', at: (now) => nextWeekdayAt(now, 1, 9) },
+]
+
+/**
+ * Which lead times are worth offering for a deadline this far away.
+ *
+ * A fixed list of "15 min / 1 hour / 1 day before" is wrong the moment the deadline is close: on
+ * something due in five minutes, every one of those resolves to a time already past, and the
+ * scheduler reads a past reminder as overdue and sends it immediately. The offer has to come from
+ * the gap, not from a constant.
+ *
+ * Two rules decide what survives. A lead has to leave real time on the clock — hence the minute of
+ * headroom, so tapping it doesn't produce a send that is already due. And it has to be no more
+ * than halfway to the deadline, because a "1 week before" on something due in eight days is a
+ * reminder that arrives while you are still reading this panel, which is not a warning.
+ *
+ * Returned largest first, which is how they read as a sequence: a day out, then an hour, then
+ * fifteen minutes.
+ */
+const LEAD_CANDIDATE_MINUTES = [5, 10, 15, 30, 60, 180, 360, 720, 1440, 4320, 10080]
+
+export function leadTimeSuggestions(remainingMs: number, limit = 3): number[] {
+  const halfway = remainingMs / 2
+  const viable = LEAD_CANDIDATE_MINUTES.filter((minutes) => {
+    const lead = minutes * 60_000
+    return lead <= halfway && remainingMs - lead > 60_000
+  })
+  return viable.slice(-limit).reverse()
+}
+
 /** One tap for the lead times people actually reach for. Everything else is typed. */
 export const OFFSET_PRESETS: Array<{ minutes: number; label: string }> = [
   { minutes: 15, label: '15 minutes' },
@@ -64,6 +154,18 @@ export function joinOffset(amount: number, unit: OffsetUnit): number {
  * Only reminders that are switched on and actually scheduled count: a paused one and a spent one
  * both have nothing coming, and saying otherwise on a card would be a promise the sweep won't keep.
  */
+/**
+ * The reminders that are still going to send something.
+ *
+ * `isActive` alone is not that question. A one-time reminder that has already fired stays active
+ * for good — its next run is simply null — so counting active reminders left a bell on the card
+ * forever, advertising a reminder that had come and gone. What a card is reporting is what is
+ * still coming.
+ */
+export function scheduledReminders(reminders: Reminder[]): Reminder[] {
+  return reminders.filter((reminder) => reminder.isActive && reminder.nextRunAt !== null)
+}
+
 export function nextReminderAt(reminders: Reminder[]): string | null {
   let soonest: string | null = null
   for (const reminder of reminders) {

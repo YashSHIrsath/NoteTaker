@@ -108,7 +108,9 @@ export function TaskEditorDialog({ taskId, onClose }: TaskEditorDialogProps) {
       >
         <div className="flex shrink-0 items-center justify-between gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5">
           <div className="flex items-center gap-0.5">
-            <PinButton pinned={task.isPinned} onToggle={() => toggleTaskPinned(task.id)} />
+            {/* The dialog opens over a listing but doesn't know which, so it pins in the note's own
+                folder — the one listing it is unambiguously part of. */}
+            <PinButton pinned={task.pinnedScopes.includes('folder')} onToggle={() => toggleTaskPinned(task.id, 'folder')} />
             <StarButton important={task.isImportant} onToggle={() => toggleTaskImportant(task.id)} />
             <RowDeleteButton
               label={`Delete ${task.title.trim() || 'Untitled'}`}

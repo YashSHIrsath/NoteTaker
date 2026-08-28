@@ -5,6 +5,7 @@ import {
   Camera,
   Check,
   ClipboardList,
+  Compass,
   LayoutGrid,
   FileText,
   Folder,
@@ -29,6 +30,7 @@ import {
   type TilesPerRow,
   type ViewStyle,
 } from '../lib/viewStyle'
+import { NavigationSettings } from '../components/settings/NavigationSettings'
 import { uploadAvatar } from '../services/profile/avatarUpload'
 
 const VIEW_STYLE_OPTIONS: Array<{
@@ -504,8 +506,16 @@ export function ProfilePage() {
           </div>
         </Card>
 
-        {/* --------------------------------------------------------- notes style */}
+        {/* -------------------------------------------------------- navigation */}
         <Card order={2}>
+          <CardTitle icon={<Compass className="h-3.5 w-3.5" aria-hidden />} category="teal">
+            Navigation
+          </CardTitle>
+          <NavigationSettings />
+        </Card>
+
+        {/* --------------------------------------------------------- notes style */}
+        <Card order={3}>
           <CardTitle icon={<ClipboardList className="h-3.5 w-3.5" aria-hidden />} category="indigo">
             Notes style
           </CardTitle>
@@ -568,7 +578,7 @@ export function ProfilePage() {
         </Card>
 
         {/* ------------------------------------------------------- smallest card */}
-        <Card order={3}>
+        <Card order={4}>
           <CardTitle icon={<LayoutGrid className="h-3.5 w-3.5" aria-hidden />} category="teal">
             Cards per row
           </CardTitle>
@@ -662,7 +672,7 @@ export function ProfilePage() {
             On its own card rather than a loose red slab under the stack: it's the one destructive
             thing here, and an outline that fills on hover states that without shouting it at you
             every time the page opens. */}
-        <Card order={4} className="flex flex-wrap items-center justify-between gap-3">
+        <Card order={5} className="flex flex-wrap items-center justify-between gap-3">
           <span className="text-[13px] text-[var(--color-text-muted)]">
             Signed in as <span className="font-medium text-[var(--color-text)]">{user.email}</span>
           </span>

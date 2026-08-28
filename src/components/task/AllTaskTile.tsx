@@ -5,22 +5,21 @@ import {
   useState,
   type MouseEvent,
 } from 'react'
-import { CalendarClock, ChevronRight, FolderInput, Pin } from 'lucide-react'
-import type { Attachment } from '../../types'
+import { ChevronRight } from 'lucide-react'
+import type { Attachment, TaskListScope } from '../../types'
 import type { FolderCategory } from '../../lib/folderColor'
 import { taskColorStyle } from '../../lib/taskColor'
 import { formatDueDate } from '../../lib/dueDate'
 import { lifecycleStyle, taskLifecycle } from '../../lib/taskLifecycle'
-import { nextReminderAt } from '../../lib/reminders'
-import { countdownLabel } from '../../lib/countdown'
+import { nextReminderAt, scheduledReminders } from '../../lib/reminders'
+import { sendLabel } from '../../lib/countdown'
 import { useServerNow } from '../../hooks/useServerNow'
 import { findBlockAttachmentId, referencedAttachmentIds } from '../../lib/blockNoteContent'
 import { useFolders } from '../../hooks/useFolders'
 import { useTaskCompletion } from '../../hooks/useTaskCompletion'
 import { AttachmentPreviewDialog } from '../attachment/AttachmentPreviewDialog'
 import { TaskColorButton } from './TaskColorButton'
-import { MoveTaskDialog } from './MoveTaskDialog'
-import { TaskScheduleDialog } from './TaskScheduleDialog'
+import { TaskActionsMenu } from './TaskActionsMenu'
 import { TaskTagsPill } from './TaskTagsPill'
 import { AttachmentTypeIcon, attachmentSortRank } from '../attachment/AttachmentTypeIcon'
 import { TaskContentPreview } from './TaskContentPreview'
@@ -52,6 +51,8 @@ export const TASK_TILE_GRID = [
 
 export interface AllTaskTileProps {
   taskId: string
+  /** The listing this tile is drawn in — pinning and grid placement are both per-listing. */
+  scope: TaskListScope
   category: FolderCategory
   folderLabel?: string
   onOpen: () => void
@@ -62,14 +63,12 @@ export interface AllTaskTileProps {
  *  One fixed height for every tile — a portrait rectangle — so the grid stays even whatever a note
  *  contains. Fixed in pixels rather than as an aspect ratio on purpose: an aspect ratio ties height
  *  to column width, which is what turned these into tall empty squares on a wide screen. */
-export function AllTaskTile({ taskId, category, folderLabel, onOpen }: AllTaskTileProps) {
+export function AllTaskTile({ taskId, scope, category, folderLabel, onOpen }: AllTaskTileProps) {
   const { getTask, getAttachmentsForTask, updateTaskColor, getRemindersForTask } = useFolders()
   const { toggleCompleted, dialog: reopenDialog } = useTaskCompletion()
   const [isOverflowing, setIsOverflowing] = useState(false)
   const [attachmentsScrollable, setAttachmentsScrollable] = useState(false)
   const [previewAttachment, setPreviewAttachment] = useState<Attachment | null>(null)
-  const [moveOpen, setMoveOpen] = useState(false)
-  const [scheduleOpen, setScheduleOpen] = useState(false)
   const bodyRef = useRef<HTMLDivElement>(null)
   const attachmentsRef = useRef<HTMLDivElement>(null)
 
@@ -80,14 +79,12 @@ export function AllTaskTile({ taskId, category, folderLabel, onOpen }: AllTaskTi
   const now = useServerNow(isTracked && !task?.completed)
   const lifecycle = task ? taskLifecycle(task, now) : 'note'
   const taskReminders = getRemindersForTask(taskId)
-  const reminderCount = taskReminders.filter((reminder) => reminder.isActive).length
+  const reminderCount = scheduledReminders(taskReminders).length
   // The clock button says when the next email actually goes out, not just that reminders exist.
   const nextReminder = nextReminderAt(taskReminders)
-  const scheduleHint = nextReminder
-    ? `Next reminder ${countdownLabel(new Date(nextReminder).getTime(), now).replace(' remaining', '')}`
-    : isTracked
-      ? 'Due date & reminders'
-      : 'Add due date or reminder'
+  const reminderHint = nextReminder
+    ? sendLabel(new Date(nextReminder).getTime(), now).toLowerCase()
+    : undefined
   // A due-date task's fill is its status and can't be overridden; a plain note keeps the picker.
   // Same rule as TaskCard, for the same reason: the colour is information here, not decoration.
   const statusColors = lifecycleStyle(lifecycle)
@@ -135,7 +132,6 @@ export function AllTaskTile({ taskId, category, folderLabel, onOpen }: AllTaskTi
     setPreviewAttachment(attachment)
   }
 
-  const folderId = task?.folderId ?? null
   const scrollAttachments = (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation()
     attachmentsRef.current?.scrollBy({ left: 88, behavior: 'smooth' })
@@ -149,6 +145,12 @@ export function AllTaskTile({ taskId, category, folderLabel, onOpen }: AllTaskTi
       tabIndex={0}
       onClick={onOpen}
       onKeyDown={(event) => {
+        // Only when the tile itself has focus. Without this, a space typed into any field inside a
+        // dialog opened from this tile bubbled back here — swallowing the space and opening the
+        // note. TaskCard has always had this guard; the tile did not.
+        if (event.target !== event.currentTarget) {
+          return
+        }
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault()
           onOpen()
@@ -160,13 +162,18 @@ export function AllTaskTile({ taskId, category, folderLabel, onOpen }: AllTaskTi
       )}
       style={{ background: colors.card }}
     >
-      {/* Plain weighted text, no chrome: the title is the one thing on the tile that doesn't need
-        *  a chip around it, which is what lets the small pills beside it read as metadata.
+      {/*
+        * The title, and the two things you might do to the tile from here. Nothing else.
         *
-        *  One line, truncated — a two-line title made the row taller than the pills beside it and
-        *  pushed the divider (and everything under it) out of step with the next tile. Fixed height
-        *  plus items-center is what puts the title, the pin, the tag count and the colour dot on
-        *  one baseline. */}
+        * This row had grown to five items — name, pin marker, tag count, state, menu — on a tile
+        * that is 150px wide on a phone, so the name was the thing that gave way. Everything that
+        * merely *describes* the note moved to the footer, which is already a metadata strip, and
+        * the pin marker went entirely: pinned notes sit under their own "Pinned" heading in every
+        * view that pins, and the menu says "Unpin" when you open it.
+        *
+        * What is left is one control that is genuinely one-tap — the colour on a note, its state
+        * on a task — and the menu holding everything else.
+        */}
       <div className="flex h-7 shrink-0 items-center gap-1.5">
         <h3
           className="min-w-0 flex-1 truncate text-[14.5px] font-bold leading-snug tracking-[-0.01em] sm:text-[15.5px]"
@@ -175,48 +182,6 @@ export function AllTaskTile({ taskId, category, folderLabel, onOpen }: AllTaskTi
         >
           {task.title.trim() || 'Untitled'}
         </h3>
-        {task.isPinned ? (
-          <Pin className="h-3.5 w-3.5 shrink-0 fill-current" style={{ color: ink }} aria-label="Pinned" />
-        ) : null}
-        {/* Tags live here as a count, opening on click — see TaskTagsPill. */}
-        <TaskTagsPill tags={task.tags} ink={ink} />
-        {/* Dragging a tile now places it on the canvas, so this is how a note changes folder. */}
-        {folderId ? (
-          <button
-            type="button"
-            aria-label={`Move ${task.title.trim() || 'note'} to another folder`}
-            title="Move to folder"
-            onClick={(event) => {
-              event.stopPropagation()
-              setMoveOpen(true)
-            }}
-            className="anim-press inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-black/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/40"
-            style={{ color: ink }}
-          >
-            <FolderInput className="h-3.5 w-3.5" aria-hidden />
-          </button>
-        ) : null}
-        {/* Deadlines and reminders without opening the note — the tile grid is where people work,
-          *  and putting this only in the editor meant opening a note to say when it was due. */}
-        <button
-          type="button"
-          aria-label={
-            isTracked
-              ? `Edit schedule for ${task.title.trim() || 'note'}`
-              : `Add a due date or reminder to ${task.title.trim() || 'note'}`
-          }
-          title={scheduleHint}
-          onClick={(event) => {
-            event.stopPropagation()
-            setScheduleOpen(true)
-          }}
-          className="anim-press inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-black/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/40"
-          style={{ color: ink }}
-        >
-          <CalendarClock className="h-3.5 w-3.5" aria-hidden />
-        </button>
-        {/* The picker is a note's control. On a task the same slot shows what the colour already
-          *  means, and ticking it is the only thing that changes it. */}
         {isTracked ? (
           <TaskStatusBadge
             lifecycle={lifecycle}
@@ -232,6 +197,7 @@ export function AllTaskTile({ taskId, category, folderLabel, onOpen }: AllTaskTi
             onSelect={(color) => updateTaskColor(taskId, color)}
           />
         )}
+        <TaskActionsMenu task={task} scope={scope} compact ink={ink} />
       </div>
 
       {/* One hairline instead of per-element borders: it separates header from body without
@@ -305,21 +271,37 @@ export function AllTaskTile({ taskId, category, folderLabel, onOpen }: AllTaskTi
 
       {/* Rendered only when populated — an empty footer row still cost a line of height plus its
         *  margin, which read as dead space under the attachment icons. */}
-      {folderLabel || isTracked || reminderCount > 0 ? (
+      {/* The metadata strip: where the note is, what it is tagged, what is scheduled. All of it
+        *  reads rather than acts, which is exactly why it can live down here at 10.5px instead of
+        *  competing with the title. The tile's own ink carries the colour throughout — a red
+        *  countdown on a red card reads as a smudge. */}
+      {/*
+        * The metadata strip. Two rules keep it on one line on a 150px tile.
+        *
+        * A finished task shows no countdown here: the card is already the colour of its outcome
+        * and the header badge already carries the tick, so "Completed on time" was a third telling
+        * of the same thing — and the longest string in the row, which is what pushed the folder
+        * label down to "in Note…" and still overflowed. A pending task keeps it, because how long
+        * is left is not written anywhere else on the card.
+        *
+        * And the label yields first when there genuinely isn't room: it shrinks far more readily
+        * than the group beside it, which used to refuse to shrink at all and simply overhang.
+        */}
+      {folderLabel || isTracked || reminderCount > 0 || task.tags.length > 0 ? (
         <div
-          className="mt-2 flex shrink-0 items-center justify-between gap-2 text-[10.5px] opacity-80 sm:text-[11px]"
+          className="mt-2 flex shrink-0 items-center justify-between gap-1.5 text-[10.5px] opacity-80 sm:text-[11px]"
           style={{ color: ink }}
         >
-          {folderLabel ? <span className="min-w-0 truncate">in {folderLabel}</span> : <span />}
-          <span className="flex shrink-0 items-center gap-1">
-            <ReminderCountPill count={reminderCount} compact />
-            {/* Under a day out (or already past), the live figure says more than the date does.
-              *  The tile's own ink carries the colour, so the countdown inherits rather than
-              *  painting its own — a red countdown on a red card reads as a smudge. */}
-            {/* The live figure rather than the date: the tile's own ink carries the colour, so the
-              *  countdown inherits it — a red countdown on a red card reads as a smudge. */}
-            {isTracked && task.dueAt ? (
-              <span style={{ color: ink }} title={formatDueDate(task.dueAt)}>
+          {folderLabel ? (
+            <span className="min-w-0 shrink-[10] truncate">in {folderLabel}</span>
+          ) : (
+            <span />
+          )}
+          <span className="flex min-w-0 shrink items-center justify-end gap-1">
+            <TaskTagsPill tags={task.tags} ink={ink} />
+            <ReminderCountPill count={reminderCount} compact hint={reminderHint} />
+            {isTracked && task.dueAt && !task.completed ? (
+              <span className="min-w-0" style={{ color: ink }} title={formatDueDate(task.dueAt)}>
                 <TaskCountdown task={task} compact className="!text-inherit" />
               </span>
             ) : null}
@@ -328,8 +310,6 @@ export function AllTaskTile({ taskId, category, folderLabel, onOpen }: AllTaskTi
       ) : null}
     </div>
     </div>
-    <MoveTaskDialog open={moveOpen} taskId={taskId} onClose={() => setMoveOpen(false)} />
-    <TaskScheduleDialog open={scheduleOpen} task={task} onClose={() => setScheduleOpen(false)} />
     <AttachmentPreviewDialog attachment={previewAttachment} onClose={() => setPreviewAttachment(null)} />
     {reopenDialog}
     </Fragment>

@@ -113,13 +113,17 @@ export function TaskColorButton({ activeColor, selected, onSelect, compact = fal
         onPointerDown={stop}
         className={cn(
           'anim-press inline-flex shrink-0 items-center justify-center rounded-full',
-          SWATCH_BORDER,
-          // Same 18px box as the tags pill it sits next to, so the two line up rather than
-          // floating at different heights.
-          compact ? 'h-[18px] w-[18px]' : 'h-5 w-5',
+          // A 24px box, matching the actions menu it sits beside — the swatch inside stays small.
+          // The button used to *be* the swatch at 18px, which left three controls of three
+          // different sizes in one row and a hit target smaller than a fingertip.
+          compact ? 'h-6 w-6' : 'h-7 w-7',
         )}
-        style={{ background: activeColor }}
-      />
+      >
+        <span
+          className={cn('block rounded-full', SWATCH_BORDER, compact ? 'h-4 w-4' : 'h-5 w-5')}
+          style={{ background: activeColor }}
+        />
+      </button>
 
       {open && position
         ? createPortal(

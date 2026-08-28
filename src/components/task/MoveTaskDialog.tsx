@@ -89,7 +89,19 @@ export function MoveTaskDialog({ open, taskId, onClose }: MoveTaskDialogProps) {
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[100] flex items-end justify-center px-3 pb-[calc(var(--bottom-nav-inset)+0.5rem)] sm:items-center sm:p-4">
+    <div className="fixed inset-0 z-[100] flex items-end justify-center px-3 pb-[calc(var(--bottom-nav-inset)+0.5rem)] sm:items-center sm:p-4"
+      /*
+       * A portal renders into <body>, but React still routes events up the *component* tree — so a
+       * click in here reaches the card this dialog was opened from, and that card's job is to open
+       * the note. Hence a note opening behind the dialog the moment you touched anything in it.
+       *
+       * Stopped at the dialog's own root rather than on each control inside. Escape still works:
+       * that listener is on window, which is the DOM tree and unaffected.
+       */
+      onClick={(event) => event.stopPropagation()}
+      onPointerDown={(event) => event.stopPropagation()}
+      onKeyDown={(event) => event.stopPropagation()}
+    >
       <button
         type="button"
         aria-label="Close dialog"

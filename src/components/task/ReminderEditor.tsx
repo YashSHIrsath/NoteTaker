@@ -9,6 +9,7 @@ import {
   OFFSET_UNITS,
   WEEKDAYS,
   defaultReminderMessage,
+  emptyDraft,
   isPastOneTime,
   isoToLocalInput,
   joinOffset,
@@ -40,8 +41,14 @@ const KIND_TABS: Array<{ kind: ReminderKind; label: string }> = [
 
 export interface ReminderEditorProps {
   draft: ReminderDraft
-  /** Hides the due-relative option and its tab when the note has no deadline. */
-  hasDueDate: boolean
+  /**
+   * Whether an offset from the deadline is a usable shape right now.
+   *
+   * False when there is no deadline, and equally when the deadline has already gone: "15 minutes
+   * before" a moment that passed this morning resolves to a time in the past, which the scheduler
+   * reads as overdue and sends immediately. Once and Repeats are the only honest options then.
+   */
+  allowRelative: boolean
   taskTitle: string
   onChange: (draft: ReminderDraft) => void
   onSave: () => void
@@ -51,7 +58,7 @@ export interface ReminderEditorProps {
 
 export function ReminderEditor({
   draft,
-  hasDueDate,
+  allowRelative,
   taskTitle,
   onChange,
   onSave,
@@ -71,7 +78,7 @@ export function ReminderEditor({
   const [messageEdited, setMessageEdited] = useState(false)
 
   const set = (patch: Partial<ReminderDraft>) => onChange({ ...draft, ...patch })
-  const tabs = KIND_TABS.filter((tab) => tab.kind !== 'relative' || hasDueDate)
+  const tabs = KIND_TABS.filter((tab) => tab.kind !== 'relative' || allowRelative)
 
   const offset = splitOffset(draft.offsetMinutes ?? 15)
   const generatedMessage = defaultReminderMessage(draft, taskTitle)
@@ -88,6 +95,14 @@ export function ReminderEditor({
    * screen means there is one. A closed field still stores null and lets the server phrase it,
    * which is the case where nobody has expressed an opinion.
    */
+  // The deadline can pass, or be cleared, while this editor is open — leaving a draft on a tab
+  // that is no longer offered. Fall back rather than stranding it on an option nobody can see.
+  useEffect(() => {
+    if (!allowRelative && draft.kind === 'relative') {
+      onChange({ ...draft, kind: 'one_time', atUtc: emptyDraft('one_time').atUtc })
+    }
+  }, [allowRelative, draft, onChange])
+
   useEffect(() => {
     if (messageOpen && !messageEdited && draft.message !== generatedMessage) {
       onChange({ ...draft, message: generatedMessage })

@@ -63,6 +63,20 @@ export function countdownLabel(dueMs: number, nowMs: number): string {
 }
 
 /**
+ * When a reminder will actually go out.
+ *
+ * Not countdownLabel with the word "remaining" stripped off, which is what this was: that produced
+ * "Sends in Due now" the moment a reminder came within a minute of its slot. A reminder either
+ * has time left on it or it is going out, and those are two different sentences.
+ */
+export function sendLabel(runAtMs: number, nowMs: number): string {
+  if (runAtMs - nowMs <= 60_000) {
+    return 'Sending now'
+  }
+  return `Sends in ${formatDuration(countdownParts(runAtMs, nowMs))}`
+}
+
+/**
  * How often this countdown needs redrawing.
  *
  * Under an hour the seconds are on screen, so it ticks every second. Above that only the minutes

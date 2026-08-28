@@ -4,6 +4,7 @@ import { IconButton } from '../ui/IconButton'
 import { SidebarSection } from './SidebarSection'
 import { SidebarFolderItem } from './SidebarFolderItem'
 import type { Folder as FolderRecord, SidebarNavId } from '../../types'
+import { NAV_DESTINATIONS, resolveNavOrder } from '../../lib/navOrder'
 import { cn } from '../../lib/cn'
 import { useAuth } from '../../hooks/useAuth'
 import { getFolderCategory } from '../../lib/folderColor'
@@ -38,6 +39,7 @@ export function Sidebar({
   className,
 }: SidebarProps) {
   const { user, signOut } = useAuth()
+  const navOrder = resolveNavOrder(user?.user_metadata as Record<string, unknown> | undefined)
   const metadata = (user?.user_metadata ?? {}) as { full_name?: string; avatar_url?: string }
   const displayName = metadata.full_name?.trim() || user?.email || 'Signed in'
   const initial = (metadata.full_name?.trim() || user?.email || 'Y').charAt(0).toUpperCase()
@@ -113,54 +115,66 @@ export function Sidebar({
       <div className="mx-3 border-t border-[var(--color-border)]" />
 
       <nav className="flex-1 overflow-y-auto px-2.5 pb-3 pt-3" aria-label="Main">
+        {/*
+          * Drawn in the account's order, the same list the bottom bar and the page transitions
+          * read. It was a third hardcoded order before this — Tree, Notes, Tasks, Starred — which
+          * agreed with neither of them, so reordering in settings changed the phone's bar and left
+          * the desktop sidebar exactly as it was.
+          *
+          * Notes renders its folders inside itself, which is why these are a map of renderers
+          * rather than a list of props: only one of the four has children.
+          */}
         <div className="space-y-1">
-          <SidebarSection
-            icon={<ListTree className="h-4 w-4" aria-hidden />}
-            label="Tree"
-            active={activeNav === 'tree'}
-            onSelect={() => onSelectNav('tree')}
-            collapsed={collapsed}
-          />
-
-          <SidebarSection
-            icon={<Folder className="h-4 w-4" aria-hidden />}
-            label="Notes"
-            active={activeNav === 'mynotes'}
-            onSelect={() => onSelectNav('mynotes')}
-            expandable
-            expanded={myNotesExpanded && !collapsed}
-            onToggleExpand={onToggleMyNotes}
-            collapsed={collapsed}
-          >
-            {rootFolders.map((folder, index) => (
-              <SidebarFolderItem
-                key={folder.id}
-                folderId={folder.id}
-                parentId={folder.parentId}
-                label={folder.name}
-                important={folder.isImportant}
-                category={getFolderCategory(index)}
-                active={activeFolderId === folder.id}
-                onClick={() => onSelectFolder(folder.id)}
-              />
-            ))}
-          </SidebarSection>
-
-          <SidebarSection
-            icon={<ClipboardList className="h-4 w-4" aria-hidden />}
-            label="Tasks"
-            active={activeNav === 'tasks'}
-            onSelect={() => onSelectNav('tasks')}
-            collapsed={collapsed}
-          />
-
-          <SidebarSection
-            icon={<Star className="h-4 w-4" aria-hidden />}
-            label="Important"
-            active={activeNav === 'important'}
-            onSelect={() => onSelectNav('important')}
-            collapsed={collapsed}
-          />
+          {navOrder
+            .filter((id): id is SidebarNavId => id !== 'profile')
+            .map((id) => {
+              if (id === 'mynotes') {
+                return (
+                  <SidebarSection
+                    key={id}
+                    icon={<Folder className="h-4 w-4" aria-hidden />}
+                    label="Notes"
+                    active={activeNav === 'mynotes'}
+                    onSelect={() => onSelectNav('mynotes')}
+                    expandable
+                    expanded={myNotesExpanded && !collapsed}
+                    onToggleExpand={onToggleMyNotes}
+                    collapsed={collapsed}
+                  >
+                    {rootFolders.map((folder, index) => (
+                      <SidebarFolderItem
+                        key={folder.id}
+                        folderId={folder.id}
+                        parentId={folder.parentId}
+                        label={folder.name}
+                        important={folder.isImportant}
+                        category={getFolderCategory(index)}
+                        active={activeFolderId === folder.id}
+                        onClick={() => onSelectFolder(folder.id)}
+                      />
+                    ))}
+                  </SidebarSection>
+                )
+              }
+              const icon =
+                id === 'tree' ? (
+                  <ListTree className="h-4 w-4" aria-hidden />
+                ) : id === 'tasks' ? (
+                  <ClipboardList className="h-4 w-4" aria-hidden />
+                ) : (
+                  <Star className="h-4 w-4" aria-hidden />
+                )
+              return (
+                <SidebarSection
+                  key={id}
+                  icon={icon}
+                  label={id === 'important' ? 'Important' : NAV_DESTINATIONS[id].label}
+                  active={activeNav === id}
+                  onSelect={() => onSelectNav(id)}
+                  collapsed={collapsed}
+                />
+              )
+            })}
         </div>
       </nav>
 

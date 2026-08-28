@@ -176,41 +176,6 @@ export class SupabaseRemindersDataRepository implements RemindersDataRepository 
     }
   }
 
-  async update(reminderId: string, draft: ReminderDraft, taskId: string): Promise<Reminder> {
-    try {
-      const { data, error } = await this.client
-        .from('reminders')
-        .update(draftToRow(draft, taskId))
-        .eq('id', reminderId)
-        .select(REMINDER_COLUMNS)
-        .single()
-      if (error) {
-        throw toRepositoryError(error, 'Could not save the reminder.')
-      }
-      return reminderFromRow(data as ReminderRow)
-    } catch (error) {
-      throw toRepositoryError(error, 'Could not save the reminder.')
-    }
-  }
-
-  /** The on/off switch on its own, so toggling one doesn't rewrite a whole schedule. */
-  async setActive(reminderId: string, isActive: boolean): Promise<Reminder> {
-    try {
-      const { data, error } = await this.client
-        .from('reminders')
-        .update({ is_active: isActive })
-        .eq('id', reminderId)
-        .select(REMINDER_COLUMNS)
-        .single()
-      if (error) {
-        throw toRepositoryError(error, 'Could not update the reminder.')
-      }
-      return reminderFromRow(data as ReminderRow)
-    } catch (error) {
-      throw toRepositoryError(error, 'Could not update the reminder.')
-    }
-  }
-
   /**
    * One task's history, newest first.
    *

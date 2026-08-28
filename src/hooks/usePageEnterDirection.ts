@@ -1,19 +1,40 @@
 import type { CSSProperties } from 'react'
 import { useLocation } from 'react-router-dom'
+import { useAuth } from './useAuth'
+import {
+  cacheNavPreferences,
+  DEFAULT_NAV_ORDER,
+  navIdForPath,
+  resolveNavOrder,
+  type NavId,
+} from '../lib/navOrder'
 
 /**
- * The bottom bar's own left-to-right order, which is the only thing that makes "left" and
- * "right" mean anything here. It matches the bar's tabs and the sidebar's sections; a folder or
- * a note sits where its section does, so stepping out to Tasks from a folder still reads as a
- * move rightwards rather than as arriving from nowhere.
+ * The bar's current order, which is the only thing that makes "left" and "right" mean anything.
+ *
+ * Held as module state and pushed in by useTrackNavSection, because this file has no component to
+ * read the account's preference from and the pages that ask for a direction mount in no reliable
+ * order. It used to be a hardcoded list that had to match the bar's own — and didn't: the bar put
+ * Starred third and Tasks fourth while this believed the reverse, so moving between those two
+ * animated backwards. There is one list now (lib/navOrder), and the bar is drawn from it too.
  */
-const NAV_ORDER: { index: number; matches: (pathname: string) => boolean }[] = [
-  { index: 0, matches: (path) => path === '/tree' },
-  { index: 1, matches: (path) => path === '/mynotes' || path.startsWith('/folder/') },
-  { index: 2, matches: (path) => path === '/tasks' || path.startsWith('/task/') },
-  { index: 3, matches: (path) => path === '/' },
-  { index: 4, matches: (path) => path === '/profile' },
-]
+let navOrder: NavId[] = DEFAULT_NAV_ORDER
+
+export function setNavOrder(order: NavId[]): void {
+  if (order.length === navOrder.length && order.every((id, i) => id === navOrder[i])) {
+    return
+  }
+  // The remembered position is an index into the *old* order, so it is translated rather than
+  // thrown away. Discarding it meant the first navigation after a reorder had no previous section
+  // to compare against and played no animation at all — which read as reordering having broken the
+  // transitions, when it had only forgotten where you were standing.
+  const lastId = lastNavIndex === null ? null : navOrder[lastNavIndex] ?? null
+  navOrder = order
+  const remapped = lastId === null ? -1 : order.indexOf(lastId)
+  lastNavIndex = remapped === -1 ? null : remapped
+  decidedPath = null
+  decidedJourney = null
+}
 
 /** How far the view travels, by how many tabs were crossed. A step to the neighbouring tab is
  *  meant to feel connected to the bar rather than thrown: it moves, but barely. Jumping the
@@ -24,7 +45,12 @@ function travelFor(distance: number): number {
 }
 
 function navIndexFor(pathname: string): number | null {
-  return NAV_ORDER.find((entry) => entry.matches(pathname))?.index ?? null
+  const id = navIdForPath(pathname)
+  if (id === null) {
+    return null
+  }
+  const index = navOrder.indexOf(id)
+  return index === -1 ? null : index
 }
 
 /**
@@ -106,6 +132,15 @@ function useJourney(): Journey | null {
  * had — and which page looked correct depended on the order you'd visited them in.
  */
 export function useTrackNavSection(): void {
+  // The bar's order comes from the account, so it is read here — the one hook guaranteed to run on
+  // every route — and handed to the module state the direction maths uses.
+  const { user } = useAuth()
+  const metadata = user?.user_metadata as Record<string, unknown> | undefined
+  // Echoed to the device on every route, so the next cold start can draw the right bar before the
+  // session has finished restoring. Writing here rather than in the settings panel means it also
+  // repairs itself on a device that has never opened settings.
+  cacheNavPreferences(metadata)
+  setNavOrder(resolveNavOrder(metadata))
   useJourney()
 }
 

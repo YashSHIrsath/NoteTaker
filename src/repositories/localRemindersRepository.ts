@@ -1,5 +1,4 @@
 import type { Reminder, ReminderDraft, TaskEvent } from '../types'
-import { RepositoryError } from './errors'
 import type { RemindersDataRepository } from './types'
 
 /**
@@ -64,28 +63,6 @@ export class LocalRemindersDataRepository implements RemindersDataRepository {
     const reminder = fromDraft(crypto.randomUUID(), taskId, draft)
     write([...read(), reminder])
     return reminder
-  }
-
-  update(reminderId: string, draft: ReminderDraft, taskId: string): Reminder {
-    const updated = fromDraft(reminderId, taskId, draft)
-    const next = read().map((reminder) => (reminder.id === reminderId ? updated : reminder))
-    if (!next.some((reminder) => reminder.id === reminderId)) {
-      throw new RepositoryError('Could not save the reminder.')
-    }
-    write(next)
-    return updated
-  }
-
-  setActive(reminderId: string, isActive: boolean): Reminder {
-    const next = read().map((reminder) =>
-      reminder.id === reminderId ? { ...reminder, isActive } : reminder,
-    )
-    const found = next.find((reminder) => reminder.id === reminderId)
-    if (!found) {
-      throw new RepositoryError('Could not update the reminder.')
-    }
-    write(next)
-    return found
   }
 
   /** No history without a server to write it: the log is produced by database triggers, and there

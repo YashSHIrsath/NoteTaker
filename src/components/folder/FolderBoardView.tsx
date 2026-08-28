@@ -136,6 +136,7 @@ function BoardColumn({
         {tasks.map((task) => (
           <TaskCard
             key={task.id}
+            scope="folder"
             taskId={task.id}
             title={task.title}
             category={category}

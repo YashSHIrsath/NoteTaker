@@ -27,7 +27,7 @@ export function mapSnapshotToUuidNotes(snapshot: AppSnapshot, maps: IdMaps): Map
     folderId: requireMappedId(maps.folders, task.folderId, 'Task folder'),
     content: task.content,
     isImportant: task.isImportant,
-    isPinned: task.isPinned,
+    pinnedScopes: task.pinnedScopes,
     sortOrder: task.sortOrder,
     noteKind: task.noteKind,
     dueAt: task.dueAt,

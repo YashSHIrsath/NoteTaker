@@ -39,7 +39,7 @@ function sampleSnapshot(): AppSnapshot {
         folderId: 'eloquent',
         content: 'notes',
         isImportant: true,
-        isPinned: false,
+        pinnedScopes: [],
         noteKind: 'note',
         dueAt: null,
         completed: false,

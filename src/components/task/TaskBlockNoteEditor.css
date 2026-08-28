@@ -135,6 +135,29 @@
   padding-inline: 0;
 }
 
+/* Long unbroken tokens have to break rather than run off the edge.
+ *
+ * Normal wrapping only breaks at spaces and hyphens, so a string like
+ * "Analytics_Advisory_Gurgaon" — underscores, no break opportunity anywhere — is one word as far
+ * as the browser is concerned. On a 200px card it simply overflowed and the tail was clipped,
+ * which reads as text that stops mid-word rather than text that is too long.
+ *
+ * `anywhere` rather than `break-word`: the two behave the same once a line has started, but
+ * `anywhere` also lets the intrinsic minimum width shrink, which matters here because these cards
+ * are laid out on a grid that asks the content how narrow it can go. With `break-word` the card
+ * still reports the whole unbroken token as its minimum and can push its own column wider.
+ *
+ * URLs get the same treatment for the same reason — a pasted link is one very long word. */
+.task-blocknote-preview .bn-static-content,
+.task-blocknote-preview .bn-inline-content,
+.task-blocknote-preview p,
+.task-blocknote-preview a,
+.task-blocknote-preview li,
+.task-blocknote-preview [data-content-type='heading'] {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
 /* Tables get their borders from `.bn-editor [data-content-type=table]` in BlockNote's own CSS,
    which a static preview isn't inside — so a table in a card would otherwise lose its grid. */
 .task-blocknote-preview [data-content-type='table'] table {

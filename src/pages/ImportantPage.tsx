@@ -1,5 +1,6 @@
 import { useState, type CSSProperties } from 'react'
-import { FileText, Folder } from 'lucide-react'
+import type { Task } from '../types'
+import { FileText, Folder, Pin } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { StarButton } from '../components/common/StarButton'
 import { RowDeleteButton } from '../components/common/RowDeleteButton'
@@ -13,6 +14,7 @@ import { useDeleteTask } from '../hooks/useDeleteTask'
 import { useFolders } from '../hooks/useFolders'
 import { useServerNowCoarse } from '../hooks/useServerNow'
 import { folderPathLabel, getImportantFolders } from '../lib/folders'
+import { isPinnedIn } from '../lib/taskGrid'
 import { getImportantTasks } from '../lib/tasks'
 import {
   applyTaskFilters,
@@ -27,6 +29,14 @@ import { usePageEnter } from '../hooks/usePageEnterDirection'
 import { cn } from '../lib/cn'
 import { performWithTaskExit } from '../lib/taskExitAnimation'
 import { useFloatingHeader } from '../hooks/useFloatingHeader'
+
+/** The two group headings, sharing the shape the Tasks page and folder views already use for
+ *  "Pinned tasks" / "All tasks", so the three listings read the same way. */
+const PINNED_HEADING_CLASS =
+  'inline-flex items-center gap-1.5 rounded-full border border-[var(--color-accent)]/30 bg-[var(--color-accent-soft)] px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-accent)] sm:px-3 sm:py-1 sm:text-xs'
+
+const SECTION_HEADING_CLASS =
+  'inline-flex items-center rounded-full border border-[var(--color-border)] bg-[var(--color-hover)] px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)] sm:px-3 sm:py-1 sm:text-xs'
 
 const CARD_GRID = 'mt-2.5 grid grid-cols-1 gap-2.5 sm:grid-cols-2 sm:gap-3 xl:grid-cols-3'
 // Same width rule as the task tiles: rows only split into columns once each one has room.
@@ -80,6 +90,9 @@ export function ImportantPage() {
     ? importantTasks.filter((task) => task.tags.includes(activeTag))
     : importantTasks
   const visibleImportantTasks = applyTaskFilters(byTag, kindFilter, statusFilter, now)
+  // Pinning is per-listing, so Starred asks about its own scope and nothing else.
+  const pinnedImportantTasks = visibleImportantTasks.filter((task) => isPinnedIn(task, 'important'))
+  const restImportantTasks = visibleImportantTasks.filter((task) => !isPinnedIn(task, 'important'))
 
   const removeTaskFromImportant = (taskId: string) => {
     void performWithTaskExit(taskId, () => toggleTaskImportant(taskId))
@@ -96,6 +109,95 @@ export function ImportantPage() {
     setTab(next)
   }
 
+  /**
+   * Both card styles, for whichever slice of the list is being drawn.
+   *
+   * Lifted out of the section below so pinned notes can be drawn as their own group. Starred was
+   * the one listing that never grouped them, which made "Pin to top of Starred" an offer with
+   * nothing behind it -- the card simply did not move.
+   */
+  const renderImportantTasks = (list: Task[]) =>
+    viewStyle === 'clipboard' ? (
+          <TaskGridCanvas
+            tasks={list}
+            scope="important"
+            className="mt-3"
+            handleColor={(task) => taskColorStyle(task.color, scatterCategoryForId(task.id)).ink}
+          >
+            {(task) => (
+              <AllTaskTile
+                scope="important"
+                taskId={task.id}
+                category={scatterCategoryForId(task.id)}
+                folderLabel={folderPathLabel(folders, task.folderId)}
+                onOpen={() => setOpenTaskId(task.id)}
+              />
+            )}
+          </TaskGridCanvas>
+        ) : (
+          <div className={CARD_GRID}>
+            {list.map((task) => {
+              const category = getRootCategoryForFolder(folders, task.folderId)
+              const folderTrail = folderPathLabel(folders, task.folderId)
+              return (
+                <div key={task.id} className={CARD_BASE} data-task-id={task.id}>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      navigate(`/folder/${task.folderId}`, { state: { openTaskId: task.id } })
+                    }
+                    className="flex min-w-0 flex-1 items-center gap-3 rounded-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/20"
+                  >
+                    <span
+                      className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--color-hover)] text-[var(--color-text-muted)]"
+                      aria-hidden
+                    >
+                      <FileText className="h-4 w-4" aria-hidden />
+                    </span>
+                    <span className="flex min-w-0 flex-1 flex-col gap-1">
+                      <span
+                        className="w-fit max-w-full truncate rounded-full border px-2 py-0.5 text-[13.5px] font-semibold leading-tight"
+                        style={{
+                          borderColor: categoryVar(category, 'soft'),
+                          background: categoryVar(category, 'soft'),
+                          color: categoryVar(category, 'ink'),
+                        }}
+                      >
+                        {task.title}
+                      </span>
+                      <span className="truncate text-[11.5px] text-[var(--color-text-muted)]">
+                        in {folderTrail}
+                      </span>
+                      {task.tags.length > 0 ? (
+                        <span className="flex flex-wrap gap-1">
+                          {task.tags.map((tag) => (
+                            <span
+                              key={tag}
+                              className="truncate rounded-full bg-[var(--color-hover)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-text-muted)]"
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                        </span>
+                      ) : null}
+                    </span>
+                  </button>
+                  <div className={CARD_ACTIONS}>
+                    <StarButton
+                      important={task.isImportant}
+                      onToggle={() => removeTaskFromImportant(task.id)}
+                    />
+                    <RowDeleteButton
+                      label={`Delete ${task.title}`}
+                      onClick={() => requestTaskDelete(task.id)}
+                    />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+    )
+
   return (
     // The animation sits on the whole view, header included, so the page arrives as one piece
     // rather than as a list sliding around underneath a stationary title.
@@ -109,15 +211,20 @@ export function ImportantPage() {
           the same mistake the Tasks page header carries a note about. A bar that overlays content
           has to keep earning its height; a switch does, a read heading doesn't. */}
       {/* The switch *is* the bar. The shared FLOATING_HEADER_CLASS is a full-width card sized for
-          a title, a subtitle and controls; with nothing in it but a 240px switch it was mostly
-          empty space with a border round it, and the switch's own pill inside made it two nested
-          rounded boxes saying one thing. Hugging its content is `w-fit` plus auto margins, which
-          centre a box between the two insets — the same rule that decides where the bottom bar
-          sits, rather than a transform. */}
+          a title, a subtitle and controls; with nothing in it but a switch it was mostly empty
+          space with a border round it, and the switch's own pill inside made it two nested rounded
+          boxes saying one thing.
+
+          It used to hug its contents and centre itself, which reads fine on a phone — where a
+          240px switch is most of the width anyway — and badly on any window between that and lg,
+          where it left a stranded pill with a hundred pixels of dead space either side. The bar
+          now spans the same insets as the content beneath it and the switch grows to fill what
+          the filter beside it doesn't take. From lg it stops growing: stretched across a wide
+          desktop it would be two enormous tabs. */}
       <div
         ref={headerRef}
         className={cn(
-          'absolute inset-x-4 top-3 z-20 mx-auto w-fit shrink-0 sm:inset-x-6 sm:top-4',
+          'absolute inset-x-4 top-3 z-20 shrink-0 sm:inset-x-6 sm:top-4',
           // From lg this stops being a pill hovering over the content and becomes the page's
           // header band — full width, on the surface, ruled off from the content below it, and
           // carrying the filter pill alongside the switch.
@@ -131,7 +238,7 @@ export function ImportantPage() {
           'lg:bg-[var(--color-surface)] lg:px-6 lg:py-3',
         )}
       >
-        <div className="flex w-full items-center justify-center lg:justify-between lg:gap-4">
+        <div className="flex w-full items-center gap-2 lg:justify-between lg:gap-4">
           <div
             role="tablist"
             aria-label="Starred"
@@ -139,7 +246,7 @@ export function ImportantPage() {
               // h-9 on both this and the filter beside it: the two used to size themselves from
               // their own contents — a line-height here, a button height there — and landed a few
               // pixels apart, which on two pills side by side is all it takes to look wrong.
-              'relative inline-flex h-9 items-center rounded-full p-1',
+              'relative inline-flex h-9 min-w-0 flex-1 items-center rounded-full p-1 lg:flex-none',
               // The floating-surface treatment the bar used to carry, now on the only thing left.
               'border border-[var(--color-border)]/60 bg-[var(--color-surface)]/70 backdrop-blur-md',
               'shadow-[var(--shadow-md)] supports-[backdrop-filter:blur(0px)]:bg-[var(--color-surface)]/80',
@@ -174,8 +281,8 @@ export function ImportantPage() {
                   aria-selected={active}
                   onClick={() => selectTab(item.key)}
                   className={cn(
-                    'anim-press relative z-10 h-full w-[104px] rounded-full px-3 text-[12.5px] font-semibold',
-                    'transition-colors duration-200 sm:w-[120px]',
+                    'anim-press relative z-10 h-full min-w-0 flex-1 rounded-full px-3 text-[12.5px] font-semibold',
+                    'transition-colors duration-200 lg:w-[120px] lg:flex-none',
                     active ? 'text-[var(--color-text)]' : 'text-[var(--color-text-muted)]',
                   )}
                 >
@@ -195,10 +302,10 @@ export function ImportantPage() {
           {tab === 'tasks' ? (
             <div
               className={cn(
-                'ml-1.5 inline-flex h-9 shrink-0 items-center rounded-full p-1',
+                'inline-flex h-9 shrink-0 items-center rounded-full p-1',
                 'border border-[var(--color-border)]/60 bg-[var(--color-surface)]/70 backdrop-blur-md',
                 'shadow-[var(--shadow-md)] supports-[backdrop-filter:blur(0px)]:bg-[var(--color-surface)]/80',
-                'lg:ml-0 lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:backdrop-blur-none',
+                'lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:backdrop-blur-none',
               )}
             >
               <TaskFilterMenu
@@ -291,84 +398,27 @@ export function ImportantPage() {
                 activeTag,
               )}
             </p>
-          ) : viewStyle === 'clipboard' ? (
-            <TaskGridCanvas
-              tasks={visibleImportantTasks}
-              scope="important"
-              className="mt-3"
-              handleColor={(task) => taskColorStyle(task.color, scatterCategoryForId(task.id)).ink}
-            >
-              {(task) => (
-                <AllTaskTile
-                  taskId={task.id}
-                  category={scatterCategoryForId(task.id)}
-                  folderLabel={folderPathLabel(folders, task.folderId)}
-                  onOpen={() => setOpenTaskId(task.id)}
-                />
-              )}
-            </TaskGridCanvas>
           ) : (
-            <div className={CARD_GRID}>
-              {visibleImportantTasks.map((task) => {
-                const category = getRootCategoryForFolder(folders, task.folderId)
-                const folderTrail = folderPathLabel(folders, task.folderId)
-                return (
-                  <div key={task.id} className={CARD_BASE} data-task-id={task.id}>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        navigate(`/folder/${task.folderId}`, { state: { openTaskId: task.id } })
-                      }
-                      className="flex min-w-0 flex-1 items-center gap-3 rounded-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/20"
-                    >
-                      <span
-                        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--color-hover)] text-[var(--color-text-muted)]"
-                        aria-hidden
-                      >
-                        <FileText className="h-4 w-4" aria-hidden />
-                      </span>
-                      <span className="flex min-w-0 flex-1 flex-col gap-1">
-                        <span
-                          className="w-fit max-w-full truncate rounded-full border px-2 py-0.5 text-[13.5px] font-semibold leading-tight"
-                          style={{
-                            borderColor: categoryVar(category, 'soft'),
-                            background: categoryVar(category, 'soft'),
-                            color: categoryVar(category, 'ink'),
-                          }}
-                        >
-                          {task.title}
-                        </span>
-                        <span className="truncate text-[11.5px] text-[var(--color-text-muted)]">
-                          in {folderTrail}
-                        </span>
-                        {task.tags.length > 0 ? (
-                          <span className="flex flex-wrap gap-1">
-                            {task.tags.map((tag) => (
-                              <span
-                                key={tag}
-                                className="truncate rounded-full bg-[var(--color-hover)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-text-muted)]"
-                              >
-                                {tag}
-                              </span>
-                            ))}
-                          </span>
-                        ) : null}
-                      </span>
-                    </button>
-                    <div className={CARD_ACTIONS}>
-                      <StarButton
-                        important={task.isImportant}
-                        onToggle={() => removeTaskFromImportant(task.id)}
-                      />
-                      <RowDeleteButton
-                        label={`Delete ${task.title}`}
-                        onClick={() => requestTaskDelete(task.id)}
-                      />
-                    </div>
-                  </div>
-                )
-              })}
+            <>
+          {/* Both halves are labelled, not just the pinned one. An unlabelled block under a
+              labelled one reads as an overflow of it rather than as its own group — the second
+              set of cards looked like more pinned notes that had run past the heading. */}
+          {pinnedImportantTasks.length > 0 ? (
+            <div className="mt-3">
+              <h3 className={PINNED_HEADING_CLASS}>
+                <Pin className="h-3 w-3 fill-current" aria-hidden />
+                Pinned starred
+              </h3>
+              {renderImportantTasks(pinnedImportantTasks)}
             </div>
+          ) : null}
+          {restImportantTasks.length > 0 ? (
+            <div className={pinnedImportantTasks.length > 0 ? 'mt-5' : 'mt-3'}>
+              <h3 className={SECTION_HEADING_CLASS}>Starred</h3>
+              {renderImportantTasks(restImportantTasks)}
+            </div>
+          ) : null}
+            </>
           )}
         </section>
         )}
