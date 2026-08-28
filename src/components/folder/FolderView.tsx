@@ -13,7 +13,7 @@ import { AllTaskTile } from '../task/AllTaskTile'
 import { TaskGridCanvas } from '../task/TaskGridCanvas'
 import { TaskEditorDialog } from '../task/TaskEditorDialog'
 import { useFolders } from '../../hooks/useFolders'
-import { useAuth } from '../../hooks/useAuth'
+import { useWorkspacePath } from '../../hooks/useWorkspace'
 import { useIsCompact } from '../../hooks/useMediaQuery'
 import { useServerNowCoarse } from '../../hooks/useServerNow'
 import { cn } from '../../lib/cn'
@@ -30,7 +30,7 @@ import { categoryVar, getRootCategoryForFolder, scatterCategoryForId } from '../
 import { taskColorStyle } from '../../lib/taskColor'
 import { isPinnedIn } from '../../lib/taskGrid'
 import { focusTaskTitle } from '../../lib/focusTaskTitle'
-import { readViewStyle } from '../../lib/viewStyle'
+import { useDisplaySettings } from '../../hooks/useDisplaySettings'
 import {
   COLLAPSIBLE_TITLE_CLASS,
   FLOATING_HEADER_CLASS,
@@ -75,10 +75,12 @@ export function FolderView({
   // own; the hook measures it so the content can leave that much room clear.
   const { headerRef, contentRef, condensed } = useFloatingHeader()
   const navigate = useNavigate()
+  const to = useWorkspacePath()
   const location = useLocation()
   const { folders, getForest, getTasksInFolder, toggleFolderImportant } = useFolders()
-  const { user } = useAuth()
-  const viewStyle = readViewStyle(user?.user_metadata as Record<string, unknown> | undefined)
+  // Space-first: inside a shared space the note style belongs to the space, so everyone sees the
+  // same one. See useDisplaySettings.
+  const { viewStyle } = useDisplaySettings()
   const locationPathIds = new Set(path.map((item) => item.id))
   const forest = getForest()
 
@@ -101,7 +103,7 @@ export function FolderView({
 
   const openChildFolder = (folderId: string) => {
     setSubfoldersSheetOpen(false)
-    navigate(`/folder/${folderId}`)
+    navigate(to(`/folder/${folderId}`))
   }
 
   const boardColumns = [

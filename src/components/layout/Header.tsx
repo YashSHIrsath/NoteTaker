@@ -1,12 +1,19 @@
-import { Moon, Sun, LogOut } from 'lucide-react'
+import { useState } from 'react'
+import { DoorOpen, History, Moon, Sun, LogOut, Users } from 'lucide-react'
 import { IconButton } from '../ui/IconButton'
 import { ProjectLogo } from '../brand/ProjectLogo'
 import { GlobalSearch } from '../search/GlobalSearch'
+import { SpaceAvatar } from '../space/SpaceAvatar'
+import { SpacesMenu } from '../space/SpacesMenu'
 import { useAuth } from '../../hooks/useAuth'
+import { useSpaces } from '../../hooks/useSpaces'
 import { useTheme } from '../../hooks/useTheme'
 import { useToggleFeedback } from '../../hooks/useToggleFeedback'
+import { useSpaceId } from '../../hooks/useWorkspace'
+import { roleCanManageMembers } from '../../lib/spaceRoles'
 import { cn } from '../../lib/cn'
 import { originFromElement } from '../../lib/themeReveal'
+import { useNavigate } from 'react-router-dom'
 
 export interface HeaderProps {
   className?: string
@@ -16,6 +23,15 @@ export function Header({ className }: HeaderProps) {
   const { signOut } = useAuth()
   const { theme, toggleTheme } = useTheme()
   const themePopping = useToggleFeedback(theme === 'dark')
+  // Only inside a shared space: personal notes have no activity log, because there is nobody to
+  // attribute anything to. And only for an owner or admin — everyone else sees what a space is and
+  // who is in it, not a record of what each of them did.
+  const spaceId = useSpaceId()
+  const { getSpace } = useSpaces()
+  const currentSpace = spaceId ? getSpace(spaceId) : undefined
+  const canSeeHistory = currentSpace ? roleCanManageMembers(currentSpace.role) : false
+  const navigate = useNavigate()
+  const [spacesOpen, setSpacesOpen] = useState(false)
 
   const handleSignOut = () => {
     void signOut().catch(() => undefined)
@@ -38,6 +54,11 @@ export function Header({ className }: HeaderProps) {
         {/* The mark stands in for the name where the name is too wide — on a phone the wordmark
             was competing with the search field, and the mark says the same thing in 20px. */}
         <ProjectLogo className="h-4 w-[22px] text-[var(--color-accent)]" label="Mindstack" />
+        {/* The app's own name, in a space as much as in your own notes.
+          *
+          * This briefly showed the space's name instead, which put a workspace label where the
+          * product's identity belongs. Which space you are in is the sidebar's job — see
+          * WorkspaceSwitcher — and on a phone the Spaces tab in the bottom bar carries it. */}
         <h1
           // Dropped on the narrowest screens: the search bar needs the room far more, and the
           // bottom bar now carries the app's identity/navigation there.
@@ -54,6 +75,45 @@ export function Header({ className }: HeaderProps) {
           and the leftover space would otherwise pile up after these controls, leaving them
           stranded mid-header instead of at the right edge. */}
       <div className="ml-auto flex shrink-0 items-center gap-0.5">
+        {/*
+          * Spaces, below `lg` only — above it the sidebar has a Spaces row of its own.
+          *
+          * It sat in the bottom bar, which made the bar six items and put a list of workspaces
+          * beside the four pages you work in. Up here it is one control with one job in each
+          * workspace: from your own notes it goes to the spaces page, and from inside a space it
+          * opens the spaces so you can switch or step out. Inside one it also wears that space's
+          * face, so the header says which workspace you are in without taking the app's name.
+          */}
+        {currentSpace ? (
+          <IconButton
+            label={`Switch or leave ${currentSpace.name}`}
+            onClick={() => setSpacesOpen((value) => !value)}
+            className="lg:hidden"
+          >
+            <SpaceAvatar
+              spaceId={currentSpace.id}
+              color={currentSpace.color}
+              imageUrl={currentSpace.imageUrl}
+              className="h-5 w-5 rounded"
+              iconClassName="h-3 w-3"
+            />
+          </IconButton>
+        ) : (
+          <IconButton
+            label="Shared spaces"
+            onClick={() => navigate('/spaces')}
+            className="lg:hidden"
+          >
+            <Users className="h-5 w-5" />
+          </IconButton>
+        )}
+
+        {canSeeHistory && spaceId ? (
+          <IconButton label="Activity in this space" onClick={() => navigate(`/s/${spaceId}/activity`)}>
+            <History className="h-5 w-5" />
+          </IconButton>
+        ) : null}
+
         <IconButton
           label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
           onClick={(event) => toggleTheme(originFromElement(event.currentTarget))}
@@ -74,15 +134,33 @@ export function Header({ className }: HeaderProps) {
             service behind it are still in the tree and still covered by the checks; putting it
             back is one <DevMigrateNotesButton /> in this slot. */}
 
-        {/* From lg, sign out lives in the sidebar's account row, beside the face and name it
-            signs out of. Below lg there's no sidebar, so it sits here — as the button itself. It
-            used to be one item inside a "More" menu, which is a menu's worth of clicks for a
-            single action; Important, the only other entry, is already the bottom bar's Starred tab
-            at these widths and the sidebar's own row above them. */}
-        <IconButton label="Sign out" onClick={handleSignOut} className="lg:hidden">
-          <LogOut className="h-5 w-5" />
-        </IconButton>
+        {/*
+          * The last button is "the way out of where you are", which is a different door in each
+          * workspace.
+          *
+          * From lg, sign out lives in the sidebar's account row beside the face and name it signs
+          * out of. Below lg there's no sidebar, so it sits here. Inside a space, though, signing
+          * out is not what this corner is for — stepping back into your own notes is, and offering
+          * the destructive one instead put an account-wide action where a workspace-wide one
+          * belongs. Signing out is then on your own profile, one tap past this.
+          */}
+        {currentSpace ? (
+          <IconButton
+            label="Leave this space and return to your own notes"
+            tooltip="Exit this space"
+            onClick={() => navigate('/')}
+            className="lg:hidden"
+          >
+            <DoorOpen className="h-5 w-5" />
+          </IconButton>
+        ) : (
+          <IconButton label="Sign out" onClick={handleSignOut} className="lg:hidden">
+            <LogOut className="h-5 w-5" />
+          </IconButton>
+        )}
       </div>
+
+      <SpacesMenu open={spacesOpen} onClose={() => setSpacesOpen(false)} />
     </header>
   )
 }

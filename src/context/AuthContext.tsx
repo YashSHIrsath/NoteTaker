@@ -34,13 +34,36 @@ export interface ProfileUpdate {
   tilesPerRowBand?: TileBandId
 }
 
+/**
+ * What happened when somebody tried to create an account.
+ *
+ * `alreadyRegistered` matters because the honest answer is not an error. Supabase deliberately does
+ * not fail a signup for an address that already exists — telling the caller would turn the form into
+ * a way of asking "does this person have an account here", which is somebody's business and nobody
+ * else's. What it does instead is answer successfully with a user carrying no identities, and send
+ * nothing. That is the signal, and reading it gives an honest message without adding a way to probe
+ * for addresses.
+ */
+export interface SignUpOutcome {
+  needsEmailConfirmation: boolean
+  /** True when that address already has an account. Nothing was created and no mail was sent. */
+  alreadyRegistered: boolean
+}
+
 interface AuthContextValue {
   user: User | null
   session: Session | null
   loading: boolean
   configured: boolean
   signIn: (email: string, password: string) => Promise<void>
-  signUp: (email: string, password: string, fullName?: string) => Promise<{ needsEmailConfirmation: boolean }>
+  signUp: (email: string, password: string, fullName?: string) => Promise<SignUpOutcome>
+  /**
+   * Sends the confirmation email again.
+   *
+   * The answer to "I signed up and nothing arrived" — a mail can be delayed, filtered or bounced,
+   * and until this existed the only route left was to start over with a different address.
+   */
+  resendConfirmation: (email: string) => Promise<void>
   signOut: () => Promise<void>
   updateProfile: (update: ProfileUpdate) => Promise<void>
 }
@@ -111,8 +134,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) {
       throw error
     }
-    return { needsEmailConfirmation: data.session === null }
+    /*
+     * An existing address comes back as a success with an empty identity list.
+     *
+     * Supabase returns that rather than an error so a signup form cannot be used to discover who has
+     * an account — which is right, and is why there is no "does this email exist" call anywhere in
+     * this app. The consequence is that a duplicate signup used to look exactly like a real one:
+     * "check your email", for a mail that was never sent. This reads the signal it does give.
+     *
+     * The `identities` array is absent on some configurations, so an undefined one is treated as a
+     * genuine signup — reporting a real new account as a duplicate would be the worse mistake.
+     */
+    const identities = data.user?.identities
+    return {
+      needsEmailConfirmation: data.session === null,
+      alreadyRegistered: Boolean(data.user) && Array.isArray(identities) && identities.length === 0,
+    }
   }, [client])
+
+  const resendConfirmation = useCallback(
+    async (email: string) => {
+      if (!client) {
+        throw new Error('Supabase is not configured.')
+      }
+      const { error } = await client.auth.resend({
+        type: 'signup',
+        email: email.trim(),
+        options: { emailRedirectTo: getAuthEmailRedirectTo() },
+      })
+      if (error) {
+        throw error
+      }
+    },
+    [client],
+  )
 
   const signOut = useCallback(async () => {
     if (!client) {
@@ -170,10 +225,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       configured: client !== null,
       signIn,
       signUp,
+      resendConfirmation,
       signOut,
       updateProfile,
     }),
-    [client, loading, session, signIn, signOut, signUp, updateProfile],
+    [client, loading, resendConfirmation, session, signIn, signOut, signUp, updateProfile],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

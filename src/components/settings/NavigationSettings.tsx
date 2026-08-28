@@ -6,9 +6,13 @@ import {
   DEFAULT_PAGE_CHOICES,
   NAV_DESTINATIONS,
   readDefaultPage,
-  resolveNavOrder,
   type NavId,
 } from '../../lib/navOrder'
+import {
+  useDisplaySettings,
+  useDisplaySettingsWriter,
+} from '../../hooks/useDisplaySettings'
+import { Notice } from '../ui/Notice'
 import { cn } from '../../lib/cn'
 import { NavOrderList } from './NavOrderList'
 
@@ -30,14 +34,22 @@ export function NavigationSettings() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const order = resolveNavOrder(metadata)
+  /*
+   * The order is the space's inside a space; the page you open on stays yours.
+   *
+   * Not an arbitrary split. The bar order describes the workspace — everyone is looking at the same
+   * tree, so one member rearranging it rearranges it for the others. Where you land when you start
+   * the app is about you, and there is no sense in which somebody else should decide it.
+   */
+  const { navOrder: order } = useDisplaySettings()
+  const display = useDisplaySettingsWriter()
   const defaultPage = readDefaultPage(metadata)
 
-  const save = async (update: { navOrder?: NavId[]; defaultPage?: SidebarNavId }) => {
+  const run = async (write: () => Promise<void>) => {
     setSaving(true)
     setError(null)
     try {
-      await updateProfile(update)
+      await write()
     } catch (cause) {
       // The real message, not a guess at one. "Check your connection" was wrong every time the
       // cause was something else — and Supabase rate-limits account updates, which a few quick
@@ -51,6 +63,9 @@ export function NavigationSettings() {
       setSaving(false)
     }
   }
+
+  const saveOrder = (next: NavId[]) => void run(() => display.save({ navOrder: next }))
+  const saveDefaultPage = (page: SidebarNavId) => void run(() => updateProfile({ defaultPage: page }))
 
   return (
     <div className="mt-4 flex flex-col gap-6">
@@ -69,7 +84,7 @@ export function NavigationSettings() {
                 type="button"
                 aria-pressed={active}
                 disabled={saving}
-                onClick={() => void save({ defaultPage: id })}
+                onClick={() => saveDefaultPage(id)}
                 className={cn(
                   'anim-press inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12.5px] font-medium transition-colors',
                   'disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/25',
@@ -93,7 +108,12 @@ export function NavigationSettings() {
           Drag to rearrange. This sets the bottom bar on a phone and the sidebar on a wide screen —
           and it is the order pages slide in from, so a tab you move left will arrive from the left.
         </p>
-        <NavOrderList order={order} disabled={saving} onReorder={(next) => save({ navOrder: next })} />
+        {display.writesToSpace ? (
+          <Notice className="mt-2">
+            Shared with everyone in {display.spaceName ?? 'this space'}.
+          </Notice>
+        ) : null}
+        <NavOrderList order={order} disabled={saving} onReorder={saveOrder} />
       </div>
 
       {error ? (

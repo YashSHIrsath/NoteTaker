@@ -1,3 +1,4 @@
+import { PERSONAL_WORKSPACE, workspaceKey, type WorkspaceRef } from '../../lib/workspace'
 import type { UiState } from '../../services/storage/types'
 
 const UI_STATE_KEY = 'MYNOTES_UI_STATE'
@@ -12,8 +13,20 @@ export function defaultUiState(): UiState {
   }
 }
 
-function storageKey(userId?: string | null): string {
-  return userId ? `${UI_STATE_KEY}:${userId}` : UI_STATE_KEY
+/**
+ * Which expand/collapse state this is, per account and per workspace.
+ *
+ * The personal key is deliberately unchanged from before spaces existed, so nobody's open folders
+ * close on the deploy. A space gets a suffix, because "which folders are open" is a per-device
+ * answer about one tree — sharing one set between your own notes and a shared space would have your
+ * tree's open folders decide a space's, and both would fight over the same list.
+ */
+function storageKey(userId?: string | null, workspace: WorkspaceRef = PERSONAL_WORKSPACE): string {
+  if (!userId) {
+    return UI_STATE_KEY
+  }
+  const scope = workspaceKey(workspace)
+  return scope === 'personal' ? `${UI_STATE_KEY}:${userId}` : `${UI_STATE_KEY}:${userId}:${scope}`
 }
 
 function isStringArray(value: unknown): value is string[] {
@@ -46,13 +59,20 @@ export function isSubtaskExpandedInUi(uiState: Pick<UiState, 'collapsedSubtaskId
   return !uiState.collapsedSubtaskIds.includes(subtaskId)
 }
 
-export function loadPersistedUiState(userId?: string | null): UiState {
+export function loadPersistedUiState(
+  userId?: string | null,
+  workspace: WorkspaceRef = PERSONAL_WORKSPACE,
+): UiState {
   if (typeof window === 'undefined') {
     return defaultUiState()
   }
 
   try {
-    const raw = window.localStorage.getItem(storageKey(userId)) ?? (userId ? window.localStorage.getItem(UI_STATE_KEY) : null)
+    // The unkeyed fallback is for state written before this store was keyed by account at all. It
+    // is personal state by definition, so a space never reaches for it.
+    const legacy =
+      userId && workspace.kind === 'personal' ? window.localStorage.getItem(UI_STATE_KEY) : null
+    const raw = window.localStorage.getItem(storageKey(userId, workspace)) ?? legacy
     if (!raw) {
       return defaultUiState()
     }
@@ -75,9 +95,16 @@ export function loadPersistedUiState(userId?: string | null): UiState {
   }
 }
 
-export function persistUiState(uiState: UiState, userId?: string | null): void {
+export function persistUiState(
+  uiState: UiState,
+  userId?: string | null,
+  workspace: WorkspaceRef = PERSONAL_WORKSPACE,
+): void {
   if (typeof window === 'undefined' || !userId) {
     return
   }
-  window.localStorage.setItem(storageKey(userId), JSON.stringify(normalizeUiState(uiState)))
+  window.localStorage.setItem(
+    storageKey(userId, workspace),
+    JSON.stringify(normalizeUiState(uiState)),
+  )
 }

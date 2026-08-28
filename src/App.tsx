@@ -2,7 +2,7 @@ import { BrowserRouter, HashRouter, Navigate, Route, Routes } from 'react-router
 import { AuthProvider } from './context/AuthContext'
 import { ThemeProvider } from './context/ThemeContext'
 import { AppLayout } from './pages/AppLayout'
-import { AuthenticatedApp } from './pages/AuthenticatedApp'
+import { AuthenticatedApp, SpaceApp, SpaceFallback, SpacesShell } from './pages/AuthenticatedApp'
 import { GuestOnly, RequireAuth } from './pages/AuthGate'
 import { LoginPage, SignupPage } from './pages/AuthPages'
 import { LandingPage } from './pages/LandingPage'
@@ -15,6 +15,9 @@ import { TaskViewPage } from './pages/TaskViewPage'
 import { ImportantPage } from './pages/ImportantPage'
 import { AllTasksPage } from './pages/AllTasksPage'
 import { ProfilePage } from './pages/ProfilePage'
+import { SharedSpacesPage } from './pages/SharedSpacesPage'
+import { InvitePage } from './pages/InvitePage'
+import { SpaceActivityPage } from './pages/SpaceActivityPage'
 import { IS_NATIVE } from './lib/platform'
 
 /**
@@ -26,6 +29,31 @@ import { IS_NATIVE } from './lib/platform'
  * is exactly the granularity this needs.
  */
 const Router = import.meta.env.MODE === 'native' ? HashRouter : BrowserRouter
+
+/**
+ * The pages of a workspace, mounted once per workspace.
+ *
+ * Written as relative paths and returned from a function rather than spelled out twice, because
+ * "the same app, pointed at different content" is exactly what a shared space is. The personal
+ * mount resolves these against "/" and the space mount against "/s/:spaceId"; nothing in the pages
+ * themselves changes, or knows which one it is in.
+ */
+function workspaceRoutes() {
+  return (
+    <>
+      {/* Starred is the front door: what a cold start, a dead deep link and the catch-all all land
+        *  on, so it is the one screen that has to be worth opening on. Tree kept its content and
+        *  its own path rather than being demoted to a redirect. */}
+      <Route index element={<ImportantPage />} />
+      <Route path="tree" element={<TreePage />} />
+      <Route path="mynotes" element={<MyNotesPage />} />
+      <Route path="folder/:folderId" element={<FolderViewPage />} />
+      <Route path="task/:taskId" element={<TaskViewPage />} />
+      <Route path="tasks" element={<AllTasksPage />} />
+      <Route path="profile" element={<ProfilePage />} />
+    </>
+  )
+}
 
 function App() {
   return (
@@ -52,23 +80,40 @@ function App() {
               <Route path="/login" element={<LoginPage />} />
               <Route path="/signup" element={<SignupPage />} />
             </Route>
+
+            {/* Outside the auth gate on purpose. Whoever follows an invite link may have no account
+              *  at all — that is the case the link exists for — and RequireAuth redirects without
+              *  keeping where you were going, which is exactly how an invitation gets lost. The page
+              *  parks the token before anything else can move you. */}
+            <Route path="/invite/:token" element={<InvitePage />} />
             <Route element={<RequireAuth />}>
-              <Route element={<AuthenticatedApp />}>
-                <Route element={<AppLayout />}>
-                  {/* Starred is the app's front door: "/" is what a cold start, a deep link that
-                    *  no longer resolves, and the catch-all below all land on, so it is the one
-                    *  screen that has to be worth opening on. Tree kept its content and moved to
-                    *  its own path rather than being demoted to a redirect — the bar's first tab
-                    *  still goes straight to it. */}
-                  <Route path="/" element={<ImportantPage />} />
-                  <Route path="/tree" element={<TreePage />} />
-                  <Route path="/mynotes" element={<MyNotesPage />} />
-                  <Route path="/folder/:folderId" element={<FolderViewPage />} />
-                  <Route path="/task/:taskId" element={<TaskViewPage />} />
-                  <Route path="/tasks" element={<AllTasksPage />} />
-                  {/* Bookmarks, and the notification links already sent out, still say /important. */}
-                  <Route path="/important" element={<Navigate to="/" replace />} />
-                  <Route path="/profile" element={<ProfilePage />} />
+              {/* Which spaces exist for this account, above both workspaces — the list spans them,
+                *  and the space shell needs it to know its own name and colour. */}
+              <Route element={<SpacesShell />}>
+                {/* The account's own notes. */}
+                <Route element={<AuthenticatedApp />}>
+                  <Route element={<AppLayout />}>
+                    {workspaceRoutes()}
+                    {/* A list of workspaces rather than a page of one, so it is not part of
+                      *  workspaceRoutes and has no /s/:spaceId twin. Tapping it from inside a space
+                      *  is how you get back out. */}
+                    <Route path="/spaces" element={<SharedSpacesPage />} />
+                    {/* Bookmarks, and the notification links already sent out, still say /important. */}
+                    <Route path="/important" element={<Navigate to="/" replace />} />
+                  </Route>
+                </Route>
+
+                {/* A shared space: the same pages, pointed at content several people hold together.
+                  *  The prefix is what makes a link to one shared note, the back button and a refresh
+                  *  all keep working — an ambient "current space" with unchanged URLs breaks all three. */}
+                <Route path="/s/:spaceId" element={<SpaceApp />}>
+                  <Route element={<AppLayout />}>
+                    {workspaceRoutes()}
+                    {/* Space-only, and so not part of workspaceRoutes: personal notes have no
+                      *  activity log, because there is nobody to attribute anything to. */}
+                    <Route path="activity" element={<SpaceActivityPage />} />
+                    <Route path="*" element={<SpaceFallback />} />
+                  </Route>
                 </Route>
               </Route>
             </Route>

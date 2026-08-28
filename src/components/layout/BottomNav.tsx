@@ -1,7 +1,11 @@
-import { ClipboardList, Folder, ListTree, Star } from 'lucide-react'
+import { ClipboardList, Folder, ListTree, Star, Users } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react'
 import type { SidebarNavId } from '../../types'
-import { NAV_DESTINATIONS, resolveNavOrder, type NavId } from '../../lib/navOrder'
+import { NAV_DESTINATIONS, type NavId } from '../../lib/navOrder'
+import { useDisplaySettings } from '../../hooks/useDisplaySettings'
+import { useSpaces } from '../../hooks/useSpaces'
+import { useWorkspace } from '../../hooks/useWorkspace'
+import { SpaceAvatar } from '../space/SpaceAvatar'
 import { useAuth } from '../../hooks/useAuth'
 import {
   INDICATOR_STRETCH_PER_SLOT,
@@ -19,6 +23,7 @@ const ICONS: Record<NavId, ReactNode> = {
   mynotes: <Folder className="h-[18px] w-[18px]" aria-hidden />,
   important: <Star className="h-[18px] w-[18px]" aria-hidden />,
   tasks: <ClipboardList className="h-[18px] w-[18px]" aria-hidden />,
+  spaces: <Users className="h-[18px] w-[18px]" aria-hidden />,
   profile: null,
 }
 
@@ -40,13 +45,47 @@ export interface BottomNavProps {
 export function BottomNav({ activeNav, profileActive = false, onSelectNav, onOpenProfile }: BottomNavProps) {
   const { user } = useAuth()
   const metadata = (user?.user_metadata ?? {}) as { full_name?: string; avatar_url?: string }
-  // Rebuilt from the account's order every render, so reordering in settings moves the tabs and
-  // the page-transition direction together — they read the same list.
-  const items = resolveNavOrder(user?.user_metadata as Record<string, unknown> | undefined).map(
-    (id) => ({ id, label: NAV_DESTINATIONS[id].label, icon: ICONS[id] }),
-  )
+  // Rebuilt from the order in force every render, so reordering in settings moves the tabs and
+  // the page-transition direction together — they read the same list. Inside a shared space that
+  // order belongs to the space, so a member rearranging the bar rearranges it for everyone.
+  const { navOrder } = useDisplaySettings()
+  const workspace = useWorkspace()
+  const { getSpace } = useSpaces()
+  const currentSpace = workspace.kind === 'space' ? getSpace(workspace.id) : undefined
+  /*
+   * Five tabs: the four pages you work in, and the account.
+   *
+   * Spaces is filtered out rather than removed from the order, because the order is also the
+   * sidebar's — where Spaces is a row with its own list under it. Down here it was a sixth item and
+   * the odd one out: a list of workspaces sitting beside the pages inside one. It is the button in
+   * the header now, which is where a workspace switcher belongs.
+   *
+   * Inside a space the last tab is that space's own page, so it wears the space's face rather than
+   * yours. Below `lg` this bar and the header are the only chrome on screen, and the tinted grounds
+   * say you are in *a* space — this says which one.
+   */
+  const items = navOrder
+    .filter((id) => id !== 'spaces')
+    .map((id) => ({
+      id,
+      label: id === 'profile' && currentSpace ? currentSpace.name : NAV_DESTINATIONS[id].label,
+      icon:
+        id === 'profile' && currentSpace ? (
+          <SpaceAvatar
+            spaceId={currentSpace.id}
+            color={currentSpace.color}
+            imageUrl={currentSpace.imageUrl}
+            className="h-[18px] w-[18px] rounded"
+            iconClassName="h-2.5 w-2.5"
+          />
+        ) : (
+          ICONS[id]
+        ),
+    }))
   const initial = (metadata.full_name?.trim() || user?.email || 'Y').charAt(0).toUpperCase()
 
+  // Stays "which page am I on". Which *workspace* is carried by the tab's own face and label, and by
+  // the tinted grounds — lighting up Spaces from inside a folder would say the wrong thing twice.
   const activeId: BottomNavId | undefined = profileActive ? 'profile' : activeNav
   const activeIndex = items.findIndex((item) => item.id === activeId)
 
@@ -177,7 +216,10 @@ export function BottomNav({ activeNav, profileActive = false, onSelectNav, onOpe
           <span
             aria-hidden
             className={cn(
-              'absolute inset-y-1 left-1 w-[calc((100%-0.5rem)/5)] rounded-full',
+              // Width comes from the number of tabs, not a literal: the bar grew a sixth
+              // destination with Shared Spaces, and a hardcoded fifth left the indicator wider than
+              // its slot and drifting further from it with every step across the bar.
+              'absolute inset-y-1 left-1 rounded-full',
               'bg-[var(--color-accent-soft)] ring-1 ring-inset ring-[var(--color-accent)]/25',
               // One transition for travel and stretch alike, on an overshooting curve so it
               // arrives with a wobble instead of stopping dead — but never while dragging, where
@@ -188,6 +230,7 @@ export function BottomNav({ activeNav, profileActive = false, onSelectNav, onOpe
               'motion-reduce:transition-none',
             )}
             style={{
+              width: `calc((100% - 0.5rem) / ${items.length})`,
               // translate first, so the percentage is of the untransformed width and the scales
               // can't drag the indicator off its slot. The position is fractional while dragging.
               transform: [
@@ -234,7 +277,9 @@ export function BottomNav({ activeNav, profileActive = false, onSelectNav, onOpe
                   active ? 'scale-110' : 'scale-100',
                 )}
               >
-                {item.id === 'profile' ? (
+                {/* Inside a space this tab is the space's page, and item.icon is already the
+                  * space's face — so your own is only drawn when the tab is actually yours. */}
+                {item.id === 'profile' && !currentSpace ? (
                   metadata.avatar_url ? (
                     <img
                       src={metadata.avatar_url}

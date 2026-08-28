@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useMatch, useNavigate } from 'react-router-dom'
+import { matchPath, useLocation, useNavigate } from 'react-router-dom'
 import {
   ClipboardList,
   Folder as FolderIcon,
@@ -20,6 +20,8 @@ import { useTheme } from '../../hooks/useTheme'
 import { collectSubtaskAncestorIds } from '../../lib/subtasks'
 import { focusTaskTitle } from '../../lib/focusTaskTitle'
 import { searchNotes, type SearchResult } from '../../services/search/searchNotes'
+import { useWorkspacePath } from '../../hooks/useWorkspace'
+import { workspaceRelativePath } from '../../lib/workspace'
 import { cn } from '../../lib/cn'
 
 export interface GlobalSearchProps {
@@ -30,10 +32,15 @@ const NEW_TASK_TITLE = 'New note'
 
 export function GlobalSearch({ className }: GlobalSearchProps) {
   const navigate = useNavigate()
+  const to = useWorkspacePath()
   const { folders, tasks, subtasks, expandSubtask, getFolder, createTask } = useFolders()
   const { signOut } = useAuth()
   const { theme, toggleTheme } = useTheme()
-  const folderMatch = useMatch('/folder/:folderId')
+  // One pattern for both mounts of the folder page, matched against the workspace-relative path.
+  // Deliberately matchPath rather than two useMatch calls behind a `??`: that is a hook behind a
+  // short-circuit, and the hook count then changes with the route.
+  const location = useLocation()
+  const folderMatch = matchPath('/folder/:folderId', workspaceRelativePath(location.pathname))
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -46,7 +53,7 @@ export function GlobalSearch({ className }: GlobalSearchProps) {
 
   const close = useCallback(() => {
     setOpen(false)
-  }, [])
+  }, [setOpen])
 
   const runAction = useCallback(
     (run: () => void) => {
@@ -54,7 +61,7 @@ export function GlobalSearch({ className }: GlobalSearchProps) {
       setQuery('')
       run()
     },
-    [close],
+    [close, setQuery],
   )
 
   // Commands are always available for navigation/theme/sign-out; "New task" only makes sense
@@ -70,7 +77,7 @@ export function GlobalSearch({ className }: GlobalSearchProps) {
         run: () =>
           runAction(() => {
             void createTask(NEW_TASK_TITLE, currentFolder.id).then((task) => {
-              navigate(`/folder/${currentFolder.id}`, { state: { openTaskId: task.id } })
+              navigate(to(`/folder/${currentFolder.id}`), { state: { openTaskId: task.id } })
               focusTaskTitle(task.id)
             })
           }),
@@ -81,31 +88,31 @@ export function GlobalSearch({ className }: GlobalSearchProps) {
         id: 'go-tree',
         label: 'Go to Tree',
         icon: <ListTree className="h-4 w-4" aria-hidden />,
-        run: () => runAction(() => navigate('/tree')),
+        run: () => runAction(() => navigate(to('/tree'))),
       },
       {
         id: 'go-mynotes',
         label: 'Go to Notes',
         icon: <FolderIcon className="h-4 w-4" aria-hidden />,
-        run: () => runAction(() => navigate('/mynotes')),
+        run: () => runAction(() => navigate(to('/mynotes'))),
       },
       {
         id: 'go-tasks',
         label: 'Go to Tasks',
         icon: <ClipboardList className="h-4 w-4" aria-hidden />,
-        run: () => runAction(() => navigate('/tasks')),
+        run: () => runAction(() => navigate(to('/tasks'))),
       },
       {
         id: 'go-important',
         label: 'Go to Important',
         icon: <Star className="h-4 w-4" aria-hidden />,
-        run: () => runAction(() => navigate('/')),
+        run: () => runAction(() => navigate(to('/'))),
       },
       {
         id: 'go-profile',
         label: 'Go to Profile',
         icon: <User className="h-4 w-4" aria-hidden />,
-        run: () => runAction(() => navigate('/profile')),
+        run: () => runAction(() => navigate(to('/profile'))),
       },
       {
         id: 'toggle-theme',
@@ -121,7 +128,7 @@ export function GlobalSearch({ className }: GlobalSearchProps) {
       },
     )
     return actions
-  }, [currentFolder, createTask, navigate, runAction, theme, toggleTheme, signOut])
+  }, [currentFolder, createTask, navigate, runAction, theme, to, toggleTheme, signOut])
 
   const filteredActions = useMemo(() => {
     const needle = query.trim().toLowerCase()
@@ -146,9 +153,12 @@ export function GlobalSearch({ className }: GlobalSearchProps) {
         : result.revealSubtaskId
           ? { revealSubtaskId: result.revealSubtaskId }
           : null
-      navigate(result.href, { state })
+      // searchNotes builds personal-shaped hrefs on purpose — it is a pure function over the
+      // document and has no business knowing which workspace it was called from. This is where
+      // they become addresses.
+      navigate(to(result.href), { state })
     },
-    [close, expandSubtask, navigate, subtasks],
+    [close, expandSubtask, navigate, setQuery, subtasks, to],
   )
 
   useEffect(() => {

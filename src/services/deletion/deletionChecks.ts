@@ -55,23 +55,18 @@ function createFakeRepos(options?: {
     load: () => {
       throw new Error('unused')
     },
-    save: () => {
-      throw new Error('unused')
-    },
-    deleteFolder: (id) => {
-      if (options?.notesError) {
-        throw new RepositoryError('Could not delete the folder.')
+    apply: (ops) => {
+      for (const op of ops) {
+        // The deletion service is the only caller here, and a delete is the only thing it sends.
+        assert(op.action === 'delete', 'deletion service applies delete ops only')
+        if (op.action !== 'delete') {
+          return
+        }
+        if (op.entity === 'folder' && (options?.notesError || options?.emptyDelete)) {
+          throw new RepositoryError('Could not delete the folder.')
+        }
+        deleted.push(`${op.entity}:${op.id}`)
       }
-      if (options?.emptyDelete) {
-        throw new RepositoryError('Could not delete the folder.')
-      }
-      deleted.push(`folder:${id}`)
-    },
-    deleteTask: (id) => {
-      deleted.push(`task:${id}`)
-    },
-    deleteSubtask: (id) => {
-      deleted.push(`subtask:${id}`)
     },
   }
   const attachments: AttachmentDataRepository = {

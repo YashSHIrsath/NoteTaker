@@ -3,7 +3,11 @@ import { Link } from 'react-router-dom'
 import { AtSign, Check, Eye, EyeOff, KeyRound, MailCheck, User } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Spinner } from '../components/ui/Spinner'
-import { toAuthErrorMessage } from '../lib/authErrors'
+import {
+  isAlreadyRegisteredError,
+  isUnconfirmedEmailError,
+  toAuthErrorMessage,
+} from '../lib/authErrors'
 import { useAuth } from '../hooks/useAuth'
 import { ProjectLogo } from '../components/brand/ProjectLogo'
 import { cn } from '../lib/cn'
@@ -60,22 +64,72 @@ function PasswordToggle({ shown, onToggle }: { shown: boolean; onToggle: () => v
   )
 }
 
+/**
+ * "Send it again", for a confirmation mail that never arrived.
+ *
+ * The one honest answer to the case this whole flow kept getting wrong: an account exists, it was
+ * never confirmed, and the person is stuck with no way forward. Delivery fails for reasons nobody in
+ * the app can see — a spam filter, a typo'd domain, a provider having a bad afternoon — so the fix
+ * has to be reachable from the screen where they notice.
+ */
+function ResendConfirmation({ email }: { email: string }) {
+  const { resendConfirmation } = useAuth()
+  const [state, setState] = useState<'idle' | 'sending' | 'sent'>('idle')
+  const [failed, setFailed] = useState<string | null>(null)
+
+  if (state === 'sent') {
+    return (
+      <p className="text-[12.5px] text-[var(--color-text-muted)]">
+        Sent again to {email.trim()}. It can take a minute — check spam too.
+      </p>
+    )
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <button
+        type="button"
+        disabled={state === 'sending' || !email.trim()}
+        onClick={() => {
+          setState('sending')
+          setFailed(null)
+          void resendConfirmation(email)
+            .then(() => setState('sent'))
+            .catch((cause: unknown) => {
+              setFailed(toAuthErrorMessage(cause))
+              setState('idle')
+            })
+        }}
+        className="text-[12.5px] font-semibold text-[var(--color-accent)] underline-offset-2 hover:underline disabled:opacity-60"
+      >
+        {state === 'sending' ? 'Sending…' : 'Send the confirmation email again'}
+      </button>
+      {failed ? <p className="text-[12px] text-[var(--color-danger)]">{failed}</p> : null}
+    </div>
+  )
+}
+
 export function LoginPage() {
   const { signIn, configured } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Tracked separately from the message, because this is the one failure with something to *do*
+  // about it rather than something to read.
+  const [unconfirmed, setUnconfirmed] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault()
     setError(null)
+    setUnconfirmed(false)
     setSubmitting(true)
     try {
       await signIn(email.trim(), password)
     } catch (cause) {
       setError(toAuthErrorMessage(cause))
+      setUnconfirmed(isUnconfirmedEmailError(cause))
     } finally {
       setSubmitting(false)
     }
@@ -122,6 +176,9 @@ export function LoginPage() {
             trailing={<PasswordToggle shown={showPassword} onToggle={() => setShowPassword((value) => !value)} />}
           />
           <FormError message={error} />
+          {/* Offered only for the one failure that has an action: the account is real and the
+            * password may well be right — what is missing is the confirmation mail. */}
+          {unconfirmed ? <ResendConfirmation email={email} /> : null}
           <SubmitButton busy={submitting} disabled={!email.trim() || !password}>
             {submitting ? 'Signing in…' : 'Sign in'}
           </SubmitButton>
@@ -140,12 +197,21 @@ export function SignupPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  /**
+   * That address already has an account.
+   *
+   * Its own state rather than an error string, because it is not a mistake to correct — it is a fork:
+   * sign in, or have the confirmation mail sent again if it never arrived. Which is the whole reason
+   * this case needed telling apart from a successful signup at all.
+   */
+  const [taken, setTaken] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault()
     setError(null)
     setNotice(null)
+    setTaken(false)
     if (password !== confirmPassword) {
       setError('Passwords do not match.')
       return
@@ -157,10 +223,23 @@ export function SignupPage() {
     setSubmitting(true)
     try {
       const result = await signUp(email.trim(), password, fullName)
+      if (result.alreadyRegistered) {
+        // Nothing was created and no mail was sent — see SignUpOutcome. Saying "check your email"
+        // here, which is what happened before, left somebody waiting for a mail that was never
+        // coming.
+        setTaken(true)
+        return
+      }
       if (result.needsEmailConfirmation) {
         setNotice('Check your email to confirm your account, then come back and sign in.')
       }
     } catch (cause) {
+      // Some configurations refuse a duplicate outright instead of answering successfully; both
+      // routes end in the same place for the person reading the screen.
+      if (isAlreadyRegisteredError(cause)) {
+        setTaken(true)
+        return
+      }
       setError(toAuthErrorMessage(cause))
     } finally {
       setSubmitting(false)
@@ -169,8 +248,10 @@ export function SignupPage() {
 
   return (
     <AuthScreen
-      title={notice ? 'Almost there' : 'Create your workspace'}
-      subtitle={notice ? undefined : 'A few details and your notes are ready to sync.'}
+      title={notice ? 'Almost there' : taken ? 'That email is already in use' : 'Create your workspace'}
+      subtitle={
+        notice || taken ? undefined : 'A few details and your notes are ready to sync.'
+      }
       footer={
         <>
           Already have an account?{' '}
@@ -182,6 +263,37 @@ export function SignupPage() {
     >
       {!configured ? (
         <NotConfigured />
+      ) : taken ? (
+        <div className="space-y-4">
+          <div className="flex gap-3 rounded-xl border border-[var(--color-border-strong)] bg-[var(--color-surface-muted)] p-3">
+            <MailCheck className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-text-muted)]" aria-hidden />
+            <p className="text-[13px] leading-relaxed text-[var(--color-text)]">
+              <span className="font-semibold">{email.trim()}</span> already has an account, so nothing
+              new was created and no email was sent.
+            </p>
+          </div>
+          <Link
+            to="/login"
+            className="anim-press inline-flex w-full items-center justify-center rounded-xl bg-[var(--color-accent)] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[var(--color-accent)]/90"
+          >
+            Sign in instead
+          </Link>
+          {/* The case that is otherwise a dead end: the account was made, the confirmation mail never
+            * arrived, and signing up again cannot help because the address is taken. */}
+          <div className="border-t border-[var(--color-border)] pt-3">
+            <p className="mb-1.5 text-[12.5px] text-[var(--color-text-muted)]">
+              Never got the confirmation email?
+            </p>
+            <ResendConfirmation email={email} />
+          </div>
+          <button
+            type="button"
+            onClick={() => setTaken(false)}
+            className="text-[12.5px] text-[var(--color-text-muted)] underline-offset-2 hover:underline"
+          >
+            Use a different email
+          </button>
+        </div>
       ) : notice ? (
         <div className="space-y-4">
           <div className="flex gap-3 rounded-xl border border-[var(--color-accent)]/25 bg-[var(--color-accent-soft)] p-3">

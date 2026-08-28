@@ -2,6 +2,7 @@ import { FileText } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import type { Folder } from '../../types'
 import { cn } from '../../lib/cn'
+import { useWorkspacePath } from '../../hooks/useWorkspace'
 
 export interface FolderBreadcrumbProps {
   path: Folder[]
@@ -11,12 +12,13 @@ export interface FolderBreadcrumbProps {
 }
 
 export function FolderBreadcrumb({ path, currentLabel, currentIsTask = false }: FolderBreadcrumbProps) {
+  const to = useWorkspacePath()
   return (
     <nav aria-label="Breadcrumb" className="text-[11.5px] text-[var(--color-text-muted)] sm:text-[13px]">
       <ol className="flex flex-wrap items-center gap-1">
         <li className="flex items-center gap-1">
           <Link
-            to="/mynotes"
+            to={to('/mynotes')}
             className="rounded-sm hover:text-[var(--color-text)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/20"
           >
             Notes
@@ -26,7 +28,7 @@ export function FolderBreadcrumb({ path, currentLabel, currentIsTask = false }: 
           <li key={folder.id} className="flex min-w-0 items-center gap-1">
             <span aria-hidden>→</span>
             <Link
-              to={`/folder/${folder.id}`}
+              to={to(`/folder/${folder.id}`)}
               className={cn(
                 'max-w-[9rem] truncate rounded-sm hover:text-[var(--color-text)] hover:underline',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/20',

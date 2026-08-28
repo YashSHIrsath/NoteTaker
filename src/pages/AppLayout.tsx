@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Outlet, useLocation, useMatch, useNavigate } from 'react-router-dom'
+import { matchPath, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { Header } from '../components/layout/Header'
 import { Sidebar } from '../components/layout/Sidebar'
 import { BottomNav } from '../components/layout/BottomNav'
@@ -8,6 +8,8 @@ import type { SidebarNavId } from '../types'
 import { useTrackNavSection } from '../hooks/usePageEnterDirection'
 import { useAuth } from '../hooks/useAuth'
 import { NAV_DESTINATIONS, resolveDefaultPage } from '../lib/navOrder'
+import { useWorkspacePath } from '../hooks/useWorkspace'
+import { workspaceRelativePath } from '../lib/workspace'
 
 const SIDEBAR_COLLAPSED_KEY = 'mynotes-sidebar-collapsed'
 
@@ -17,8 +19,26 @@ export function AppLayout() {
   )
   const navigate = useNavigate()
   const location = useLocation()
-  const folderMatch = useMatch('/folder/:folderId')
-  const taskMatch = useMatch('/task/:taskId')
+  /**
+   * Where this page sits, said in personal-app terms.
+   *
+   * Everything below decides what to highlight and where to go by comparing against '/tree',
+   * '/tasks' and so on. Inside a space the real pathname is '/s/<id>/tree', so the comparisons run
+   * against the relative path and the destinations are put back through `to()` on the way out.
+   */
+  const relativePath = workspaceRelativePath(location.pathname)
+  const to = useWorkspacePath()
+  /*
+   * matchPath, not useMatch, and against the relative path.
+   *
+   * One pattern covers both mounts of the page this way, because the space prefix is already gone.
+   * The version this replaced tried `useMatch(personal) ?? useMatch(space)` — which is a hook behind
+   * a short-circuit: on /folder/x the left side matched and the right hook was never called, so the
+   * hook count changed between renders and React tore the layout down. matchPath is an ordinary
+   * function, so there is nothing to get out of order.
+   */
+  const folderMatch = matchPath('/folder/:folderId', relativePath)
+  const taskMatch = matchPath('/task/:taskId', relativePath)
   const { getChildFolders, getPath, getTask, uiState, toggleMyNotesSidebar } = useFolders()
   const rootFolders = getChildFolders(null)
 
@@ -55,33 +75,44 @@ export function AppLayout() {
       return
     }
     appliedDefaultPage.current = true
-    if (location.pathname !== '/') {
+    if (relativePath !== '/') {
       return
     }
     const target = NAV_DESTINATIONS[resolveDefaultPage(user.user_metadata as Record<string, unknown>)]
     if (target.path !== '/') {
-      navigate(target.path, { replace: true })
+      // Applies inside a space too, and to that space's copy of the page. Opening a shared workspace
+      // on the page you chose to open on is the same preference, not a different one.
+      navigate(to(target.path), { replace: true })
     }
     // Runs on the first render that has a signed-in account; the ref makes it once-only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user])
 
   const activeNav: SidebarNavId | undefined =
-    location.pathname === '/'
+    relativePath === '/'
       ? 'important'
-      : location.pathname === '/tree'
+      : relativePath === '/tree'
         ? 'tree'
-        : location.pathname === '/mynotes'
+        : relativePath === '/mynotes'
           ? 'mynotes'
-          : location.pathname === '/tasks'
+          : relativePath === '/tasks'
             ? 'tasks'
-            : undefined
+            : relativePath === '/spaces'
+              ? 'spaces'
+              : undefined
 
+  // Every destination in this file goes through here, so a tab tapped inside a space stays in it.
   const goTo = (path: string) => {
-    navigate(path)
+    navigate(to(path))
   }
 
   const handleSelectNav = (id: SidebarNavId) => {
+    if (id === 'spaces') {
+      // Absolute on purpose: a space list is not a page *of* a workspace, so this leaves whichever
+      // one you are in rather than looking for /s/<id>/spaces.
+      navigate('/spaces')
+      return
+    }
     if (id === 'tree') {
       goTo('/tree')
       return
@@ -114,7 +145,7 @@ export function AppLayout() {
     onSelectNav: handleSelectNav,
     onSelectFolder: (folderId: string) => goTo(`/folder/${folderId}`),
     onOpenProfile: () => goTo('/profile'),
-    profileActive: location.pathname === '/profile',
+    profileActive: relativePath === '/profile',
   }
 
   return (
@@ -135,9 +166,12 @@ export function AppLayout() {
         </main>
       </div>
 
+      {/* Spaces is not one of these below `lg` — it is the button in the header. The bar is the
+        * five places you work: Tree, Notes, Starred, Tasks, and the account (which inside a space
+        * is the space's own page). See BottomNav, which drops it from the order. */}
       <BottomNav
         activeNav={activeNav}
-        profileActive={location.pathname === '/profile'}
+        profileActive={relativePath === '/profile'}
         onSelectNav={handleSelectNav}
         onOpenProfile={() => goTo('/profile')}
       />

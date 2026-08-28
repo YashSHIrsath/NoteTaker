@@ -3,13 +3,13 @@ import {
   beginExclusiveAction,
   cloneSnapshot,
   endExclusiveAction,
-  notesFingerprint,
-  rollbackNotesOnSaveFailure,
   shouldApplySessionResult,
   snapshotFromParts,
   UNTITLED,
   UNTITLED_FOLDER,
 } from '../../lib/persistGuard'
+import { rollbackOps } from '../notes/ops'
+import type { Folder } from '../../types'
 import type { AppSnapshot } from '../storage/types'
 
 function assert(condition: boolean, message: string): void {
@@ -63,19 +63,67 @@ function sampleSnapshot(name: string): AppSnapshot {
 
 export function runPersistHardeningChecks(): void {
   const confirmed = sampleSnapshot('Saved')
-  const attempted = sampleSnapshot('Unsaved')
-  const outcome = rollbackNotesOnSaveFailure({ lastConfirmed: confirmed, attempted })
-  assert(outcome.restored.folders[0]?.name === 'Saved', 'failed save restores last confirmed notes')
-  assert(outcome.pendingRetry.folders[0]?.name === 'Unsaved', 'failed save keeps the unsaved snapshot for retry')
-  assert(confirmed.folders[0]?.name === 'Saved', 'rollback does not mutate last confirmed')
   assert(cloneSnapshot(confirmed).folders[0]?.name === 'Saved', 'clone keeps folder name')
 
-  attempted.folders[0]!.name = 'Mutated'
-  assert(outcome.pendingRetry.folders[0]?.name === 'Unsaved', 'retry snapshot is isolated')
-
+  /*
+   * A rejected batch puts back the rows it named, and only those.
+   *
+   * This is what replaced restoring the whole document. An edit made while the request was in
+   * flight has to survive the failure — and the same property is what stops one person's rejected
+   * title from discarding somebody else's work once a document has two authors.
+   */
+  const folderId = confirmed.folders[0]!.id
+  const taskId = confirmed.tasks[0]!.id
+  const edited = {
+    folders: [{ ...confirmed.folders[0]!, name: 'Rejected' }],
+    tasks: [{ ...confirmed.tasks[0]!, content: 'typed while the request was in flight' }],
+    subtasks: [],
+    tags: [],
+  }
+  const restored = rollbackOps({
+    lastConfirmed: confirmed,
+    current: edited,
+    ops: [{ entity: 'folder', action: 'patch', id: folderId, fields: { name: 'Rejected' } }],
+  })
+  assert(restored.folders[0]?.name === 'Saved', 'a rejected patch restores the row it named')
   assert(
-    notesFingerprint(confirmed) !== notesFingerprint(attempted),
-    'unsaved notes differ from confirmed notes',
+    restored.tasks[0]?.content === 'typed while the request was in flight',
+    'a rejected patch leaves rows it never named alone',
+  )
+  assert(confirmed.folders[0]?.name === 'Saved', 'rollback does not mutate last confirmed')
+
+  // A rejected create has nothing to restore to, so the row it invented leaves.
+  const invented: Folder = {
+    id: 'dddddddd-dddd-dddd-dddd-dddddddddddd',
+    name: 'Never saved',
+    parentId: null,
+    isImportant: false,
+    sortOrder: 1,
+  }
+  const afterFailedCreate = rollbackOps({
+    lastConfirmed: confirmed,
+    current: { ...edited, folders: [...confirmed.folders, invented] },
+    ops: [{ entity: 'folder', action: 'create', row: invented }],
+  })
+  assert(
+    !afterFailedCreate.folders.some((folder) => folder.id === invented.id),
+    'a rejected create removes the row it invented',
+  )
+
+  // And a rejected delete brings the row back with everything that hung off it — restoring an
+  // empty folder where a populated one used to be would be its own kind of data loss.
+  const afterFailedDelete = rollbackOps({
+    lastConfirmed: confirmed,
+    current: { folders: [], tasks: [], subtasks: [], tags: [] },
+    ops: [{ entity: 'folder', action: 'delete', id: folderId }],
+  })
+  assert(
+    afterFailedDelete.folders.some((folder) => folder.id === folderId),
+    'a rejected folder delete restores the folder',
+  )
+  assert(
+    afterFailedDelete.tasks.some((task) => task.id === taskId),
+    'a rejected folder delete restores the tasks that were inside it',
   )
 
   assert(
@@ -131,16 +179,13 @@ export function runPersistHardeningChecks(): void {
   const deleteFail = toRepositoryError({ message: 'delete failed' }, 'Could not delete the attachment.')
   assert(deleteFail.message === 'Could not delete the attachment.', 'failed delete stays user-facing')
 
-  const retry = rollbackNotesOnSaveFailure({ lastConfirmed: confirmed, attempted: sampleSnapshot('Retry me') })
-  assert(retry.pendingRetry.folders[0]?.name === 'Retry me', 'retry after failure keeps the attempted notes')
-
   /*
    * A blank name never leaves the client.
    *
-   * folders.name, tasks.title and subtasks.title each carry length(btrim(...)) > 0 in the schema.
-   * A rejected row rolls the whole document back to the last accepted snapshot, so one empty title
-   * does not fail quietly — it undoes whatever else was in the same save. These are the cases the
-   * title field can actually produce mid-edit.
+   * folders.name, tasks.title and subtasks.title each carry length(btrim(...)) > 0 in the schema,
+   * so an empty title is a rejected write rather than a stored blank. The live write path repairs
+   * this per op (see repairNames in notesOpsChecks); what is checked here is the snapshot builder,
+   * which still guards the empty baseline and the retry that re-applies a rejected batch.
    */
   const blank = sampleSnapshot('   ')
   blank.tasks[0]!.title = ''
@@ -168,15 +213,10 @@ export function runPersistHardeningChecks(): void {
   assert(spaced.folders[0]?.name === ' Job applications ', 'padding around a real name is left alone')
   assert(spaced.tasks[0]?.title === 'Interview ', 'a trailing space mid-typing is left alone')
 
-  // Both sides of the fingerprint comparison are built here, so a snapshot that needed no fixing
-  // has to come back identical — otherwise every save would look like a change and loop.
+  // A snapshot that needed no fixing comes back as the same array, so nothing downstream has to
+  // treat "normalised" and "original" as two different values.
   const clean = snapshotFromParts(confirmed.folders, confirmed.tasks, [], [], emptyUi)
   assert(clean.folders === confirmed.folders, 'a snapshot with no blank names is not rebuilt')
-  assert(
-    notesFingerprint(snapshotFromParts(named.folders, named.tasks, named.subtasks, [], emptyUi)) ===
-      notesFingerprint(named),
-    'normalising twice is the same as normalising once',
-  )
 }
 
 export function runInvalidRecordChecks(): void {

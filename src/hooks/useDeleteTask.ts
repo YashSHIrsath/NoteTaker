@@ -4,12 +4,15 @@ import { useFolders } from './useFolders'
 import { useDeleteConfirmation } from './useDeleteConfirmation'
 import { taskDeleteCopy } from '../services/deletion/deleteCopy'
 import { performWithTaskExit } from '../lib/taskExitAnimation'
+import { useWorkspacePath } from './useWorkspace'
+import { workspaceRelativePath } from '../lib/workspace'
 
 export function useDeleteTask() {
   const { requestDelete, dialog } = useDeleteConfirmation()
   const { deleteTask, getTask } = useFolders()
   const navigate = useNavigate()
   const location = useLocation()
+  const to = useWorkspacePath()
 
   const requestTaskDelete = useCallback(
     (taskId: string) => {
@@ -23,13 +26,14 @@ export function useDeleteTask() {
         description: copy.description,
         onConfirm: async () => {
           const result = await performWithTaskExit(taskId, () => deleteTask(taskId))
-          if (location.pathname === `/task/${taskId}`) {
-            navigate(`/folder/${result.folderId}`, { replace: true })
+          // Compared workspace-relative: inside a space this pathname is /s/<id>/task/<id>.
+          if (workspaceRelativePath(location.pathname) === `/task/${taskId}`) {
+            navigate(to(`/folder/${result.folderId}`), { replace: true })
           }
         },
       })
     },
-    [deleteTask, getTask, location.pathname, navigate, requestDelete],
+    [deleteTask, getTask, location.pathname, navigate, requestDelete, to],
   )
 
   return { requestTaskDelete, dialog }

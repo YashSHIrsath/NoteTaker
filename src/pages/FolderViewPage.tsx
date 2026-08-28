@@ -2,13 +2,15 @@ import { Navigate, useParams } from 'react-router-dom'
 import { EmptyState } from '../components/common/EmptyState'
 import { FolderView } from '../components/folder/FolderView'
 import { useFolders } from '../hooks/useFolders'
+import { useWorkspacePath } from '../hooks/useWorkspace'
 
 export function FolderViewPage() {
   const { folderId } = useParams<{ folderId: string }>()
   const { getFolder, getPath, getChildFolders, getTasksInFolder, createFolder, createTask } = useFolders()
+  const to = useWorkspacePath()
 
   if (!folderId) {
-    return <Navigate to="/" replace />
+    return <Navigate to={to('/')} replace />
   }
 
   const folder = getFolder(folderId)

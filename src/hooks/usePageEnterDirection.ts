@@ -5,9 +5,9 @@ import {
   cacheNavPreferences,
   DEFAULT_NAV_ORDER,
   navIdForPath,
-  resolveNavOrder,
   type NavId,
 } from '../lib/navOrder'
+import { useDisplaySettings } from './useDisplaySettings'
 
 /**
  * The bar's current order, which is the only thing that makes "left" and "right" mean anything.
@@ -132,15 +132,19 @@ function useJourney(): Journey | null {
  * had — and which page looked correct depended on the order you'd visited them in.
  */
 export function useTrackNavSection(): void {
-  // The bar's order comes from the account, so it is read here — the one hook guaranteed to run on
-  // every route — and handed to the module state the direction maths uses.
+  // The bar's order is read here — the one hook guaranteed to run on every route — and handed to the
+  // module state the direction maths uses. Inside a shared space that order belongs to the space, so
+  // this has to be the *effective* order rather than the account's: the bar and the animation reading
+  // two different lists is exactly the bug lib/navOrder exists to prevent.
   const { user } = useAuth()
   const metadata = user?.user_metadata as Record<string, unknown> | undefined
+  const { navOrder } = useDisplaySettings()
   // Echoed to the device on every route, so the next cold start can draw the right bar before the
-  // session has finished restoring. Writing here rather than in the settings panel means it also
-  // repairs itself on a device that has never opened settings.
+  // session has finished restoring. The account's own order, not the space's — a cold start opens
+  // your own notes. Writing here rather than in the settings panel means it also repairs itself on a
+  // device that has never opened settings.
   cacheNavPreferences(metadata)
-  setNavOrder(resolveNavOrder(metadata))
+  setNavOrder(navOrder)
   useJourney()
 }
 

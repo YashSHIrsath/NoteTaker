@@ -31,15 +31,32 @@ export function isUnreachableError(error: unknown): boolean {
 }
 
 /**
- * PostgREST reports a column the API's schema cache doesn't know as PGRST204 ("Could not find
- * the 'x' column of 'y' in the schema cache") — in practice, a migration that hasn't been
- * applied to this database yet. Worth naming: the save is rolled back when it fails, so
- * otherwise the only symptom is the edit quietly reverting a moment later.
+ * The name of a column this database doesn't have, in whichever way it said so.
+ *
+ * A migration that hasn't been applied yet reports itself two different ways, and they arrive from
+ * different layers. A *write* trips PostgREST's schema cache — PGRST204, "Could not find the 'x'
+ * column of 'y' in the schema cache". A *read* gets all the way to Postgres and comes back as
+ * 42703, "column folders.space_id does not exist". Only the first was recognised here, which meant
+ * a filter on a column the database lacked was an unrecoverable load failure rather than something
+ * to degrade around.
+ *
+ * Worth naming in both cases: a failed save is rolled back, so otherwise the only symptom is an
+ * edit quietly reverting a moment later.
  */
 export function missingColumnName(error: unknown): string | null {
   const text = errorText(error)
-  const match = /could not find the '([^']+)' column/i.exec(text)
-  return match ? match[1] : null
+  const patterns = [
+    /could not find the '([^']+)' column/i,
+    /column\s+"?(\w+)"?\s+of relation/i,
+    /column\s+(?:[\w"]+\.)?"?(\w+)"?\s+does not exist/i,
+  ]
+  for (const pattern of patterns) {
+    const match = pattern.exec(text)
+    if (match) {
+      return match[1] ?? null
+    }
+  }
+  return null
 }
 
 export function toRepositoryError(error: unknown, fallback: string): RepositoryError {

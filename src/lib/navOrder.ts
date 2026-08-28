@@ -1,4 +1,5 @@
 import type { SidebarNavId } from '../types'
+import { workspaceRelativePath } from './workspace'
 
 /**
  * Every destination the bottom bar can hold, and where each one lives.
@@ -44,6 +45,18 @@ export const NAV_DESTINATIONS: Record<NavId, NavDestination> = {
     path: '/tasks',
     matches: (path) => path === '/tasks' || path.startsWith('/task/'),
   },
+  /**
+   * Not a page of a workspace — a list of them.
+   *
+   * Which is why its path is absolute everywhere and never goes through spacePath: a space list
+   * inside a space is nonsense, and tapping this from inside one is how you get back out.
+   */
+  spaces: {
+    id: 'spaces',
+    label: 'Spaces',
+    path: '/spaces',
+    matches: (path) => path === '/spaces',
+  },
   profile: {
     id: 'profile',
     label: 'You',
@@ -59,10 +72,10 @@ export const NAV_DESTINATIONS: Record<NavId, NavDestination> = {
  * catch-all route all land on. The home tab belongs under the thumb at the centre of the bar, and
  * the centre slot is the one the indicator travels shortest to from either side.
  */
-export const DEFAULT_NAV_ORDER: NavId[] = ['tree', 'mynotes', 'important', 'tasks', 'profile']
+export const DEFAULT_NAV_ORDER: NavId[] = ['tree', 'mynotes', 'important', 'tasks', 'spaces', 'profile']
 
 /** The pages worth opening onto. Not 'profile' — a settings screen is somewhere you go, not
- *  somewhere you start. */
+ *  somewhere you start — and not 'spaces', which is a list of workspaces rather than one to work in. */
 export const DEFAULT_PAGE_CHOICES: SidebarNavId[] = ['tree', 'mynotes', 'important', 'tasks']
 
 const NAV_ORDER_KEY = 'nav_order'
@@ -123,10 +136,18 @@ export function defaultPageUpdate(page: SidebarNavId): Record<string, string> {
   return { [DEFAULT_PAGE_KEY]: page }
 }
 
-/** Which section a route belongs to, or null for a route that is not one of the tabs. */
+/**
+ * Which section a route belongs to, or null for a route that is not one of the tabs.
+ *
+ * Matched on the workspace-relative path, so /s/<space>/tree is the Tree section exactly as /tree
+ * is. The `matches` predicates above all compare against personal-shaped paths; without this every
+ * one of them would silently stop matching the moment you opened a shared space, and the bottom bar
+ * would show no active tab while page transitions slid the wrong way.
+ */
 export function navIdForPath(pathname: string): NavId | null {
+  const path = workspaceRelativePath(pathname)
   for (const id of DEFAULT_NAV_ORDER) {
-    if (NAV_DESTINATIONS[id].matches(pathname)) {
+    if (NAV_DESTINATIONS[id].matches(path)) {
       return id
     }
   }

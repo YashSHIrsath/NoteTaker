@@ -87,7 +87,9 @@ export class SupabaseMappedNotesInsert implements MappedNotesInsert {
     if (folders.length === 0) {
       return
     }
-    const { error } = await this.client.from('folders').upsert(folders.map(folderToRow), {
+    // Always personal: this is the one-time import of a browser's LocalStorage notes into the
+    // account that owns them. Nothing about it has ever concerned a shared space.
+    const { error } = await this.client.from('folders').upsert(folders.map((folder) => folderToRow(folder, null)), {
       onConflict: 'id',
     })
     throwIfError(error, 'Could not migrate folders.')

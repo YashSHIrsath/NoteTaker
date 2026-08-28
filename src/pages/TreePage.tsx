@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { FolderTree as FolderTreeIcon, ListTree } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useFolders } from '../hooks/useFolders'
+import { useWorkspacePath } from '../hooks/useWorkspace'
 import { useServerNowCoarse } from '../hooks/useServerNow'
 import { FolderTree } from '../components/tree/FolderTree'
 import { TreeStats } from '../components/tree/TreeStats'
@@ -30,6 +31,7 @@ import {
  */
 export function TreePage() {
   const { getForest, folders, tasks } = useFolders()
+  const to = useWorkspacePath()
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
   const [kindFilter, setKindFilter] = useState<KindFilter>('all')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
@@ -144,7 +146,7 @@ export function TreePage() {
                 onTagChange={setActiveTag}
               />
               <Link
-                to="/tasks"
+                to={to('/tasks')}
                 className="rounded-full px-2 py-1 text-[12.5px] font-semibold text-[var(--color-accent)] transition-colors hover:bg-[var(--color-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/20"
               >
                 View all

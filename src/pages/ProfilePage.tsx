@@ -9,10 +9,13 @@ import {
   LayoutGrid,
   FileText,
   Folder,
+  History,
+  Home,
   LogOut,
   Monitor,
   Sparkles,
   User as UserIcon,
+  Users,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '../components/ui/Button'
@@ -26,11 +29,21 @@ import { cn } from '../lib/cn'
 import {
   MIN_TILES_PER_ROW,
   readTilesPerRow,
-  readViewStyle,
   type TilesPerRow,
   type ViewStyle,
 } from '../lib/viewStyle'
+import {
+  useDisplaySettings,
+  useDisplaySettingsWriter,
+} from '../hooks/useDisplaySettings'
+import { Notice } from '../components/ui/Notice'
 import { NavigationSettings } from '../components/settings/NavigationSettings'
+import { SpaceAvatar } from '../components/space/SpaceAvatar'
+import { SpaceSettingsPanel } from '../components/space/SpaceSettingsPanel'
+import { InviteMemberDialog } from '../components/space/InviteMemberDialog'
+import { useSpaces } from '../hooks/useSpaces'
+import { useWorkspace } from '../hooks/useWorkspace'
+import { ROLE_LABELS, roleCanManageMembers } from '../lib/spaceRoles'
 import { uploadAvatar } from '../services/profile/avatarUpload'
 
 const VIEW_STYLE_OPTIONS: Array<{
@@ -234,7 +247,23 @@ export function ProfilePage() {
   const [saved, setSaved] = useState(false)
   const [viewStyleSaving, setViewStyleSaving] = useState(false)
   const [tilesSaving, setTilesSaving] = useState(false)
-  const viewStyle = readViewStyle(user?.user_metadata as Record<string, unknown> | undefined)
+  // The space you are in, if you are in one. On a wide screen the sidebar footer carries this; below
+  // `lg` there is no sidebar, so without it a phone had no way to reach a space's picture, its note,
+  // or the people in it — and no way to tell it was in one at all.
+  const workspace = useWorkspace()
+  const { getSpace, invite, refresh: refreshSpaces } = useSpaces()
+  const currentSpace = workspace.kind === 'space' ? getSpace(workspace.id) : undefined
+  const [spaceInviteOpen, setSpaceInviteOpen] = useState(false)
+  // The cards below stagger in. Inserting one has to push the rest along, or two of them arrive
+  // together and the cascade stops reading as an order. A space adds its own card, and an admin
+  // adds the history card behind it.
+  const spaceCards = currentSpace ? (roleCanManageMembers(currentSpace.role) ? 2 : 1) : 0
+  const cardOrder = (base: number) => base + spaceCards
+  // Space-first: inside a shared space the note style belongs to the space, and this writes it there
+  // for everybody. Tiles per row below stays personal — it is a function of the screen in front of
+  // you, which is why it is already stored per screen size.
+  const { viewStyle } = useDisplaySettings()
+  const display = useDisplaySettingsWriter()
   // Everything on this card is about the screen you are reading it on. The band decides both
   // which stored choice is shown and which one a press writes, so opening this page on a phone
   // and on a desktop configures two different things — which is the point.
@@ -305,7 +334,7 @@ export function ProfilePage() {
     }
     setViewStyleSaving(true)
     try {
-      await updateProfile({ viewStyle: next })
+      await display.save({ viewStyle: next })
     } catch (cause) {
       setError(toAuthErrorMessage(cause))
     } finally {
@@ -352,7 +381,41 @@ export function ProfilePage() {
           />
 
           <div className="relative flex items-center gap-4">
-            <div className="group relative shrink-0">
+            {/*
+              * Inside a space this whole row is the space, not you.
+              *
+              * Below `lg` this page is the last tab in the bar and the only screen a space has, so
+              * it opens with what the sidebar footer shows on a wide one. Your own face and name
+              * here read as though the space were yours; they are one tap away, past Return home.
+              */}
+            {currentSpace ? (
+              <>
+                <SpaceAvatar
+                  spaceId={currentSpace.id}
+                  color={currentSpace.color}
+                  imageUrl={currentSpace.imageUrl}
+                  className="h-20 w-20 shrink-0 rounded-full sm:h-24 sm:w-24"
+                  iconClassName="h-8 w-8"
+                />
+                <div className="min-w-0">
+                  <h1
+                    className="truncate text-[20px] font-semibold tracking-tight text-[var(--color-text)] sm:text-[26px]"
+                    style={{ fontFamily: 'var(--font-display)' }}
+                  >
+                    {currentSpace.name}
+                  </h1>
+                  <p className="truncate text-[13px] text-[var(--color-text-muted)] sm:text-sm">
+                    Shared space
+                  </p>
+                  <p className="mt-1.5 inline-flex items-center gap-1.5 rounded-full bg-[var(--color-accent-soft)] px-2.5 py-0.5 text-[11.5px] font-semibold text-[var(--color-accent)]">
+                    <Sparkles className="h-3 w-3" aria-hidden />
+                    You're {ROLE_LABELS[currentSpace.role].toLowerCase() === 'owner' ? 'the owner' : `an ${ROLE_LABELS[currentSpace.role].toLowerCase()}`}
+                  </p>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="group relative shrink-0">
               {/* The ring is a sibling, not a border: a border would change the avatar's box and
                   nudge the row every time it thickened on hover. */}
               <span
@@ -417,7 +480,9 @@ export function ProfilePage() {
                 <Sparkles className="h-3 w-3" aria-hidden />
                 Personal workspace
               </p>
-            </div>
+                </div>
+              </>
+            )}
           </div>
 
           {/* A grid, not a wrapping row of flex-1 boxes. Three equal shares of a phone's width is
@@ -439,19 +504,99 @@ export function ProfilePage() {
               category="teal"
               order={1}
             />
-            <StatChip
-              icon={<CalendarDays className="h-4 w-4" aria-hidden />}
-              label="Member since"
-              value={formatJoinDate(user.created_at)}
-              category="amber"
-              order={2}
-              className="col-span-2 sm:col-span-1"
-            />
+            {/* The counts above are already the workspace's — useFolders is scoped to it — so in a
+              * space they describe the space. Only the date has to change: what you want to know
+              * about a shared workspace is how many people are in it. */}
+            {currentSpace ? (
+              <StatChip
+                icon={<Users className="h-4 w-4" aria-hidden />}
+                label="People"
+                value={currentSpace.memberCount}
+                category="amber"
+                order={2}
+                className="col-span-2 sm:col-span-1"
+              />
+            ) : (
+              <StatChip
+                icon={<CalendarDays className="h-4 w-4" aria-hidden />}
+                label="Member since"
+                value={formatJoinDate(user.created_at)}
+                category="amber"
+                order={2}
+                className="col-span-2 sm:col-span-1"
+              />
+            )}
           </div>
         </section>
 
-        {/* ------------------------------------------------------------- details */}
-        <Card order={1}>
+        {/* ---------------------------------------------------------- this space
+          *
+          * Not a summary with a button that opens a popup — the space itself, on the page.
+          *
+          * Below `lg` this tab *is* the space's screen, and putting its identity, its note and its
+          * people behind a dialog meant the one screen a space had was a card saying it existed.
+          * SpaceSettingsPanel is the same component the sidebar's dialog holds on a wide screen, so
+          * an admin gets the picture, the colour, the note, roles and removals here, and everyone
+          * else gets the note and who is in the space, grouped by what each of them can do.
+          */}
+        {currentSpace ? (
+          <Card order={1}>
+            <CardTitle icon={<Users className="h-3.5 w-3.5" aria-hidden />} category="amber">
+              {roleCanManageMembers(currentSpace.role) ? 'This space' : 'About this space'}
+            </CardTitle>
+            <div className="mt-4">
+              <SpaceSettingsPanel
+                space={currentSpace}
+                currentUserId={user.id}
+                onChanged={() => void refreshSpaces()}
+                onInvite={
+                  roleCanManageMembers(currentSpace.role)
+                    ? () => setSpaceInviteOpen(true)
+                    : undefined
+                }
+                onLeft={() => navigate('/')}
+              />
+            </div>
+          </Card>
+        ) : null}
+
+        {/* ---------------------------------------------------------------- history
+          *
+          * Owner and admin only, which is the same rule the header's button follows. Everyone in a
+          * space can see what the space is and who is in it; a record of what each person did is
+          * the part that belongs to whoever answers for the space.
+          */}
+        {currentSpace && roleCanManageMembers(currentSpace.role) ? (
+          <Card order={2}>
+            <CardTitle icon={<History className="h-3.5 w-3.5" aria-hidden />} category="rose">
+              History
+            </CardTitle>
+            <p className="mt-2 text-[12.5px] leading-relaxed text-[var(--color-text-muted)]">
+              Everything anyone has added, changed or deleted in this space, with who did it and
+              when — searchable, and kept for a year.
+            </p>
+            <div className="mt-4">
+              <Button
+                variant="subtle"
+                size="sm"
+                onClick={() => navigate(`/s/${currentSpace.id}/activity`)}
+              >
+                <span className="inline-flex items-center gap-1.5">
+                  <History className="h-3.5 w-3.5" aria-hidden />
+                  Open the record
+                </span>
+              </Button>
+            </div>
+          </Card>
+        ) : null}
+
+        {/* ------------------------------------------------------------- details
+          *
+          * Your name and picture, and only outside a space. In one, this screen belongs to the
+          * space; your own account is behind Return home below, where the sidebar puts it too.
+          */}
+        {currentSpace ? null : (
+        <Card order={cardOrder(1)}>
           <CardTitle icon={<UserIcon className="h-3.5 w-3.5" aria-hidden />} category="rose">
             Your details
           </CardTitle>
@@ -506,8 +651,10 @@ export function ProfilePage() {
           </div>
         </Card>
 
+        )}
+
         {/* -------------------------------------------------------- navigation */}
-        <Card order={2}>
+        <Card order={cardOrder(2)}>
           <CardTitle icon={<Compass className="h-3.5 w-3.5" aria-hidden />} category="teal">
             Navigation
           </CardTitle>
@@ -515,10 +662,17 @@ export function ProfilePage() {
         </Card>
 
         {/* --------------------------------------------------------- notes style */}
-        <Card order={3}>
+        <Card order={cardOrder(3)}>
           <CardTitle icon={<ClipboardList className="h-3.5 w-3.5" aria-hidden />} category="indigo">
             Notes style
           </CardTitle>
+          {display.writesToSpace ? (
+            /* Said before the choice, not after it. Changing this changes it for everybody in the
+             * space, and that is not something to discover from somebody else's screen. */
+            <Notice className="mt-3">
+              Shared with everyone in {display.spaceName ?? 'this space'}.
+            </Notice>
+          ) : null}
           <div className="mt-4 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
             {VIEW_STYLE_OPTIONS.map((option) => {
               const Icon = option.icon
@@ -578,7 +732,7 @@ export function ProfilePage() {
         </Card>
 
         {/* ------------------------------------------------------- smallest card */}
-        <Card order={4}>
+        <Card order={cardOrder(4)}>
           <CardTitle icon={<LayoutGrid className="h-3.5 w-3.5" aria-hidden />} category="teal">
             Cards per row
           </CardTitle>
@@ -667,30 +821,61 @@ export function ProfilePage() {
           ) : null}
         </Card>
 
-        {/* ------------------------------------------------------------- sign out
+        {/* --------------------------------------------------------------- the way out
 
-            On its own card rather than a loose red slab under the stack: it's the one destructive
-            thing here, and an outline that fills on hover states that without shouting it at you
-            every time the page opens. */}
-        <Card order={5} className="flex flex-wrap items-center justify-between gap-3">
-          <span className="text-[13px] text-[var(--color-text-muted)]">
-            Signed in as <span className="font-medium text-[var(--color-text)]">{user.email}</span>
-          </span>
-          <button
-            type="button"
-            onClick={() => void handleSignOut()}
-            className={cn(
-              'anim-press inline-flex shrink-0 items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-colors',
-              'border-[var(--color-danger)]/40 text-[var(--color-danger)]',
-              'hover:border-[var(--color-danger)] hover:bg-[var(--color-danger)] hover:text-white',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-danger)]/25',
-            )}
-          >
-            <LogOut className="h-4 w-4" aria-hidden />
-            Sign out
-          </button>
+            On its own card rather than a loose slab under the stack. In a space the last card is
+            the way back to your own notes and account — signing out from inside somebody else's
+            workspace is not the thing you came to this screen for, and it is one tap further on.
+            Outside one it is the sign out, the one destructive thing here, in an outline that
+            fills on hover rather than shouting every time the page opens. */}
+        <Card order={cardOrder(5)} className="flex flex-wrap items-center justify-between gap-3">
+          {currentSpace ? (
+            <>
+              <span className="text-[13px] text-[var(--color-text-muted)]">
+                You're in{' '}
+                <span className="font-medium text-[var(--color-text)]">{currentSpace.name}</span>
+              </span>
+              <Button variant="primary" size="sm" onClick={() => navigate('/')}>
+                <span className="inline-flex items-center gap-1.5">
+                  <Home className="h-4 w-4" aria-hidden />
+                  Return home
+                </span>
+              </Button>
+            </>
+          ) : (
+            <>
+              <span className="text-[13px] text-[var(--color-text-muted)]">
+                Signed in as{' '}
+                <span className="font-medium text-[var(--color-text)]">{user.email}</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => void handleSignOut()}
+                className={cn(
+                  'anim-press inline-flex shrink-0 items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-colors',
+                  'border-[var(--color-danger)]/40 text-[var(--color-danger)]',
+                  'hover:border-[var(--color-danger)] hover:bg-[var(--color-danger)] hover:text-white',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-danger)]/25',
+                )}
+              >
+                <LogOut className="h-4 w-4" aria-hidden />
+                Sign out
+              </button>
+            </>
+          )}
         </Card>
       </div>
+
+      {/* The one thing on this screen that still wants a dialog: inviting is a short form with a
+        * generated link at the end of it, and the same screen serves every entry point. */}
+      {currentSpace ? (
+        <InviteMemberDialog
+          open={spaceInviteOpen}
+          spaceName={currentSpace.name}
+          onClose={() => setSpaceInviteOpen(false)}
+          onInvite={(email, role) => invite(currentSpace.id, email, role)}
+        />
+      ) : null}
     </div>
   )
 }

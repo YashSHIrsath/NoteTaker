@@ -1,3 +1,30 @@
+function rawMessage(error: unknown): string {
+  return typeof error === 'object' && error !== null && 'message' in error
+    ? String((error as { message: unknown }).message)
+    : typeof error === 'string'
+      ? error
+      : ''
+}
+
+/**
+ * Whether the account exists but has never been confirmed.
+ *
+ * Worth telling apart from a wrong password, because the two need opposite things from the person:
+ * one is "try again", the other is "the mail we sent never arrived, here it is again". Answering
+ * both with "incorrect email or password" is what leaves somebody retyping a password that was
+ * right all along.
+ */
+export function isUnconfirmedEmailError(error: unknown): boolean {
+  const normalized = rawMessage(error).toLowerCase()
+  return normalized.includes('email not confirmed') || normalized.includes('not_confirmed')
+}
+
+/** An address that already has an account, on configurations where Supabase says so outright. */
+export function isAlreadyRegisteredError(error: unknown): boolean {
+  const normalized = rawMessage(error).toLowerCase()
+  return normalized.includes('already registered') || normalized.includes('already been registered')
+}
+
 export function toAuthErrorMessage(error: unknown): string {
   const raw =
     typeof error === 'object' && error !== null && 'message' in error

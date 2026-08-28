@@ -39,11 +39,17 @@ import {
   beginExclusiveAction,
   cloneSnapshot,
   endExclusiveAction,
-  notesFingerprint,
-  rollbackNotesOnSaveFailure,
   shouldApplySessionResult,
   snapshotFromParts,
 } from '../lib/persistGuard'
+import {
+  applyOpsToSnapshot,
+  hasNoEffect,
+  repairNames,
+  rollbackOps,
+  type NotesOp,
+  type TaskPatch,
+} from '../services/notes/ops'
 import {
   getAttachmentRepository,
   getNotesRepository,
@@ -59,9 +65,12 @@ import { detectDocumentType, isAcceptedImageFile, isAcceptedPdfFile } from '../s
 import { NotesDeletionService } from '../services/deletion/notesDeletionService'
 import { ItemDndProvider } from './ItemDndContext'
 import { useAuth } from './AuthContext'
+import { useWorkspace } from '../hooks/useWorkspace'
+import { summariseIntents, WRITE_INTENT } from '../lib/writeIntent'
 import { Button } from '../components/ui/Button'
 import { Spinner } from '../components/ui/Spinner'
 import { LoadingSplash } from '../components/common/LoadingSplash'
+import { WorkspaceLoadingSplash } from '../components/common/WorkspaceLoadingSplash'
 
 interface FolderContextValue {
   folders: Folder[]
@@ -192,6 +201,27 @@ function removeId(ids: string[], id: string): string[] {
   return ids.filter((item) => item !== id)
 }
 
+/**
+ * The rows a reorder actually moved.
+ *
+ * Reordering rewrites the sort order of a whole run of siblings, but most of them come back holding
+ * the number they already had. Sending those too would be a write per untouched row — and in a
+ * shared document, a write per row somebody else might be moving at the same moment.
+ */
+function movedSortOrders<T extends { id: string; sortOrder: number }>(
+  before: T[],
+  after: T[],
+): Array<{ id: string; sortOrder: number }> {
+  const previous = new Map(before.map((row) => [row.id, row.sortOrder]))
+  const moved: Array<{ id: string; sortOrder: number }> = []
+  for (const row of after) {
+    if (previous.get(row.id) !== row.sortOrder) {
+      moved.push({ id: row.id, sortOrder: row.sortOrder })
+    }
+  }
+  return moved
+}
+
 const EMPTY_UI_STATE: UiState = {
   myNotesSidebarExpanded: true,
   expandedFolderIds: [],
@@ -203,7 +233,16 @@ const EMPTY_UI_STATE: UiState = {
 export function FolderProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
   const userId = user?.id ?? null
-  const notesRepository = getNotesRepository()
+  /**
+   * Which workspace this provider is reading and writing.
+   *
+   * The same provider powers your own notes and a shared space; the only difference is the scope it
+   * was handed. Everything below — every mutation, every op, every page that calls useFolders() —
+   * is written once and works in both, which is the reason a space needed no parallel component
+   * tree.
+   */
+  const workspace = useWorkspace()
+  const notesRepository = getNotesRepository(workspace)
   const attachmentRepository = getAttachmentRepository()
   const remindersRepository = getRemindersRepository()
   const deletionService = useMemo(
@@ -235,9 +274,26 @@ export function FolderProvider({ children }: { children: ReactNode }) {
   const uiStateRef = useRef(uiState)
   const userIdRef = useRef(userId)
   const lastConfirmedRef = useRef(snapshotFromParts([], [], [], [], EMPTY_UI_STATE))
-  const pendingRetryRef = useRef<ReturnType<typeof cloneSnapshot> | null>(null)
+  const pendingRetryRef = useRef<{ ops: NotesOp[]; intents: string[] } | null>(null)
   const persistInflightRef = useRef<Promise<void> | null>(null)
-  const persistAgainRef = useRef(false)
+  /**
+   * The edits made since the last flush, in the order they happened.
+   *
+   * A ref rather than state because nothing renders from it and because every mutation below has
+   * to be able to add to it and read it back within the same tick — the same reason foldersRef and
+   * friends exist. It replaces the old "something changed, save the whole document again" flag:
+   * what to write is now a list, so "is there anything to write" is just whether it's empty.
+   */
+  const pendingOpsRef = useRef<NotesOp[]>([])
+  /**
+   * What the queued edits were for, in the order they happened.
+   *
+   * Parallel to the ops rather than part of them, because intent describes an *action* and an action
+   * can touch several rows: reordering forty notes is one thing a person did. The flush joins these
+   * into one sentence and hands it to the write path, which puts it in place before anything is
+   * written so the activity triggers can stamp it onto every row the batch touches.
+   */
+  const pendingIntentsRef = useRef<string[]>([])
   const contentTimerRef = useRef<number | null>(null)
   const actionLocksRef = useRef(new Set<string>())
   foldersRef.current = folders
@@ -265,23 +321,48 @@ export function FolderProvider({ children }: { children: ReactNode }) {
     [],
   )
 
+  /**
+   * Queues what an edit changed.
+   *
+   * The one door into the write path, which is what lets the blank-name repair live in a single
+   * place: `folders.name`, `tasks.title` and `subtasks.title` all carry a `length(btrim(...)) > 0`
+   * check, and a title field is legitimately empty for as long as it takes to retype one. Those two
+   * facts used to meet badly — the write was rejected, and the failure handler did the only thing it
+   * could and rolled the document back to the last state the server had accepted, which held a
+   * half-deleted title. So the letters just removed reappeared, mid-word, over what was being typed.
+   */
+  const enqueue = useCallback((ops: NotesOp[], intent?: string) => {
+    if (ops.length === 0) {
+      return
+    }
+    pendingOpsRef.current = [...pendingOpsRef.current, ...repairNames(ops)]
+    if (intent) {
+      pendingIntentsRef.current = [...pendingIntentsRef.current, intent]
+    }
+  }, [])
+
+  /**
+   * Sends everything queued, and nothing else.
+   *
+   * The loop re-reads the queue rather than running once because edits keep arriving while a
+   * request is in flight. That used to be a "save again" flag and a second round trip carrying the
+   * whole document; now it is simply the next batch, holding the keystrokes that arrived during the
+   * first one.
+   *
+   * A rejected batch rolls back only the rows it named and is kept for retry. That is the part the
+   * old snapshot save could not do: a write that *was* the whole document had to be undone as a
+   * whole, so one rejected title discarded every unrelated edit made since the last save — and in a
+   * shared space it would discard other people's.
+   */
   const persistNotes = useCallback(async () => {
     if (contentTimerRef.current !== null) {
       window.clearTimeout(contentTimerRef.current)
       contentTimerRef.current = null
     }
-    persistAgainRef.current = true
     const inflight = persistInflightRef.current
     if (inflight) {
       await inflight
-      if (
-        notesFingerprint({
-          folders: foldersRef.current,
-          tasks: tasksRef.current,
-          subtasks: subtasksRef.current,
-          tags: tagsRef.current,
-        }) === notesFingerprint(lastConfirmedRef.current)
-      ) {
+      if (pendingOpsRef.current.length === 0) {
         return
       }
       if (persistInflightRef.current && persistInflightRef.current !== inflight) {
@@ -293,25 +374,23 @@ export function FolderProvider({ children }: { children: ReactNode }) {
     const run = (async () => {
       setIsBusy(true)
       try {
-        while (persistAgainRef.current) {
-          persistAgainRef.current = false
+        while (pendingOpsRef.current.length > 0) {
           const requestUserId = userIdRef.current
           if (!requestUserId) {
             throw new RepositoryError('You need to be signed in.')
           }
-          const attempted = snapshotFromParts(
-            foldersRef.current,
-            tasksRef.current,
-            subtasksRef.current,
-            tagsRef.current,
-            uiStateRef.current,
-          )
-          if (notesFingerprint(attempted) === notesFingerprint(lastConfirmedRef.current)) {
+          // Claimed before the request goes out, so an edit made while it is in flight belongs to
+          // the next batch rather than being sent twice or dropped.
+          const batch = pendingOpsRef.current
+          const intents = pendingIntentsRef.current
+          pendingOpsRef.current = []
+          pendingIntentsRef.current = []
+          if (hasNoEffect(batch)) {
             continue
           }
           setSaveStatus('saving')
           try {
-            await Promise.resolve(notesRepository.save(attempted))
+            await Promise.resolve(notesRepository.apply(batch, summariseIntents(intents)))
             if (
               !shouldApplySessionResult({
                 cancelled: false,
@@ -321,7 +400,10 @@ export function FolderProvider({ children }: { children: ReactNode }) {
             ) {
               return
             }
-            lastConfirmedRef.current = cloneSnapshot(attempted)
+            // The baseline moves by the batch that just landed, rather than being rebuilt from
+            // local state: local state has usually moved on by now, and a baseline holding unsaved
+            // edits would restore them on the next failure as though the server had them.
+            lastConfirmedRef.current = applyOpsToSnapshot(lastConfirmedRef.current, batch)
             pendingRetryRef.current = null
             setCanRetry(false)
             setPersistError(null)
@@ -336,12 +418,19 @@ export function FolderProvider({ children }: { children: ReactNode }) {
             ) {
               return
             }
-            const outcome = rollbackNotesOnSaveFailure({
-              lastConfirmed: lastConfirmedRef.current,
-              attempted,
-            })
-            pendingRetryRef.current = outcome.pendingRetry
-            applyNotes(outcome.restored)
+            applyNotes(
+              rollbackOps({
+                lastConfirmed: lastConfirmedRef.current,
+                current: {
+                  folders: foldersRef.current,
+                  tasks: tasksRef.current,
+                  subtasks: subtasksRef.current,
+                  tags: tagsRef.current,
+                },
+                ops: batch,
+              }),
+            )
+            pendingRetryRef.current = { ops: batch, intents }
             setCanRetry(true)
             setSaveStatus('idle')
             setPersistError(error instanceof RepositoryError ? error.message : 'Could not save notes.')
@@ -378,6 +467,10 @@ export function FolderProvider({ children }: { children: ReactNode }) {
       setCanRetry(false)
       setSaveStatus('idle')
       pendingRetryRef.current = null
+      // Anything still queued belongs to the account that just left. Sending it against the next
+      // session would be writing one person's edits into another person's document.
+      pendingOpsRef.current = []
+      pendingIntentsRef.current = []
       applyNotes({ folders: [], tasks: [], subtasks: [], tags: [] })
       setAttachments([])
       setExpandedAttachmentIds([])
@@ -405,6 +498,10 @@ export function FolderProvider({ children }: { children: ReactNode }) {
         applyNotes(loaded)
         setUiState(normalizeUiState(loaded.uiState))
         lastConfirmedRef.current = cloneSnapshot(loaded)
+        // A fresh read is the new truth; ops queued against the copy it replaces would be applied
+        // to rows that may no longer look anything like what they were queued from.
+        pendingOpsRef.current = []
+        pendingIntentsRef.current = []
         pendingRetryRef.current = null
         setCanRetry(false)
         setPersistError(null)
@@ -524,11 +621,39 @@ export function FolderProvider({ children }: { children: ReactNode }) {
       return
     }
     try {
-      persistUiState(uiState, userId)
+      persistUiState(uiState, userId, workspace)
     } catch {
       /* local expand flags only */
     }
-  }, [ready, uiState, userId])
+  }, [ready, uiState, userId, workspace])
+
+  /**
+   * A pending typing save must not die with the workspace either.
+   *
+   * Moving between your own notes and a space unmounts this provider and mounts another one, and the
+   * queue is a ref that goes with it. Whatever is in it describes rows in the document being left,
+   * so it has to go out now and to the repository being left — which is exactly what this cleanup
+   * captures. Sending it a moment later, from the new provider, would write one workspace's edits
+   * into another's.
+   *
+   * Fire and forget on purpose: nothing is left to render the outcome to, and the alternative is
+   * blocking a navigation on a request.
+   */
+  useEffect(
+    () => () => {
+      const ops = pendingOpsRef.current
+      const intents = pendingIntentsRef.current
+      pendingOpsRef.current = []
+      pendingIntentsRef.current = []
+      if (ops.length === 0 || hasNoEffect(ops)) {
+        return
+      }
+      void Promise.resolve(notesRepository.apply(ops, summariseIntents(intents))).catch(
+        () => undefined,
+      )
+    },
+    [notesRepository],
+  )
 
   // A pending typing save must not die with the page. Both events fire on a reload, a tab close
   // and a phone backgrounding the browser, and pagehide is the one that still fires on iOS, where
@@ -554,17 +679,36 @@ export function FolderProvider({ children }: { children: ReactNode }) {
     }
   }, [persistNotes])
 
+  /**
+   * Puts a rejected batch back and sends it again.
+   *
+   * The rows it touched were rolled back when it failed, so this re-applies the batch optimistically
+   * — the same thing the original edit did — instead of restoring a whole snapshot over the top of
+   * everything that has been edited since.
+   */
   const retryPersist = useCallback(async () => {
     const pending = pendingRetryRef.current
     if (!pending) {
       return
     }
-    applyNotes(pending)
-    setUiState(pending.uiState)
+    const { ops, intents } = pending
     pendingRetryRef.current = null
     setCanRetry(false)
+    applyNotes(
+      applyOpsToSnapshot(
+        snapshotFromParts(
+          foldersRef.current,
+          tasksRef.current,
+          subtasksRef.current,
+          tagsRef.current,
+          uiStateRef.current,
+        ),
+        ops,
+      ),
+    )
+    enqueue(ops, summariseIntents(intents))
     await persistNotes()
-  }, [applyNotes, persistNotes])
+  }, [applyNotes, enqueue, persistNotes])
 
   const getFolder = useCallback((id: string) => getFolderById(folders, id), [folders])
 
@@ -595,6 +739,7 @@ export function FolderProvider({ children }: { children: ReactNode }) {
           tasks: tasksRef.current,
           subtasks: subtasksRef.current,
         })
+        enqueue([{ entity: 'folder', action: 'create', row: folder }], WRITE_INTENT.folderCreated)
         if (parentId) {
           setUiState((current) => ({
             ...current,
@@ -607,7 +752,7 @@ export function FolderProvider({ children }: { children: ReactNode }) {
         endExclusiveAction(actionLocksRef.current, 'create-folder')
       }
     },
-    [applyNotes, persistNotes],
+    [applyNotes, enqueue, persistNotes],
   )
 
   const renameFolder = useCallback(
@@ -631,6 +776,10 @@ export function FolderProvider({ children }: { children: ReactNode }) {
           tasks: tasksRef.current,
           subtasks: subtasksRef.current,
         })
+        enqueue(
+          [{ entity: 'folder', action: 'patch', id: folderId, fields: { name: trimmed } }],
+          WRITE_INTENT.folderRenamed,
+        )
         await persistNotes()
       } catch (error: unknown) {
         const message = error instanceof RepositoryError ? error.message : 'Could not rename the folder.'
@@ -640,7 +789,7 @@ export function FolderProvider({ children }: { children: ReactNode }) {
         endExclusiveAction(actionLocksRef.current, `rename-folder:${folderId}`)
       }
     },
-    [applyNotes, persistNotes],
+    [applyNotes, enqueue, persistNotes],
   )
 
   const deleteFolder = useCallback(
@@ -668,13 +817,12 @@ export function FolderProvider({ children }: { children: ReactNode }) {
         // drops the local copies, which nothing renders once their task is gone but which would
         // otherwise accumulate in memory for the rest of the session.
         setReminders((current) => current.filter((item) => !taskIds.has(item.taskId)))
-        lastConfirmedRef.current = snapshotFromParts(
-          next.folders,
-          next.tasks,
-          next.subtasks,
-          tagsRef.current,
-          uiStateRef.current,
-        )
+        // Moved by the delete that just succeeded, rather than rebuilt from local state. Rebuilding
+        // was subtly wrong: it folded in whatever had been edited since the last flush and recorded
+        // it as something the server already had, so a later failure would not roll it back.
+        lastConfirmedRef.current = applyOpsToSnapshot(lastConfirmedRef.current, [
+          { entity: 'folder', action: 'delete', id: folderId },
+        ])
         return result
       } catch (error: unknown) {
         const message = error instanceof RepositoryError ? error.message : 'Could not delete the folder.'
@@ -689,14 +837,21 @@ export function FolderProvider({ children }: { children: ReactNode }) {
 
   const reorderSiblingFolders = useCallback(
     (draggedId: string, targetId: string, position: 'before' | 'after') => {
-      applyNotes({
-        folders: applySiblingReorder(foldersRef.current, draggedId, targetId, position),
-        tasks: tasksRef.current,
-        subtasks: subtasksRef.current,
-      })
+      const before = foldersRef.current
+      const folders = applySiblingReorder(before, draggedId, targetId, position)
+      applyNotes({ folders, tasks: tasksRef.current, subtasks: subtasksRef.current })
+      enqueue(
+        movedSortOrders(before, folders).map(({ id, sortOrder }) => ({
+          entity: 'folder' as const,
+          action: 'patch' as const,
+          id,
+          fields: { sortOrder },
+        })),
+        WRITE_INTENT.foldersReordered,
+      )
       void persistNotes().catch(() => undefined)
     },
-    [applyNotes, persistNotes],
+    [applyNotes, enqueue, persistNotes],
   )
 
   const getTask = useCallback((id: string) => getTaskById(tasks, id), [tasks])
@@ -733,6 +888,7 @@ export function FolderProvider({ children }: { children: ReactNode }) {
           tasks: [...tasksRef.current, task],
           subtasks: subtasksRef.current,
         })
+        enqueue([{ entity: 'task', action: 'create', row: task }], WRITE_INTENT.taskCreated)
         setUiState((current) => ({
           ...current,
           expandedTaskIds: addId(current.expandedTaskIds, task.id),
@@ -743,35 +899,54 @@ export function FolderProvider({ children }: { children: ReactNode }) {
         endExclusiveAction(actionLocksRef.current, 'create-task')
       }
     },
-    [applyNotes, persistNotes],
+    [applyNotes, enqueue, persistNotes],
   )
 
   const reorderSiblingTasks = useCallback(
     (draggedId: string, targetId: string, position: 'before' | 'after') => {
-      applyNotes({
-        folders: foldersRef.current,
-        tasks: applyTaskReorder(tasksRef.current, draggedId, targetId, position),
-        subtasks: subtasksRef.current,
-      })
+      const before = tasksRef.current
+      const tasks = applyTaskReorder(before, draggedId, targetId, position)
+      applyNotes({ folders: foldersRef.current, tasks, subtasks: subtasksRef.current })
+      enqueue(
+        movedSortOrders(before, tasks).map(({ id, sortOrder }) => ({
+          entity: 'task' as const,
+          action: 'patch' as const,
+          id,
+          fields: { sortOrder },
+        })),
+        WRITE_INTENT.tasksReordered,
+      )
       void persistNotes().catch(() => undefined)
     },
-    [applyNotes, persistNotes],
+    [applyNotes, enqueue, persistNotes],
   )
 
   const moveTaskToFolder = useCallback(
     (taskId: string, targetFolderId: string) => {
+      const sortOrder = nextTaskSortOrder(tasksRef.current, targetFolderId)
       applyNotes({
         folders: foldersRef.current,
         tasks: tasksRef.current.map((task) =>
-          task.id === taskId
-            ? { ...task, folderId: targetFolderId, sortOrder: nextTaskSortOrder(tasksRef.current, targetFolderId) }
-            : task,
+          task.id === taskId ? { ...task, folderId: targetFolderId, sortOrder } : task,
         ),
         subtasks: subtasksRef.current,
       })
+      // Both fields together: a note arriving in a folder has to land somewhere in that folder's
+      // order, and the two written separately would leave it briefly sharing a position.
+      enqueue(
+        [
+          {
+            entity: 'task',
+            action: 'patch',
+            id: taskId,
+            fields: { folderId: targetFolderId, sortOrder },
+          },
+        ],
+        WRITE_INTENT.taskMoved,
+      )
       void persistNotes().catch(() => undefined)
     },
-    [applyNotes, persistNotes],
+    [applyNotes, enqueue, persistNotes],
   )
 
   const updateTaskContent = useCallback(
@@ -781,6 +956,10 @@ export function FolderProvider({ children }: { children: ReactNode }) {
         tasks: tasksRef.current.map((task) => (task.id === taskId ? { ...task, content } : task)),
         subtasks: subtasksRef.current,
       })
+      // One op per keystroke, folded down to one write per flush — see planOps. Sending the content
+      // column and nothing else is what keeps a long typing session from carrying a stale due date
+      // or title along with it on every save.
+      enqueue([{ entity: 'task', action: 'patch', id: taskId, fields: { content } }], WRITE_INTENT.taskEdited)
       // The debounce here exists for typing — it's waiting for the next keystroke. A discrete
       // edit has no next keystroke, so it saves the way every other discrete action in this file
       // does: right now. Ticking a checklist item from a card and reloading a moment later was
@@ -791,7 +970,7 @@ export function FolderProvider({ children }: { children: ReactNode }) {
       }
       scheduleContentPersist()
     },
-    [applyNotes, persistNotes, scheduleContentPersist],
+    [applyNotes, enqueue, persistNotes, scheduleContentPersist],
   )
 
   const updateTaskLayouts = useCallback(
@@ -800,7 +979,7 @@ export function FolderProvider({ children }: { children: ReactNode }) {
         return
       }
       const byId = new Map(entries.map((entry) => [entry.taskId, entry.placement]))
-      let changed = false
+      const patches: NotesOp[] = []
       const tasks = tasksRef.current.map((task) => {
         const update = byId.get(task.id)
         if (!update) {
@@ -814,21 +993,23 @@ export function FolderProvider({ children }: { children: ReactNode }) {
         if (samePlacement(current, next)) {
           return task
         }
-        changed = true
         // Merged at both levels, never replaced: the other listings' arrangements live in the
         // same column, and within this listing a drag must not discard a size (or the reverse).
-        return { ...task, gridLayouts: { ...task.gridLayouts, [scope]: next } }
+        const gridLayouts = { ...task.gridLayouts, [scope]: next }
+        patches.push({ entity: 'task', action: 'patch', id: task.id, fields: { gridLayouts } })
+        return { ...task, gridLayouts }
       })
       // A drag that ends where it started, or a re-render handing back the layout it was given,
       // would otherwise write and save on every pointer-up.
-      if (!changed) {
+      if (patches.length === 0) {
         return
       }
       applyNotes({ folders: foldersRef.current, tasks, subtasks: subtasksRef.current })
+      enqueue(patches, WRITE_INTENT.boardRearranged)
       // Discrete, like every other non-typing action here: the gesture is over when this runs.
       void persistNotes().catch(() => undefined)
     },
-    [applyNotes, persistNotes],
+    [applyNotes, enqueue, persistNotes],
   )
 
   const updateTaskTitle = useCallback(
@@ -838,9 +1019,11 @@ export function FolderProvider({ children }: { children: ReactNode }) {
         tasks: tasksRef.current.map((task) => (task.id === taskId ? { ...task, title } : task)),
         subtasks: subtasksRef.current,
       })
+      // A title cleared to nothing stays cleared on screen and is sent as "Untitled" — see enqueue.
+      enqueue([{ entity: 'task', action: 'patch', id: taskId, fields: { title } }], WRITE_INTENT.taskRenamed)
       scheduleContentPersist()
     },
-    [applyNotes, scheduleContentPersist],
+    [applyNotes, enqueue, scheduleContentPersist],
   )
 
   const deleteTask = useCallback(
@@ -862,13 +1045,9 @@ export function FolderProvider({ children }: { children: ReactNode }) {
         // Cascaded away in the database along with the task; dropped here so the session's copy
         // doesn't keep them.
         setReminders((current) => current.filter((item) => !taskIds.has(item.taskId)))
-        lastConfirmedRef.current = snapshotFromParts(
-          next.folders,
-          next.tasks,
-          next.subtasks,
-          tagsRef.current,
-          uiStateRef.current,
-        )
+        lastConfirmedRef.current = applyOpsToSnapshot(lastConfirmedRef.current, [
+          { entity: 'task', action: 'delete', id: taskId },
+        ])
         return result
       } catch (error: unknown) {
         const message = error instanceof RepositoryError ? error.message : 'Could not delete the task.'
@@ -883,85 +1062,121 @@ export function FolderProvider({ children }: { children: ReactNode }) {
 
   const toggleFolderImportant = useCallback(
     (folderId: string) => {
+      const folder = foldersRef.current.find((item) => item.id === folderId)
+      if (!folder) {
+        return
+      }
+      const isImportant = !folder.isImportant
       applyNotes({
-        folders: foldersRef.current.map((folder) =>
-          folder.id === folderId ? { ...folder, isImportant: !folder.isImportant } : folder,
+        folders: foldersRef.current.map((item) =>
+          item.id === folderId ? { ...item, isImportant } : item,
         ),
         tasks: tasksRef.current,
         subtasks: subtasksRef.current,
       })
+      enqueue(
+        [{ entity: 'folder', action: 'patch', id: folderId, fields: { isImportant } }],
+        isImportant ? WRITE_INTENT.folderStarred : WRITE_INTENT.folderUnstarred,
+      )
       void persistNotes().catch(() => undefined)
     },
-    [applyNotes, persistNotes],
+    [applyNotes, enqueue, persistNotes],
   )
 
   const toggleTaskImportant = useCallback(
     (taskId: string) => {
+      const task = tasksRef.current.find((item) => item.id === taskId)
+      if (!task) {
+        return
+      }
+      const isImportant = !task.isImportant
       applyNotes({
         folders: foldersRef.current,
-        tasks: tasksRef.current.map((task) =>
-          task.id === taskId ? { ...task, isImportant: !task.isImportant } : task,
+        tasks: tasksRef.current.map((item) =>
+          item.id === taskId ? { ...item, isImportant } : item,
         ),
         subtasks: subtasksRef.current,
       })
+      enqueue(
+        [{ entity: 'task', action: 'patch', id: taskId, fields: { isImportant } }],
+        isImportant ? WRITE_INTENT.taskStarred : WRITE_INTENT.taskUnstarred,
+      )
       void persistNotes().catch(() => undefined)
     },
-    [applyNotes, persistNotes],
+    [applyNotes, enqueue, persistNotes],
   )
 
   const toggleTaskPinned = useCallback(
     (taskId: string, scope: TaskListScope) => {
+      const task = tasksRef.current.find((item) => item.id === taskId)
+      if (!task) {
+        return
+      }
+      // Only this listing moves. Pinning in Starred says nothing about where the same note should
+      // sit inside its folder.
+      const pinnedScopes = task.pinnedScopes.includes(scope)
+        ? task.pinnedScopes.filter((entry) => entry !== scope)
+        : [...task.pinnedScopes, scope]
       applyNotes({
         folders: foldersRef.current,
-        tasks: tasksRef.current.map((task) => {
-          if (task.id !== taskId) {
-            return task
-          }
-          // Only this listing moves. Pinning in Starred says nothing about where the same note
-          // should sit inside its folder.
-          const pinnedScopes = task.pinnedScopes.includes(scope)
-            ? task.pinnedScopes.filter((entry) => entry !== scope)
-            : [...task.pinnedScopes, scope]
-          return { ...task, pinnedScopes }
-        }),
+        tasks: tasksRef.current.map((item) =>
+          item.id === taskId ? { ...item, pinnedScopes } : item,
+        ),
         subtasks: subtasksRef.current,
       })
+      enqueue(
+        [{ entity: 'task', action: 'patch', id: taskId, fields: { pinnedScopes } }],
+        pinnedScopes.length > task.pinnedScopes.length
+          ? WRITE_INTENT.taskPinned
+          : WRITE_INTENT.taskUnpinned,
+      )
       void persistNotes().catch(() => undefined)
     },
-    [applyNotes, persistNotes],
+    [applyNotes, enqueue, persistNotes],
   )
 
   const updateTaskSchedule = useCallback(
     (taskId: string, noteKind: NoteKind, dueAt: string | null) => {
+      const task = tasksRef.current.find((item) => item.id === taskId)
+      if (!task) {
+        return
+      }
+      // A finished task given a deadline that hasn't happened yet is work to do again, not work
+      // already done — the database enforces this (see the reopen migration); mirroring it here is
+      // what stops the card showing "completed on time" for a frame first.
+      const reopen =
+        noteKind !== 'note' &&
+        task.completed &&
+        dueAt !== null &&
+        dueAt !== task.dueAt &&
+        new Date(dueAt).getTime() > serverNowMs()
+      // Turning a task back into a note drops the deadline and the tick with it, matching what the
+      // database's normalising trigger does. Applying it here as well keeps the card from showing a
+      // stale "overdue" for the moment before the save comes back.
+      const fields: TaskPatch =
+        noteKind === 'note'
+          ? { noteKind, dueAt: null, completed: false }
+          : reopen
+            ? { noteKind, dueAt, completed: false }
+            : { noteKind, dueAt }
       applyNotes({
         folders: foldersRef.current,
-        tasks: tasksRef.current.map((task) => {
-          if (task.id !== taskId) {
-            return task
-          }
-          // Turning a task back into a note drops the deadline and the tick with it, matching what
-          // the database's normalising trigger does. Applying it here as well keeps the card from
-          // showing a stale "overdue" for the moment before the save comes back.
-          if (noteKind === 'note') {
-            return { ...task, noteKind, dueAt: null, completed: false, completedAt: null }
-          }
-          // A finished task given a deadline that hasn't happened yet is work to do again, not
-          // work already done — the database enforces this (see the reopen migration); mirroring
-          // it here is what stops the card showing "completed on time" for a frame first.
-          const reopen =
-            task.completed &&
-            dueAt !== null &&
-            dueAt !== task.dueAt &&
-            new Date(dueAt).getTime() > serverNowMs()
-          return reopen
-            ? { ...task, noteKind, dueAt, completed: false, completedAt: null }
-            : { ...task, noteKind, dueAt }
-        }),
+        tasks: tasksRef.current.map((item) =>
+          item.id === taskId
+            ? {
+                ...item,
+                ...fields,
+                completedAt: fields.completed === false ? null : item.completedAt,
+              }
+            : item,
+        ),
         subtasks: subtasksRef.current,
       })
+      // completedAt is deliberately not in the patch — the server stamps it from its own clock.
+      enqueue([{ entity: 'task', action: 'patch', id: taskId, fields }], WRITE_INTENT.scheduleChanged)
       void persistNotes().catch(() => undefined)
     },
-    [applyNotes, persistNotes],
+    [applyNotes, enqueue, persistNotes],
   )
 
   const setTaskCompleted = useCallback(
@@ -984,9 +1199,15 @@ export function FolderProvider({ children }: { children: ReactNode }) {
         }),
         subtasks: subtasksRef.current,
       })
+      // Only the tick goes out. The timestamp beside it is this device's guess, good for the
+      // current frame; the real one is written by the server and read back on the next load.
+      enqueue(
+        [{ entity: 'task', action: 'patch', id: taskId, fields: { completed } }],
+        completed ? WRITE_INTENT.taskCompleted : WRITE_INTENT.taskReopened,
+      )
       void persistNotes().catch(() => undefined)
     },
-    [applyNotes, persistNotes],
+    [applyNotes, enqueue, persistNotes],
   )
 
   /**
@@ -1094,6 +1315,7 @@ export function FolderProvider({ children }: { children: ReactNode }) {
       if (!current) {
         return
       }
+      const affected = tasksRef.current.filter((task) => task.tags.includes(current.name))
       applyNotes({
         folders: foldersRef.current,
         tasks: tasksRef.current.map((task) =>
@@ -1104,9 +1326,24 @@ export function FolderProvider({ children }: { children: ReactNode }) {
         subtasks: subtasksRef.current,
         tags: tagsRef.current.filter((tag) => tag.id !== tagId),
       })
+      // task_tags cascades from the tag, but a task's own `tags` array is plain text with nothing
+      // to cascade from — left alone, the deleted name would reappear on the next load out of the
+      // array the mapper falls back to. So every task carrying it is patched too.
+      enqueue(
+        [
+          ...affected.map((task) => ({
+            entity: 'task' as const,
+            action: 'patch' as const,
+            id: task.id,
+            fields: { tags: task.tags.filter((tag) => tag !== current.name) },
+          })),
+          { entity: 'tag', action: 'delete', id: tagId },
+        ],
+        WRITE_INTENT.tagDeleted,
+      )
       void persistNotes().catch(() => undefined)
     },
-    [applyNotes, persistNotes],
+    [applyNotes, enqueue, persistNotes],
   )
 
   const updateTaskTags = useCallback(
@@ -1125,6 +1362,8 @@ export function FolderProvider({ children }: { children: ReactNode }) {
         }
       }
       const nextTags = withTags(resolved)
+      const knownIds = new Set(tagsRef.current.map((tag) => tag.id))
+      const created = nextTags.filter((tag) => !knownIds.has(tag.id))
       applyNotes({
         folders: foldersRef.current,
         tasks: tasksRef.current.map((task) =>
@@ -1135,9 +1374,20 @@ export function FolderProvider({ children }: { children: ReactNode }) {
         // correct, but this keeps "did the catalogue move" honest for anything watching it.
         tags: nextTags === tagsRef.current ? undefined : nextTags,
       })
+      // Three parts, and all three are needed. The catalogue entries so a name can be linked at
+      // all; the task's own array because that is the fallback a client without the catalogue
+      // reads; and the links, which are what the next load actually resolves the names from.
+      enqueue(
+        [
+          ...created.map((row) => ({ entity: 'tag' as const, action: 'create' as const, row })),
+          { entity: 'task', action: 'patch', id: taskId, fields: { tags: resolved } },
+          { entity: 'taskTags', action: 'set', taskId, names: resolved },
+        ],
+        WRITE_INTENT.tagsChanged,
+      )
       void persistNotes().catch(() => undefined)
     },
-    [applyNotes, findTagByName, persistNotes, withTags],
+    [applyNotes, enqueue, findTagByName, persistNotes, withTags],
   )
 
   const updateTaskColor = useCallback(
@@ -1147,9 +1397,10 @@ export function FolderProvider({ children }: { children: ReactNode }) {
         tasks: tasksRef.current.map((task) => (task.id === taskId ? { ...task, color } : task)),
         subtasks: subtasksRef.current,
       })
+      enqueue([{ entity: 'task', action: 'patch', id: taskId, fields: { color } }], WRITE_INTENT.colourChanged)
       void persistNotes().catch(() => undefined)
     },
-    [applyNotes, persistNotes],
+    [applyNotes, enqueue, persistNotes],
   )
 
   const getSubtasksForTask = useCallback(
@@ -1175,6 +1426,7 @@ export function FolderProvider({ children }: { children: ReactNode }) {
           tasks: tasksRef.current,
           subtasks: [...subtasksRef.current, subtask],
         })
+        enqueue([{ entity: 'subtask', action: 'create', row: subtask }], WRITE_INTENT.subtaskCreated)
         if (parentSubtaskId) {
           setUiState((current) => ({
             ...current,
@@ -1189,7 +1441,7 @@ export function FolderProvider({ children }: { children: ReactNode }) {
         endExclusiveAction(actionLocksRef.current, 'create-subtask')
       }
     },
-    [applyNotes, persistNotes],
+    [applyNotes, enqueue, persistNotes],
   )
 
   const updateSubtaskTitle = useCallback(
@@ -1201,9 +1453,13 @@ export function FolderProvider({ children }: { children: ReactNode }) {
           subtask.id === subtaskId ? { ...subtask, title } : subtask,
         ),
       })
+      enqueue(
+        [{ entity: 'subtask', action: 'patch', id: subtaskId, fields: { title } }],
+        WRITE_INTENT.subtaskRenamed,
+      )
       scheduleContentPersist()
     },
-    [applyNotes, scheduleContentPersist],
+    [applyNotes, enqueue, scheduleContentPersist],
   )
 
   const deleteSubtask = useCallback(
@@ -1221,13 +1477,9 @@ export function FolderProvider({ children }: { children: ReactNode }) {
           subtasks: subtasksRef.current.filter((subtask) => !remove.has(subtask.id)),
         }
         applyNotes(next)
-        lastConfirmedRef.current = snapshotFromParts(
-          next.folders,
-          next.tasks,
-          next.subtasks,
-          tagsRef.current,
-          uiStateRef.current,
-        )
+        lastConfirmedRef.current = applyOpsToSnapshot(lastConfirmedRef.current, [
+          { entity: 'subtask', action: 'delete', id: subtaskId },
+        ])
       } catch (error: unknown) {
         const message = error instanceof RepositoryError ? error.message : 'Could not delete the subtask.'
         setPersistError(message)
@@ -1241,16 +1493,25 @@ export function FolderProvider({ children }: { children: ReactNode }) {
 
   const toggleSubtaskCompleted = useCallback(
     (subtaskId: string) => {
+      const subtask = subtasksRef.current.find((item) => item.id === subtaskId)
+      if (!subtask) {
+        return
+      }
+      const completed = !subtask.completed
       applyNotes({
         folders: foldersRef.current,
         tasks: tasksRef.current,
-        subtasks: subtasksRef.current.map((subtask) =>
-          subtask.id === subtaskId ? { ...subtask, completed: !subtask.completed } : subtask,
+        subtasks: subtasksRef.current.map((item) =>
+          item.id === subtaskId ? { ...item, completed } : item,
         ),
       })
+      enqueue(
+        [{ entity: 'subtask', action: 'patch', id: subtaskId, fields: { completed } }],
+        completed ? WRITE_INTENT.subtaskCompleted : WRITE_INTENT.subtaskReopened,
+      )
       void persistNotes().catch(() => undefined)
     },
-    [applyNotes, persistNotes],
+    [applyNotes, enqueue, persistNotes],
   )
 
   const toggleMyNotesSidebar = useCallback(() => {
@@ -1582,7 +1843,9 @@ export function FolderProvider({ children }: { children: ReactNode }) {
   }
 
   if (!ready && !loadError) {
-    return <LoadingSplash label="Opening your notes" />
+    // A space announces itself here rather than borrowing the app's mark and the word "your" — see
+    // WorkspaceLoadingSplash, which falls back to exactly this for personal notes.
+    return <WorkspaceLoadingSplash label="Opening your notes" />
   }
 
   if (loadError) {

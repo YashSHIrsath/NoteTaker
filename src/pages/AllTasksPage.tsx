@@ -8,7 +8,6 @@ import { TaskFilterMenu } from '../components/task/TaskFilterMenu'
 import { TaskCard } from '../components/task/TaskCard'
 import { TaskEditorDialog } from '../components/task/TaskEditorDialog'
 import { Button } from '../components/ui/Button'
-import { useAuth } from '../hooks/useAuth'
 import { useFolders } from '../hooks/useFolders'
 import { useServerNowCoarse } from '../hooks/useServerNow'
 import {
@@ -26,7 +25,7 @@ import { getRootCategoryForFolder, scatterCategoryForId } from '../lib/folderCol
 import { taskColorStyle } from '../lib/taskColor'
 import { isPinnedIn } from '../lib/taskGrid'
 import { focusTaskTitle } from '../lib/focusTaskTitle'
-import { readViewStyle } from '../lib/viewStyle'
+import { useDisplaySettings } from '../hooks/useDisplaySettings'
 import { usePageEnter } from '../hooks/usePageEnterDirection'
 import { cn } from '../lib/cn'
 
@@ -44,11 +43,12 @@ const SECTION_TITLE: Partial<Record<StatusFilter, string>> = {
 
 export function AllTasksPage() {
   const { folders, tasks } = useFolders()
-  const { user } = useAuth()
   // The Notes style preference applies wherever notes are listed, this page included — it used
   // to be honoured only by the folder views and Important, so picking "Professional" appeared
   // to do nothing here.
-  const viewStyle = readViewStyle(user?.user_metadata as Record<string, unknown> | undefined)
+  // Space-first: inside a shared space the note style belongs to the space, so everyone sees the
+  // same one. See useDisplaySettings.
+  const { viewStyle } = useDisplaySettings()
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
   const [activeTag, setActiveTag] = useState<string | null>(null)
   const [kindFilter, setKindFilter] = useState<KindFilter>('all')

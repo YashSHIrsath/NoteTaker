@@ -13,13 +13,21 @@
      note text and 11px metadata read better in a UI face. */
   --font-display: "Sansita", "Iowan Old Style", Georgia, serif;
 
-  --color-surface: #ffffff;
-  --color-surface-muted: #f8f9fb;
+  /* The untinted grounds. Named separately because a space's theme mixes its own colour into
+     these — see .space-theme — and duplicating the literals there is how the two would drift. */
+  --surface-base: #ffffff;
+  --surface-muted-base: #f8f9fb;
+  --surface-raised-base: #ffffff;
+  --border-base: #e6e8ec;
+  --hover-base: #f1f3f6;
+
+  --color-surface: var(--surface-base);
+  --color-surface-muted: var(--surface-muted-base);
   /* A dedicated "elevated card" fill — distinct from --color-surface-muted (which reads as
      *receded*, not raised) so cards actually look lifted off the page instead of blending
      into it or sinking below it. */
-  --color-surface-raised: #ffffff;
-  --color-border: #e6e8ec;
+  --color-surface-raised: var(--surface-raised-base);
+  --color-border: var(--border-base);
   /* Cards sit on a page that's the same #ffffff as --color-surface-raised itself, so this is
      the only thing (plus shadow, below) actually separating a card's edge from the page in
      light mode — it has to read as a real line, not a near-invisible tint-on-white. */
@@ -28,7 +36,7 @@
   --color-text: #14161a;
   --color-text-muted: #6b7180;
 
-  --color-hover: #f1f3f6;
+  --color-hover: var(--hover-base);
 
   --color-accent: #4f46e5;
   --color-accent-hover: #4338ca;
@@ -115,16 +123,22 @@
 }
 
 :root[data-theme="dark"] {
-  --color-surface: #1b1d23;
-  --color-surface-muted: #15161b;
-  --color-surface-raised: #242631;
-  --color-border: #2c2e36;
+  --surface-base: #1b1d23;
+  --surface-muted-base: #15161b;
+  --surface-raised-base: #242631;
+  --border-base: #2c2e36;
+  --hover-base: #262832;
+
+  --color-surface: var(--surface-base);
+  --color-surface-muted: var(--surface-muted-base);
+  --color-surface-raised: var(--surface-raised-base);
+  --color-border: var(--border-base);
   --color-border-strong: #3a3d47;
 
   --color-text: #edeef2;
   --color-text-muted: #9296a3;
 
-  --color-hover: #262832;
+  --color-hover: var(--hover-base);
 
   --color-accent: #8b85f0;
   --color-accent-hover: #a29cf5;
@@ -536,6 +550,143 @@ body {
   animation: anim-page-enter var(--motion-slow) var(--motion-ease) both;
 }
 
+/* Walking into a shared space.
+
+   A different move from a page transition, because it is a different kind of arrival: not the next
+   tab along, but the same app pointed at somebody else's content. So it comes up towards you rather
+   than in from a side, and the space's own colour is already on the shell as it does — the point of
+   the whole gesture is that you notice you have changed workspace, before you read anything. */
+/* ------------------------------------------------------------------ a space's own theme
+ *
+ * A shared space looks different from your own notes, in both light and dark, and the difference is
+ * the space's own colour rather than a second design.
+ *
+ * Repointing the accent alone was not enough: the accent shows on a handful of controls, so a whole
+ * screen of white cards still read as your own notes at a glance — which on a phone, where there is
+ * no sidebar saying otherwise, meant no signal at all. Tinting the *surfaces* changes the ground
+ * everything sits on, so the answer to "whose notes am I looking at" arrives before you read a word.
+ *
+ * Kept deliberately faint. This has to be legible for hours, so the mix is a few percent — enough
+ * that the page is clearly not white (or not the usual near-black), and far short of a coloured
+ * screen. The text and border tokens are left alone: contrast is not the thing being signalled.
+ *
+ * `--space-tint` is set inline from the space's palette colour. Every value below is derived from it
+ * with color-mix against the base tokens, so the two themes stay in step with the app's own and a
+ * change to either ground follows through here without being restated.
+ */
+.space-theme {
+  --color-surface: color-mix(in oklab, var(--space-tint) 5%, var(--surface-base));
+  --color-surface-muted: color-mix(in oklab, var(--space-tint) 7%, var(--surface-muted-base));
+  --color-surface-raised: color-mix(in oklab, var(--space-tint) 4%, var(--surface-raised-base));
+  --color-border: color-mix(in oklab, var(--space-tint) 14%, var(--border-base));
+  --color-hover: color-mix(in oklab, var(--space-tint) 12%, var(--hover-base));
+}
+
+/* Dark needs a heavier hand for the same apparent difference: a tint that reads clearly on white
+   disappears into a near-black ground at the same percentage.
+
+   Both forms, because the class is stamped on :root itself — so it is the same element as the
+   theme attribute, not a descendant of it — while the compound selector alone would miss any
+   nested use. */
+:root[data-theme="dark"].space-theme,
+:root[data-theme="dark"] .space-theme {
+  --color-surface: color-mix(in oklab, var(--space-tint) 10%, var(--surface-base));
+  --color-surface-muted: color-mix(in oklab, var(--space-tint) 8%, var(--surface-muted-base));
+  --color-surface-raised: color-mix(in oklab, var(--space-tint) 13%, var(--surface-raised-base));
+  --color-border: color-mix(in oklab, var(--space-tint) 20%, var(--border-base));
+  --color-hover: color-mix(in oklab, var(--space-tint) 18%, var(--hover-base));
+}
+
+/* ------------------------------------------------------------------ walking into a space
+ *
+ * Crossing into someone else's workspace is the one navigation in this app with a cost attached to
+ * not noticing it, so it is the one that gets a real arrival rather than a fade. Three things happen
+ * at once and settle at different times: the shell lifts and scales in, a wash of the space's own
+ * colour sweeps across it once, and the loading screen underneath shows the space's mark rather
+ * than the app's.
+ *
+ * Everything is derived from --space-tint, so a space's arrival is in its own colour without a
+ * single value being restated per space. */
+@keyframes anim-space-enter {
+  0% {
+    opacity: 0;
+    transform: scale(0.94) translateY(14px);
+  }
+  55% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes anim-space-wash {
+  0% {
+    opacity: 0;
+    transform: translateX(-60%) skewX(-12deg);
+  }
+  35% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(160%) skewX(-12deg);
+  }
+}
+
+.anim-space-enter {
+  position: relative;
+  animation: anim-space-enter var(--motion-space-enter, 460ms) var(--motion-spring) both;
+}
+
+/* The sweep. pointer-events:none and a single pass, so it is over before it can be in the way. */
+.anim-space-enter::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+  background: linear-gradient(
+    100deg,
+    transparent 0%,
+    var(--space-tint, transparent) 45%,
+    transparent 80%
+  );
+  animation: anim-space-wash 780ms var(--motion-ease) both;
+}
+
+/* The mark on the loading screen: it lands, and the colour keeps going outward without it. */
+@keyframes anim-space-mark {
+  0% {
+    opacity: 0;
+    transform: scale(0.55);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes anim-space-halo {
+  0% {
+    opacity: 0.45;
+    transform: scale(0.85);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(2.3);
+  }
+}
+
+.anim-space-mark {
+  animation: anim-space-mark 520ms var(--motion-spring) both;
+}
+
+.anim-space-halo {
+  animation: anim-space-halo 1900ms var(--motion-ease) infinite;
+}
+
 .anim-loader-bar {
   transform-origin: bottom;
   animation: anim-loader-bar 900ms var(--motion-ease) infinite;
@@ -726,6 +877,10 @@ body.dnd-touch-active {
   .anim-pop,
   .anim-rise,
   .anim-page-enter,
+  .anim-space-enter,
+  .anim-space-enter::after,
+  .anim-space-mark,
+  .anim-space-halo,
   .anim-loader-bar,
   .anim-delayed-in,
   .anim-panel-in,

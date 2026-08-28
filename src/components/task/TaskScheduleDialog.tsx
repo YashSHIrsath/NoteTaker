@@ -9,6 +9,7 @@ import { Notice } from '../ui/Notice'
 import { ReminderEditor } from './ReminderEditor'
 import { TaskCountdown } from './TaskCountdown'
 import { TaskHistoryPanel, type HistoryTab } from './TaskHistoryPanel'
+import { SpaceItemHistory } from '../space/SpaceItemHistory'
 import { useDialogFocus } from '../../hooks/useDialogFocus'
 import { useFolders } from '../../hooks/useFolders'
 import { useAuth } from '../../hooks/useAuth'
@@ -647,6 +648,10 @@ export function TaskScheduleDialog({ open, task, onClose }: TaskScheduleDialogPr
                 onTabChange={setHistoryTab}
                 reloadKey={historyKey}
               />
+              {/* Inside a shared space, the schedule's own history is only half the story — who
+                * renamed it, moved it or ticked it is the other half. Shown here rather than
+                * somewhere new because this is already where anyone looking for history opens. */}
+              <SpaceItemHistory entityType="task" entityId={task.id} open={historyOpen} />
             </Collapse>
           </div>
         </div>

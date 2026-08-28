@@ -11,7 +11,7 @@ export interface FolderNode extends Folder {
   children: FolderNode[]
 }
 
-export type SidebarNavId = 'tree' | 'mynotes' | 'tasks' | 'important'
+export type SidebarNavId = 'tree' | 'mynotes' | 'tasks' | 'important' | 'spaces'
 
 /**
  * What a note *is*, chosen explicitly rather than inferred.
@@ -326,3 +326,168 @@ export interface Attachment {
 }
 
 
+
+/* ------------------------------------------------------------------ shared spaces
+ *
+ * A space is a workspace several people hold together. Nothing here describes its *contents* —
+ * folders, tasks and subtasks in a space are the same types as anywhere else, which is the whole
+ * reason the app renders one without a parallel component tree (see WorkspaceRef).
+ */
+
+/**
+ * What someone may do in a space.
+ *
+ * Four rather than two. The split between owner and admin is what lets a space have several people
+ * who can manage members without any ambiguity about who may delete it; `viewer` is what lets a plan
+ * be shown to someone without hoping they don't touch it. Enforced in the database — see
+ * space_can_write and the *_writable_by_uid helpers — not here.
+ */
+export type SpaceRole = 'owner' | 'admin' | 'editor' | 'viewer'
+
+/** Exactly one per space, and the only role an invitation can never hand out. */
+export const SPACE_ROLES: SpaceRole[] = ['owner', 'admin', 'editor', 'viewer']
+
+/** The roles a person can actually be invited as. */
+export const INVITABLE_ROLES: SpaceRole[] = ['admin', 'editor', 'viewer']
+
+export interface Space {
+  id: string
+  name: string
+  /** What the space is for, in the members' own words. The first question a new member has. */
+  description: string | null
+  /** The space's own picture. Null falls back to its colour, which is what every space starts with. */
+  imageUrl: string | null
+  /** A palette name (see TaskPaletteColor), or null for the app's own accent. Carried through the
+   *  whole shell while you're inside the space, so "which workspace am I in" is never a guess. */
+  color: TaskPaletteColor | null
+  createdBy: string
+  createdAt: string
+}
+
+/** A space plus where the signed-in account stands in it — what the Shared Spaces page lists. */
+export interface SpaceSummary extends Space {
+  role: SpaceRole
+  memberCount: number
+  /**
+   * Display settings that belong to the space rather than to a person, and null until somebody sets
+   * them — in which case each member's own preference applies.
+   *
+   * The tab order and the note style describe the space: everyone in it is looking at the same tree,
+   * so one member arranging it arranges it for the others. Tiles per row is *not* here on purpose —
+   * it is a function of the screen in front of you, and is already stored per screen size for that
+   * reason. Which page you open on stays personal too: that is about where you start, not about the
+   * space.
+   */
+  navOrder: string[] | null
+  viewStyle: 'professional' | 'clipboard' | null
+}
+
+export interface SpaceMember {
+  userId: string
+  role: SpaceRole
+  joinedAt: string
+  email: string
+  fullName: string | null
+  avatarUrl: string | null
+}
+
+export type SpaceInviteStatus = 'pending' | 'accepted' | 'declined' | 'revoked'
+
+/**
+ * An invitation, addressed to an email rather than to an account.
+ *
+ * That is the point: requiring the invitee to already be a user means every invitation starts with
+ * "sign up first, then tell me". This one waits, and appears in the app the moment an account with
+ * that address exists — nothing is claimed or migrated at signup.
+ */
+export interface SpaceInvite {
+  id: string
+  spaceId: string
+  email: string
+  role: SpaceRole
+  /** The credential in an invite link. Present for the space's own members (who build the link) and
+   *  for the invitee (who is already holding it if they followed one). */
+  token: string
+  status: SpaceInviteStatus
+  createdAt: string
+  expiresAt: string
+}
+
+/** A pending invitation as the person invited sees it, with the parts they cannot read themselves. */
+export interface IncomingSpaceInvite {
+  id: string
+  spaceId: string
+  spaceName: string
+  spaceColor: TaskPaletteColor | null
+  role: SpaceRole
+  token: string
+  createdAt: string
+  expiresAt: string
+  invitedByName: string | null
+  invitedByEmail: string
+}
+
+/* ------------------------------------------------------------------ space activity
+ *
+ * What happened in a shared space. Written entirely by database triggers reading OLD and NEW — see
+ * the space_activity migration — so nothing in this app authors one, and there is no setter for any
+ * of it anywhere.
+ */
+
+/**
+ * What happened, derived from the diff rather than declared.
+ *
+ * The trigger works this out by comparing the row before and after, which is why it cannot be wrong
+ * about it: a moved note is a note whose folder_id changed, whatever anyone says they were doing.
+ * Where several fields changed at once, the most consequential one names the entry.
+ */
+export type SpaceActivityAction =
+  | 'created'
+  | 'deleted'
+  | 'renamed'
+  | 'moved'
+  | 'completed'
+  | 'reopened'
+  | 'due_changed'
+  | 'content_edited'
+  | 'starred'
+  | 'unstarred'
+  | 'attachment_added'
+  | 'attachment_removed'
+  | 'updated'
+
+export type SpaceActivityEntity = 'folder' | 'task' | 'subtask' | 'attachment'
+
+export interface SpaceActivityEntry {
+  /** Ordered and paged by this. A feed's cursor, not a random identifier. */
+  id: number
+  occurredAt: string
+  action: SpaceActivityAction
+  entityType: SpaceActivityEntity
+  entityId: string
+  /**
+   * The title as it was when this happened, stored rather than joined.
+   *
+   * This is what keeps a line readable after the thing it describes has been deleted — the same
+   * reason task_events keeps a reminder's description. A join would render "deleted" entries blank,
+   * which are precisely the ones anybody goes looking for.
+   */
+  entityTitle: string | null
+  /** Where it was, in words, at the time. Also a snapshot for the same reason. */
+  pathLabel: string | null
+  /** The sentence the write path declared. Null for a change that did not come through it. */
+  intent: string | null
+  /**
+   * The row before and after, as the database saw it.
+   *
+   * A note's body is left out of an update's diff and kept on a delete: storing two copies of every
+   * body on every save would make the log larger than the notes, and a delete is the one case where
+   * the body is not still in the live row.
+   */
+  before: Record<string, unknown> | null
+  after: Record<string, unknown> | null
+  actorId: string | null
+  actorName: string | null
+  actorEmail: string | null
+  actorAvatarUrl: string | null
+}

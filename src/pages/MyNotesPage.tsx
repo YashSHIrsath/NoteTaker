@@ -5,6 +5,7 @@ import { Button } from '../components/ui/Button'
 import { CreateFolderDialog } from '../components/folder/CreateFolderDialog'
 import { RootFolderList } from '../components/folder/RootFolderList'
 import { useFolders } from '../hooks/useFolders'
+import { useWorkspacePath } from '../hooks/useWorkspace'
 import { getRootFolders } from '../lib/folders'
 import { cn } from '../lib/cn'
 import {
@@ -15,6 +16,7 @@ import {
 
 export function MyNotesPage() {
   const navigate = useNavigate()
+  const to = useWorkspacePath()
   const { folders, tasks, createFolder } = useFolders()
   const rootFolders = getRootFolders(folders)
   const [createOpen, setCreateOpen] = useState(false)
@@ -87,7 +89,7 @@ export function MyNotesPage() {
           <div className="mt-4 lg:mt-6">
             <RootFolderList
               folders={rootFolders}
-              onOpenFolder={(folderId) => navigate(`/folder/${folderId}`)}
+              onOpenFolder={(folderId) => navigate(to(`/folder/${folderId}`))}
               onCreateFolder={() => setCreateOpen(true)}
             />
           </div>

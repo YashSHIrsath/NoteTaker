@@ -2,13 +2,15 @@ import { Navigate, useParams } from 'react-router-dom'
 import { EmptyState } from '../components/common/EmptyState'
 import { TaskEditor } from '../components/task/TaskEditor'
 import { useFolders } from '../hooks/useFolders'
+import { useWorkspacePath } from '../hooks/useWorkspace'
 
 export function TaskViewPage() {
   const { taskId } = useParams<{ taskId: string }>()
   const { getTask, getFolder, getPath } = useFolders()
+  const to = useWorkspacePath()
 
   if (!taskId) {
-    return <Navigate to="/" replace />
+    return <Navigate to={to('/')} replace />
   }
 
   const task = getTask(taskId)

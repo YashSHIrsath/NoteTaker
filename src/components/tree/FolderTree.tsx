@@ -4,6 +4,7 @@ import type { FolderNode } from '../../types'
 import { FolderTreeNode } from './FolderTreeNode'
 import { cn } from '../../lib/cn'
 import { useFolders } from '../../hooks/useFolders'
+import { useWorkspacePath } from '../../hooks/useWorkspace'
 import { getFolderCategory } from '../../lib/folderColor'
 import './folder-tree.css'
 
@@ -23,6 +24,7 @@ export function FolderTree({
   interactive = true,
 }: FolderTreeProps) {
   const navigate = useNavigate()
+  const to = useWorkspacePath()
   const { uiState, toggleFolderExpanded } = useFolders()
 
   const extraExpandedKey = extraExpandedIds
@@ -54,7 +56,7 @@ export function FolderTree({
           compact={compact}
           interactive={interactive}
           onToggle={toggleFolderExpanded}
-          onSelect={(folderId) => navigate(`/folder/${folderId}`)}
+          onSelect={(folderId) => navigate(to(`/folder/${folderId}`))}
         />
       ))}
     </ul>

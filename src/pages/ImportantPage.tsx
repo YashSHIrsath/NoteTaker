@@ -9,9 +9,9 @@ import { AllTaskTile } from '../components/task/AllTaskTile'
 import { TaskFilterMenu } from '../components/task/TaskFilterMenu'
 import { TaskGridCanvas } from '../components/task/TaskGridCanvas'
 import { TaskEditorDialog } from '../components/task/TaskEditorDialog'
-import { useAuth } from '../hooks/useAuth'
 import { useDeleteTask } from '../hooks/useDeleteTask'
 import { useFolders } from '../hooks/useFolders'
+import { useWorkspacePath } from '../hooks/useWorkspace'
 import { useServerNowCoarse } from '../hooks/useServerNow'
 import { folderPathLabel, getImportantFolders } from '../lib/folders'
 import { isPinnedIn } from '../lib/taskGrid'
@@ -24,7 +24,7 @@ import {
 } from '../lib/taskFilters'
 import { categoryVar, getRootCategoryForFolder, scatterCategoryForId } from '../lib/folderColor'
 import { taskColorStyle } from '../lib/taskColor'
-import { readViewStyle } from '../lib/viewStyle'
+import { useDisplaySettings } from '../hooks/useDisplaySettings'
 import { usePageEnter } from '../hooks/usePageEnterDirection'
 import { cn } from '../lib/cn'
 import { performWithTaskExit } from '../lib/taskExitAnimation'
@@ -66,10 +66,12 @@ const PANE_TRAVEL = 28
 
 export function ImportantPage() {
   const navigate = useNavigate()
+  const to = useWorkspacePath()
   const { folders, tasks, toggleFolderImportant, toggleTaskImportant } = useFolders()
   const { requestTaskDelete, dialog } = useDeleteTask()
-  const { user } = useAuth()
-  const viewStyle = readViewStyle(user?.user_metadata as Record<string, unknown> | undefined)
+  // Space-first: inside a shared space the note style belongs to the space, so everyone sees the
+  // same one. See useDisplaySettings.
+  const { viewStyle } = useDisplaySettings()
   const [tab, setTab] = useState<ImportantTab>('tasks')
   // Which way the next pane arrives from. Held in state rather than derived, because by the time
   // the new pane renders the tab it came from is gone.
@@ -144,7 +146,7 @@ export function ImportantPage() {
                   <button
                     type="button"
                     onClick={() =>
-                      navigate(`/folder/${task.folderId}`, { state: { openTaskId: task.id } })
+                      navigate(to(`/folder/${task.folderId}`), { state: { openTaskId: task.id } })
                     }
                     className="flex min-w-0 flex-1 items-center gap-3 rounded-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/20"
                   >
@@ -352,7 +354,7 @@ export function ImportantPage() {
                   <div key={folder.id} className={CARD_BASE}>
                     <button
                       type="button"
-                      onClick={() => navigate(`/folder/${folder.id}`)}
+                      onClick={() => navigate(to(`/folder/${folder.id}`))}
                       className="flex min-w-0 flex-1 items-center gap-3 rounded-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/20"
                     >
                       <span

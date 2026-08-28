@@ -1,13 +1,23 @@
-import { ClipboardList, Folder, ListTree, LogOut, PanelLeftClose, PanelLeftOpen, Star } from 'lucide-react'
+import { ClipboardList, Folder, Home, ListTree, LogOut, PanelLeftClose, PanelLeftOpen, Star, Users } from 'lucide-react'
 import { ProjectLogo } from '../brand/ProjectLogo'
 import { IconButton } from '../ui/IconButton'
 import { SidebarSection } from './SidebarSection'
 import { SidebarFolderItem } from './SidebarFolderItem'
+import { SidebarWorkspaceItem } from './SidebarWorkspaceItem'
 import type { Folder as FolderRecord, SidebarNavId } from '../../types'
-import { NAV_DESTINATIONS, resolveNavOrder } from '../../lib/navOrder'
+import { NAV_DESTINATIONS } from '../../lib/navOrder'
+import { useDisplaySettings } from '../../hooks/useDisplaySettings'
 import { cn } from '../../lib/cn'
 import { useAuth } from '../../hooks/useAuth'
 import { getFolderCategory } from '../../lib/folderColor'
+import { WorkspaceSwitcher } from '../space/WorkspaceSwitcher'
+import { SpaceAvatar } from '../space/SpaceAvatar'
+import { SpaceMembersDialog } from '../space/SpaceMembersDialog'
+import { InviteMemberDialog } from '../space/InviteMemberDialog'
+import { useWorkspace } from '../../hooks/useWorkspace'
+import { useSpaces } from '../../hooks/useSpaces'
+import { useNavigate } from 'react-router-dom'
+import { useState } from 'react'
 
 export interface SidebarProps {
   rootFolders: FolderRecord[]
@@ -24,6 +34,8 @@ export interface SidebarProps {
   className?: string
 }
 
+const SPACES_EXPANDED_KEY = 'mynotes-sidebar-spaces-expanded'
+
 export function Sidebar({
   rootFolders,
   myNotesExpanded,
@@ -39,7 +51,50 @@ export function Sidebar({
   className,
 }: SidebarProps) {
   const { user, signOut } = useAuth()
-  const navOrder = resolveNavOrder(user?.user_metadata as Record<string, unknown> | undefined)
+  /**
+   * Which workspace this sidebar is showing.
+   *
+   * The brand row is where it belongs: it is the first thing read in the column, and inside a shared
+   * space the whole column below it is somebody else's content. The account row at the bottom used to
+   * say "Personal workspace" as a literal, which was true right up until spaces existed.
+   */
+  const workspace = useWorkspace()
+  const { owned, joined, getSpace, invite } = useSpaces()
+  const navigate = useNavigate()
+  const spaces = [...owned, ...joined]
+
+  /**
+   * Whether the Spaces row is showing its workspaces.
+   *
+   * Open by default inside a space, because that is exactly when "how do I get out of here" is the
+   * question — and the first entry in the list is the way out. Remembered per device, the same way
+   * the sidebar's own collapsed state is.
+   */
+  /*
+   * The footer opens the space, rather than leaving it.
+   *
+   * Clicking it used to navigate to the Shared spaces page, which took you out of the space you were
+   * looking at — the same mistake the Spaces row made. What is actually wanted from there is the
+   * space itself: its picture, what it is for, and who is in it.
+   */
+  const [spaceSettingsOpen, setSpaceSettingsOpen] = useState(false)
+  const [spaceInviteOpen, setSpaceInviteOpen] = useState(false)
+
+  const [spacesExpanded, setSpacesExpanded] = useState(() => {
+    const stored = window.localStorage.getItem(SPACES_EXPANDED_KEY)
+    return stored === null ? workspace.kind === 'space' : stored === '1'
+  })
+  const toggleSpaces = () => {
+    setSpacesExpanded((current) => {
+      const next = !current
+      window.localStorage.setItem(SPACES_EXPANDED_KEY, next ? '1' : '0')
+      return next
+    })
+  }
+  const currentSpace = workspace.kind === 'space' ? getSpace(workspace.id) : undefined
+  const workspaceLabel =
+    workspace.kind === 'space' ? currentSpace?.name ?? 'Shared space' : 'Personal workspace'
+  const { navOrder } = useDisplaySettings()
   const metadata = (user?.user_metadata ?? {}) as { full_name?: string; avatar_url?: string }
   const displayName = metadata.full_name?.trim() || user?.email || 'Signed in'
   const initial = (metadata.full_name?.trim() || user?.email || 'Y').charAt(0).toUpperCase()
@@ -77,14 +132,7 @@ export function Sidebar({
           >
             <ProjectLogo className="h-3.5 w-[19px]" />
           </span>
-          {!collapsed ? (
-            <span
-              className="truncate text-[16px] font-semibold tracking-tight text-[var(--color-text)]"
-              style={{ fontFamily: 'var(--font-display)' }}
-            >
-              Mindstack
-            </span>
-          ) : null}
+          <WorkspaceSwitcher collapsed={collapsed} className={collapsed ? undefined : 'flex-1'} />
         </div>
         {onToggleCollapsed ? (
           // Given a border and a fill of its own: as a bare glyph pushed against the sidebar's
@@ -156,6 +204,47 @@ export function Sidebar({
                   </SidebarSection>
                 )
               }
+              if (id === 'spaces') {
+                /*
+                 * The row goes to the spaces page; the chevron opens the spaces themselves.
+                 *
+                 * Two controls, two jobs, and neither pretends to be the other. The row was briefly
+                 * a pure toggle — clicking "Spaces" opened a list instead of going anywhere — which
+                 * left the page it names reachable only through an entry buried in that list. And
+                 * the list then held three kinds of thing: workspaces, a link to a page, and the way
+                 * out of a space. It now holds workspaces only.
+                 */
+                return (
+                  <SidebarSection
+                    key={id}
+                    icon={<Users className="h-4 w-4" aria-hidden />}
+                    label="Spaces"
+                    active={activeNav === 'spaces'}
+                    onSelect={() => onSelectNav('spaces')}
+                    expandable
+                    expanded={spacesExpanded && !collapsed}
+                    onToggleExpand={toggleSpaces}
+                    collapsed={collapsed}
+                  >
+                    {spaces.length === 0 ? (
+                      /* Not a control — an empty dropdown with no explanation reads as broken.
+                         The way to make one is the row above, which is where it belongs. */
+                      <p className="px-2 py-1.5 text-[12px] text-[var(--color-text-muted)]">
+                        No spaces yet
+                      </p>
+                    ) : (
+                      spaces.map((space) => (
+                        <SidebarWorkspaceItem
+                          key={space.id}
+                          space={space}
+                          active={workspace.kind === 'space' && workspace.id === space.id}
+                          onClick={() => navigate(`/s/${space.id}`)}
+                        />
+                      ))
+                    )}
+                  </SidebarSection>
+                )
+              }
               const icon =
                 id === 'tree' ? (
                   <ListTree className="h-4 w-4" aria-hidden />
@@ -193,11 +282,19 @@ export function Sidebar({
             collapsed ? 'flex-col gap-1' : 'gap-1',
           )}
         >
+          {/*
+            * Inside a space this row is the space, not you.
+            *
+            * The column above it is somebody else's content, and a footer showing your own face and
+            * name read as though the whole sidebar were yours. So the space gets its own mark — its
+            * colour, which is the same identity carried through the rest of the app — its name, and
+            * how many people are in it. Your own account is the small avatar to the right.
+            */}
           <button
             type="button"
-            onClick={onOpenProfile}
-            aria-current={profileActive ? 'page' : undefined}
-            title={collapsed ? displayName : undefined}
+            onClick={currentSpace ? () => setSpaceSettingsOpen(true) : onOpenProfile}
+            aria-current={!currentSpace && profileActive ? 'page' : undefined}
+            title={collapsed ? (currentSpace ? currentSpace.name : displayName) : undefined}
             className={cn(
               'flex min-w-0 items-center gap-2.5 rounded-lg p-1 text-left transition-colors',
               'hover:bg-[var(--color-hover)]',
@@ -205,7 +302,14 @@ export function Sidebar({
               collapsed ? 'justify-center' : 'flex-1',
             )}
           >
-            {metadata.avatar_url ? (
+            {currentSpace ? (
+              <SpaceAvatar
+                spaceId={currentSpace.id}
+                color={currentSpace.color}
+                imageUrl={currentSpace.imageUrl}
+                className="h-7 w-7"
+              />
+            ) : metadata.avatar_url ? (
               <img
                 src={metadata.avatar_url}
                 alt=""
@@ -223,25 +327,72 @@ export function Sidebar({
             {!collapsed ? (
               <div className="min-w-0 flex-1">
                 <div className="truncate text-[12.5px] font-medium text-[var(--color-text)]">
-                  {displayName}
+                  {currentSpace ? currentSpace.name : displayName}
                 </div>
-                <div className="text-[11px] text-[var(--color-text-muted)]">Personal workspace</div>
+                <div className="truncate text-[11px] text-[var(--color-text-muted)]">
+                  {currentSpace
+                    ? currentSpace.memberCount === 1
+                      ? 'Just you so far'
+                      : `${currentSpace.memberCount} people`
+                    : workspaceLabel}
+                </div>
               </div>
             ) : null}
           </button>
 
-          {/* Danger colour on hover, not at rest: it sits one thumb's width from the profile
-              button, so it has to identify itself as the destructive one before it's clicked —
-              without turning the resting sidebar into a warning. */}
-          <IconButton
-            label="Sign out"
-            onClick={handleSignOut}
-            className="h-8 w-8 shrink-0 rounded-lg hover:bg-[var(--color-danger)]/10 hover:text-[var(--color-danger)]"
-          >
-            <LogOut className="h-4 w-4" />
-          </IconButton>
+          {/*
+            * The way out, where the space you are in is named — not an entry inside a list you have
+            * to open first.
+            *
+            * This slot used to hold your own face and a sign out, beside a row that belonged to the
+            * space. Two accounts in one pill, and the destructive control of the pair was the one
+            * you did not come here for. Inside a space the only thing wanted from this corner is
+            * back, so that is all it offers; it lands on your profile, which is where signing out
+            * lives.
+            */}
+          {currentSpace ? (
+            <IconButton
+              label="Leave this space and go to your account"
+              onClick={() => navigate('/profile')}
+              className="h-8 w-8 shrink-0 rounded-lg"
+            >
+              <Home className="h-4 w-4" />
+            </IconButton>
+          ) : (
+            /* Danger colour on hover, not at rest: it sits one thumb's width from the profile
+               button, so it has to identify itself as the destructive one before it's clicked —
+               without turning the resting sidebar into a warning. */
+            <IconButton
+              label="Sign out"
+              onClick={handleSignOut}
+              className="h-8 w-8 shrink-0 rounded-lg hover:bg-[var(--color-danger)]/10 hover:text-[var(--color-danger)]"
+            >
+              <LogOut className="h-4 w-4" />
+            </IconButton>
+          )}
         </div>
       </div>
+
+      {/* The space's own settings, opened from the footer. Both dialogs portal to the body, so the
+        * sidebar's own overflow cannot clip them. */}
+      {currentSpace ? (
+        <>
+          <SpaceMembersDialog
+            open={spaceSettingsOpen}
+            space={currentSpace}
+            currentUserId={user?.id ?? null}
+            onClose={() => setSpaceSettingsOpen(false)}
+            onChanged={() => undefined}
+            onInvite={() => setSpaceInviteOpen(true)}
+          />
+          <InviteMemberDialog
+            open={spaceInviteOpen}
+            spaceName={currentSpace.name}
+            onClose={() => setSpaceInviteOpen(false)}
+            onInvite={(email, role) => invite(currentSpace.id, email, role)}
+          />
+        </>
+      ) : null}
     </aside>
   )
 }

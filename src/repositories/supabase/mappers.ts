@@ -13,6 +13,7 @@ import type {
 } from '../../types'
 import { isTaskColor } from '../../lib/taskColor'
 import { GRID_SCOPES } from '../../lib/taskGrid'
+import type { FolderPatch, SubtaskPatch, TaskPatch } from '../../services/notes/ops'
 import type { AppSnapshot, UiState } from '../types'
 
 export interface FolderRow {
@@ -74,13 +75,29 @@ export function folderFromRow(row: FolderRow): Folder {
   }
 }
 
-export function folderToRow(folder: Folder): FolderRow {
+/**
+ * A folder row on the way out, including which workspace it belongs to.
+ *
+ * `space_id` is not on the domain object and never will be. A folder in a space is not a different
+ * kind of folder — it is the same folder in a different scope, and the scope belongs to whatever is
+ * doing the reading and writing, not to the row as the UI understands it. The repository knows its
+ * own workspace and stamps it here; the 43 components that render folders stay unaware that spaces
+ * exist at all.
+ */
+export interface FolderWriteRow extends FolderRow {
+  space_id: string | null
+}
+
+/** `spaceId` is required rather than optional on purpose: an omitted argument would silently write
+ *  a personal folder, which inside a space is a folder nobody in it can see. */
+export function folderToRow(folder: Folder, spaceId: string | null): FolderWriteRow {
   return {
     id: folder.id,
     parent_id: folder.parentId ? folder.parentId : null,
     name: folder.name,
     is_important: folder.isImportant,
     sort_order: folder.sortOrder,
+    space_id: spaceId,
   }
 }
 
@@ -214,6 +231,100 @@ export function subtaskToRow(subtask: Subtask): SubtaskRow {
     title: subtask.title,
     completed: subtask.completed,
   }
+}
+
+/* ------------------------------------------------------------------ patches
+ *
+ * A patch names the fields that changed and nothing else, and these mappers keep it that way: a
+ * key absent from the patch is absent from the row, so the column is left alone rather than
+ * rewritten with whatever the sender happened to be holding. That is the whole point of patching
+ * over upserting a full row — two people editing different columns of the same note stop
+ * overwriting each other.
+ *
+ * Presence is tested with `in`, never truthiness. Every one of these fields has a legitimate
+ * falsy value: a cleared due date is null, an unticked box is false, an emptied note is ''.
+ */
+
+export function folderPatchToRow(fields: FolderPatch): Partial<FolderRow> {
+  const row: Partial<FolderRow> = {}
+  if ('name' in fields) {
+    row.name = fields.name
+  }
+  if ('parentId' in fields) {
+    row.parent_id = fields.parentId ? fields.parentId : null
+  }
+  if ('isImportant' in fields) {
+    row.is_important = fields.isImportant
+  }
+  if ('sortOrder' in fields) {
+    row.sort_order = fields.sortOrder
+  }
+  return row
+}
+
+export function taskPatchToRow(fields: TaskPatch): Partial<TaskRow> {
+  const row: Partial<TaskRow> = {}
+  if ('title' in fields) {
+    row.title = fields.title
+  }
+  if ('folderId' in fields) {
+    row.folder_id = fields.folderId
+  }
+  if ('content' in fields) {
+    row.content = fields.content
+  }
+  if ('isImportant' in fields) {
+    row.is_important = fields.isImportant
+  }
+  if ('pinnedScopes' in fields) {
+    row.pinned_scopes = fields.pinnedScopes
+    // The old single flag is derived, here and in the database both, so a client reading only
+    // `is_pinned` still sees the truth after a per-scope change.
+    row.is_pinned = (fields.pinnedScopes ?? []).length > 0
+  }
+  if ('sortOrder' in fields) {
+    row.sort_order = fields.sortOrder
+  }
+  if ('noteKind' in fields) {
+    row.note_kind = fields.noteKind
+  }
+  if ('dueAt' in fields) {
+    row.due_at = fields.dueAt
+  }
+  if ('completed' in fields) {
+    row.completed = fields.completed
+  }
+  if ('tags' in fields) {
+    row.tags = fields.tags
+  }
+  if ('color' in fields) {
+    row.color = fields.color
+  }
+  if ('gridLayouts' in fields) {
+    row.grid_layout = fields.gridLayouts
+  }
+  // completedAt is deliberately not mappable. It is stamped by normalize_task_schedule from the
+  // server's own clock, which is what separates "finished before the deadline" from "finished two
+  // hours after it"; a browser sending its own value could only ever be ignored or believed, and
+  // both are worse than not asking.
+  return row
+}
+
+export function subtaskPatchToRow(fields: SubtaskPatch): Partial<SubtaskRow> {
+  const row: Partial<SubtaskRow> = {}
+  if ('title' in fields) {
+    row.title = fields.title
+  }
+  if ('taskId' in fields) {
+    row.task_id = fields.taskId
+  }
+  if ('parentSubtaskId' in fields) {
+    row.parent_subtask_id = fields.parentSubtaskId
+  }
+  if ('completed' in fields) {
+    row.completed = fields.completed
+  }
+  return row
 }
 
 export interface AttachmentRow {

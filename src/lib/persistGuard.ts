@@ -4,20 +4,6 @@ export function cloneSnapshot(snapshot: AppSnapshot): AppSnapshot {
   return structuredClone(snapshot)
 }
 
-export function notesFingerprint(
-  snapshot: Pick<AppSnapshot, 'folders' | 'tasks' | 'subtasks' | 'tags'>,
-): string {
-  return JSON.stringify({
-    folders: snapshot.folders,
-    tasks: snapshot.tasks,
-    subtasks: snapshot.subtasks,
-    // The catalogue is in here because a tag can change without any task changing: making one
-    // ahead of time, renaming it, or deleting one nothing carries. Left out, those saves would be
-    // skipped as no-ops and the tag would be gone on the next reload.
-    tags: snapshot.tags,
-  })
-}
-
 export function shouldApplySessionResult(args: {
   cancelled: boolean
   requestUserId: string | null | undefined
@@ -44,16 +30,6 @@ export function endExclusiveAction(locks: Set<string>, key: string): void {
   locks.delete(key)
 }
 
-export function rollbackNotesOnSaveFailure(args: {
-  lastConfirmed: AppSnapshot
-  attempted: AppSnapshot
-}): { restored: AppSnapshot; pendingRetry: AppSnapshot } {
-  return {
-    restored: cloneSnapshot(args.lastConfirmed),
-    pendingRetry: cloneSnapshot(args.attempted),
-  }
-}
-
 /** What a blank name is saved as — the same word the empty title field shows as its hint. */
 export const UNTITLED = 'Untitled'
 export const UNTITLED_FOLDER = 'Untitled folder'
@@ -69,9 +45,9 @@ export const UNTITLED_FOLDER = 'Untitled folder'
  * half-deleted title. So the letters you had just removed came back, mid-word, over the top of
  * what you were typing.
  *
- * The fix belongs here rather than in the title field, because the field is not the only way a
- * blank name can be produced (an import, a migration, a future editor) and one rejected row rolls
- * back *everything*, not just the note you were touching.
+ * The repair the write path actually uses now lives in services/notes/ops (see repairNames), which
+ * is where a single edit's rows pass through. This one still guards anything built as a whole
+ * snapshot — the empty baseline, and the retry that re-applies a rejected batch.
  *
  * Only a name that is blank is replaced. A name with spaces around it is passed through exactly as
  * typed — `btrim` means the database is content, and trimming here would eat the space someone is
@@ -95,9 +71,6 @@ export function snapshotFromParts(
 ): AppSnapshot {
   return {
     version: NOTES_STORAGE_VERSION,
-    // Every outgoing snapshot is built here, and so is every snapshot recorded as confirmed —
-    // which is what keeps the two comparable. Normalising in one and not the other would leave the
-    // fingerprints permanently unequal and re-save on a loop.
     folders: withRequiredNames(
       folders,
       (folder) => folder.name,
