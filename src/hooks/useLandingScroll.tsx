@@ -276,3 +276,67 @@ export function useProgress(ref: RefObject<HTMLElement | null>): number {
 
   return progress
 }
+
+/**
+ * Which of these sections the reader is currently in.
+ *
+ * IntersectionObserver rather than comparing `scrollTop` against a list of `offsetTop`s: the offsets
+ * are only correct until something above them changes height, and on this page plenty does — the
+ * webfonts land, the carousel lays out, the deck sizes itself. The browser re-answers this for free
+ * as the page settles; arithmetic would have to be re-run, and nothing tells it when to.
+ *
+ * The trigger is a thin band across the upper-middle of the viewport, not the whole of it. With the
+ * whole viewport, two sections are on screen for most of any scroll and "current" flickers between
+ * them; with a band, the current section is simply the one the reader is looking at. Nothing matches
+ * while the hero fills the screen, which is correct — the index is not on show there either.
+ */
+export function useActiveSection(ids: readonly string[]): string | null {
+  const rootRef = useScrollRoot()
+  const [active, setActive] = useState<string | null>(null)
+  // Callers build this array inline, so a new one arrives every render. Keying the effect on the
+  // joined ids rather than the array means it re-runs when the sections change and not before.
+  const key = ids.join('|')
+
+  useEffect(() => {
+    const order = key.split('|').filter(Boolean)
+    const elements = order
+      .map((id) => document.getElementById(id))
+      .filter((element): element is HTMLElement => element !== null)
+    if (elements.length === 0) {
+      return
+    }
+
+    // The observer's root has to be the element that actually scrolls, and on this page that may be
+    // the document rather than the div we were handed — see scrollerFor. A document scroller is
+    // spelled `null` here, not passed as an element.
+    const scroller = scrollerFor(rootRef?.current ?? null)
+    const root =
+      scroller && scroller !== document.scrollingElement && scroller !== document.documentElement
+        ? scroller
+        : null
+
+    const inBand = new Set<string>()
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            inBand.add(entry.target.id)
+          } else {
+            inBand.delete(entry.target.id)
+          }
+        }
+        // Document order decides ties, so a short section straddling the band with its neighbour
+        // never steals the mark from the one above it.
+        setActive(order.find((id) => inBand.has(id)) ?? null)
+      },
+      { root, rootMargin: '-38% 0px -56% 0px', threshold: 0 },
+    )
+
+    for (const element of elements) {
+      observer.observe(element)
+    }
+    return () => observer.disconnect()
+  }, [key, rootRef])
+
+  return active
+}

@@ -1,6 +1,6 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
-import { Link } from 'react-router-dom'
-import { AtSign, Check, Eye, EyeOff, KeyRound, MailCheck, User } from 'lucide-react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { ArrowLeft, AtSign, Check, Eye, EyeOff, KeyRound, MailCheck, User } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Spinner } from '../components/ui/Spinner'
 import {
@@ -11,6 +11,7 @@ import {
 import { useAuth } from '../hooks/useAuth'
 import { ProjectLogo } from '../components/brand/ProjectLogo'
 import { cn } from '../lib/cn'
+import { IS_NATIVE } from '../lib/platform'
 
 const MIN_PASSWORD_LENGTH = 6
 
@@ -415,6 +416,42 @@ function NotConfigured() {
   )
 }
 
+/**
+ * The way out of an auth screen — on the web only.
+ *
+ * There is nothing behind these pages in the Android app: `AuthGate` sends a signed-out session
+ * straight to /login there, because the app ships without the marketing site. A back control would
+ * be a door onto a wall. On the web the same session starts at /welcome, so there is always
+ * somewhere to go back to.
+ *
+ * `location.key` is 'default' only for the first entry in a history session — i.e. this page was
+ * opened cold, from a bookmark or a link, and history has nothing of ours to step back into. Then
+ * the landing page is the honest destination rather than whatever site sent them here.
+ */
+function BackToSite() {
+  const navigate = useNavigate()
+  const location = useLocation()
+
+  if (IS_NATIVE) {
+    return null
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => (location.key === 'default' ? navigate('/welcome') : navigate(-1))}
+      className={cn(
+        'anim-press mb-4 inline-flex items-center gap-1.5 rounded-full py-1 pl-1 pr-2.5 text-[12.5px] font-medium',
+        'text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-hover)] hover:text-[var(--color-text)]',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/20',
+      )}
+    >
+      <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
+      Back
+    </button>
+  )
+}
+
 function AuthScreen({
   title,
   subtitle,
@@ -442,6 +479,7 @@ function AuthScreen({
       />
 
       <div className="anim-panel-in relative w-full max-w-[620px] rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-[var(--shadow-lg)] sm:p-8">
+        <BackToSite />
         <div className="mb-5 flex items-center gap-2.5">
           <span
             className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent-soft)] text-[var(--color-accent)]"

@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from 'react'
 import {
   AlarmClock,
   ArrowLeft,
@@ -722,10 +730,80 @@ const SLIDES: Slide[] = [
 /** How long a slide holds before the track moves on by itself. */
 const AUTOPLAY_MS = 3000
 
+/**
+ * The marker's two edges, which is where all of the liquid comes from.
+ *
+ * It is ONE pill whose leading and trailing edges are chased toward the target at different rates:
+ * the edge in the direction of travel closes fast, the edge behind it clings. So the pill stretches
+ * out of the tab it is leaving, travels, and gathers itself back up on arrival — a drop drawn along
+ * a surface, and never at any point more than one shape.
+ *
+ * Two things this replaces, in order.
+ *
+ * It was two blobs under a metaball filter. Two blobs merge beautifully when they are close and
+ * read as two separate buttons when they are not, and nothing bounded the gap: the trailing blob
+ * held before following, every step of the deck restarted that hold, and a click across the row
+ * steps the index through every tab between — so the hold restarted faster than the blob could
+ * travel and it was left stranded tabs behind.
+ *
+ * Then it was these two edges under CSS transitions, which cannot come apart but stretch in
+ * proportion to the distance: crossing the whole row drew the marker as a bar the length of the
+ * row. A transition has no way to say "lag, but never by more than this". So the chase runs here
+ * instead, per frame, and the cap below is applied after it — which is the only reason the marker
+ * looks the same crossing one tab as it does crossing eleven.
+ */
+/** Time constants for the exponential chase, in ms: the near edge is prompt, the far edge lingers. */
+const MARKER_LEAD_TAU = 58
+const MARKER_TRAIL_TAU = 155
+/**
+ * The most the pill may exceed its destination's width while travelling.
+ *
+ * The whole of the restraint. Enough that the stretch is unmistakably a stretch, and little enough
+ * that at no distance does it stop looking like the tab marker and start looking like a bar.
+ */
+const MARKER_MAX_STRETCH = 54
+
+/** How far the mask fades the row out at an edge it can still be scrolled past. */
+const EDGE_FADE = 22
+
 export function FeatureCarousel() {
   const trackRef = useRef<HTMLDivElement>(null)
   const tabsRef = useRef<HTMLDivElement>(null)
+  /** The tabs' own inner row. The marker is positioned against this, so it scrolls with them. */
+  const tabRowRef = useRef<HTMLDivElement>(null)
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([])
   const [index, setIndex] = useState(0)
+  const markerRef = useRef<HTMLSpanElement>(null)
+  /** False only until the first measurement lands, so the marker never paints at the wrong place. */
+  const [placed, setPlaced] = useState(false)
+  /**
+   * Everything the chase reads and writes, off the React tree entirely.
+   *
+   * A ref, because this is written every frame while the marker moves and none of it is anything
+   * React should re-render for — the marker's own left and right are put on the node directly.
+   * `covered` below is the one thing the tree does need, and it changes a handful of times per
+   * slide rather than sixty.
+   */
+  const geometry = useRef({
+    target: { left: 0, right: 0, width: 0 },
+    current: { left: 0, right: 0 },
+    rowWidth: 0,
+    heading: 1 as 1 | -1,
+  })
+  const frameRef = useRef(0)
+  /** The active slide, for the measurement callback — see its dependency list for why. */
+  const indexRef = useRef(0)
+  /**
+   * Which tabs the marker is currently lying on, one bit each.
+   *
+   * A label has to be white while the accent is under it and muted while it is not, and nothing but
+   * the marker's real position knows which. This used to be two guessed delays, tuned against how
+   * long the marker took to cross ONE tab; a stretch across several makes nonsense of them.
+   */
+  const [covered, setCovered] = useState(0)
+  /** Which ends of the row have more row past them — drives the fade, so it never fades nothing. */
+  const [edges, setEdges] = useState({ start: false, end: false })
+  const [stillness, setStillness] = useState(false)
   /**
    * Held still while a pointer is over the track or something inside it has focus.
    *
@@ -753,6 +831,198 @@ export function FeatureCarousel() {
     track.scrollTo({ left: wrapped * track.clientWidth, behavior: reduceMotion ? 'auto' : 'smooth' })
     setRestartKey((key) => key + 1)
   }, [])
+
+  // Asked once. Every transition below is switched off by it rather than shortened: a marker that
+  // slides fast is still a marker that slides.
+  useEffect(() => {
+    const query = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const read = () => setStillness(query.matches)
+    read()
+    query.addEventListener('change', read)
+    return () => query.removeEventListener('change', read)
+  }, [])
+
+  /**
+   * Puts the marker where the chase currently says it is, and tells the labels what it is lying on.
+   *
+   * Offsets rather than getBoundingClientRect: the tabs and the marker share the row's coordinate
+   * space already, so the cheap read is also the correct one, and it does not care that the row may
+   * be scrolled sideways at the time.
+   */
+  const paintMarker = useCallback(() => {
+    const bar = markerRef.current
+    const { current, rowWidth } = geometry.current
+    if (!bar) {
+      return
+    }
+    bar.style.left = `${current.left}px`
+    bar.style.right = `${current.right}px`
+
+    const barLeft = current.left
+    const barRight = rowWidth - current.right
+    let mask = 0
+    tabRefs.current.forEach((tab, tabIndex) => {
+      if (!tab) {
+        return
+      }
+      const overlap = Math.min(barRight, tab.offsetLeft + tab.offsetWidth) - Math.max(barLeft, tab.offsetLeft)
+      // Past halfway is where white becomes the more legible of the two, and also where the eye
+      // reads the marker as being on this tab rather than the last one.
+      if (overlap > tab.offsetWidth * 0.5) {
+        mask |= 1 << tabIndex
+      }
+    })
+    setCovered((previous) => (previous === mask ? previous : mask))
+  }, [])
+
+  /** Runs the chase until both edges have arrived, then stops itself. */
+  const chaseMarker = useCallback(() => {
+    if (frameRef.current) {
+      return
+    }
+    let previous = performance.now()
+    const step = (now: number) => {
+      const geo = geometry.current
+      // Clamped, so a tab returning from the background does not resolve the whole move in one
+      // enormous frame.
+      const elapsed = Math.min(50, now - previous)
+      previous = now
+
+      const lead = 1 - Math.exp(-elapsed / MARKER_LEAD_TAU)
+      const trail = 1 - Math.exp(-elapsed / MARKER_TRAIL_TAU)
+      const towardLeft = geo.heading === 1 ? trail : lead
+      const towardRight = geo.heading === 1 ? lead : trail
+      geo.current.left += (geo.target.left - geo.current.left) * towardLeft
+      geo.current.right += (geo.target.right - geo.current.right) * towardRight
+
+      /*
+       * The cap, applied after the chase rather than inside it.
+       *
+       * Everything above only says how much the two edges lag one another; this says how far apart
+       * they may ever get. Past the limit the trailing edge is simply dragged along behind the
+       * leading one, so the marker travels as a pill of fixed length and gathers up at the end —
+       * which is why a jump across eleven tabs looks like the same object as a step across one,
+       * instead of a bar the width of the row.
+       */
+      const widest = geo.target.width + MARKER_MAX_STRETCH
+      if (geo.rowWidth - geo.current.left - geo.current.right > widest) {
+        if (geo.heading === 1) {
+          geo.current.left = geo.rowWidth - geo.current.right - widest
+        } else {
+          geo.current.right = geo.rowWidth - geo.current.left - widest
+        }
+      }
+
+      paintMarker()
+
+      if (
+        Math.abs(geo.target.left - geo.current.left) < 0.5 &&
+        Math.abs(geo.target.right - geo.current.right) < 0.5
+      ) {
+        geo.current.left = geo.target.left
+        geo.current.right = geo.target.right
+        paintMarker()
+        frameRef.current = 0
+        return
+      }
+      frameRef.current = requestAnimationFrame(step)
+    }
+    frameRef.current = requestAnimationFrame(step)
+  }, [paintMarker])
+
+  /**
+   * Where the active tab actually is.
+   *
+   * Measured off the element rather than computed from the labels, because the row is type — its
+   * widths are whatever the face and the letter-spacing make them, and they change again when the
+   * webfont lands. A ResizeObserver on the row catches that, and every other reflow with it; those
+   * re-measurements snap rather than animate, since nothing has actually moved from tab to tab.
+   */
+  const measureMarker = useCallback(
+    (animate: boolean) => {
+      const active = tabRefs.current[indexRef.current]
+      const row = tabRowRef.current
+      if (!active || !row) {
+        return
+      }
+      const geo = geometry.current
+      geo.rowWidth = row.offsetWidth
+      geo.target = {
+        left: active.offsetLeft,
+        right: row.offsetWidth - (active.offsetLeft + active.offsetWidth),
+        width: active.offsetWidth,
+      }
+      if (animate) {
+        chaseMarker()
+        return
+      }
+      geo.current = { left: geo.target.left, right: geo.target.right }
+      paintMarker()
+    },
+    // Deliberately not keyed on `index` — it is read through a ref instead. As a dependency it
+    // rebuilt this callback on every slide, which rebuilt the ResizeObserver effect below, and a
+    // fresh observer fires its callback the moment it observes. So every slide change started the
+    // chase and was then snapped to the end by an observer that had only just been re-attached:
+    // the marker teleported, and none of the easing above ever ran.
+    [chaseMarker, paintMarker],
+  )
+
+  // Which edge leads. Read off the index rather than off the measurements, so a re-measure that
+  // moves nothing (a webfont landing) can neither flip the marker's direction nor animate it.
+  const headingFrom = useRef(index)
+  useLayoutEffect(() => {
+    const from = headingFrom.current
+    const moved = from !== index
+    if (moved) {
+      geometry.current.heading = index > from ? 1 : -1
+      headingFrom.current = index
+    }
+    indexRef.current = index
+    measureMarker(moved && !stillness)
+    setPlaced(true)
+  }, [index, measureMarker, stillness])
+
+  useEffect(() => {
+    const row = tabRowRef.current
+    if (!row) {
+      return
+    }
+    const observer = new ResizeObserver(() => measureMarker(false))
+    observer.observe(row)
+    return () => observer.disconnect()
+  }, [measureMarker])
+
+  useEffect(
+    () => () => {
+      if (frameRef.current) {
+        cancelAnimationFrame(frameRef.current)
+      }
+    },
+    [],
+  )
+
+  /** Whether there is row left to scroll to, on each side. */
+  const readEdges = useCallback(() => {
+    const tabs = tabsRef.current
+    if (!tabs) {
+      return
+    }
+    setEdges({
+      start: tabs.scrollLeft > 4,
+      end: tabs.scrollLeft + tabs.clientWidth < tabs.scrollWidth - 4,
+    })
+  }, [])
+
+  useEffect(() => {
+    readEdges()
+    const tabs = tabsRef.current
+    if (!tabs) {
+      return
+    }
+    const observer = new ResizeObserver(readEdges)
+    observer.observe(tabs)
+    return () => observer.disconnect()
+  }, [readEdges])
 
   /*
    * Keep the active tab in view, by moving this row's own scrollLeft.
@@ -964,30 +1234,117 @@ export function FeatureCarousel() {
         * The row scrolls rather than wrapping, so it stays one line on a phone, and the active tab is
         * scrolled into view when the deck moves on its own.
         */}
-      <div
-        ref={tabsRef}
-        role="tablist"
-        aria-label="Slides"
-        className="no-scrollbar mt-4 flex gap-1.5 overflow-x-auto pb-1"
-      >
-        {SLIDES.map((slide, tabIndex) => (
-          <button
-            key={slide.key}
-            type="button"
-            role="tab"
-            aria-selected={tabIndex === index}
-            data-active={tabIndex === index || undefined}
-            onClick={() => goTo(tabIndex)}
-            className={cn(
-              'anim-press shrink-0 rounded-full border px-3 py-1.5 text-[12.5px] font-semibold transition-colors',
-              tabIndex === index
-                ? 'border-[var(--color-accent)] bg-[var(--color-accent)] text-white'
-                : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-[var(--color-border-strong)] hover:bg-[var(--color-hover)] hover:text-[var(--color-text)]',
-            )}
-          >
-            {slide.tab}
-          </button>
-        ))}
+      <div className="relative mt-4">
+        {/* The metaball filter that used to live here is gone with the two blobs it was blending —
+          * see MARKER_LEAD_TAU. One pill needs no merging, and an SVG filter re-rastering a strip of the
+          * page on every frame of every slide change is not a cost to carry for nothing. */}
+        <div
+          ref={tabsRef}
+          role="tablist"
+          aria-label="Slides"
+          className="no-scrollbar overflow-x-auto overscroll-x-contain pb-1"
+          onScroll={readEdges}
+          style={{
+            // Faded only on a side that has more row behind it, so a row that fits is not fading
+            // its own first and last tab into the page for no reason. It is also the only cue that
+            // the row scrolls at all, the scrollbar being hidden.
+            maskImage: `linear-gradient(90deg, ${
+              edges.start ? `transparent 0, #000 ${EDGE_FADE}px` : '#000 0'
+            }, ${edges.end ? `#000 calc(100% - ${EDGE_FADE}px), transparent 100%` : '#000 100%'})`,
+            WebkitMaskImage: `linear-gradient(90deg, ${
+              edges.start ? `transparent 0, #000 ${EDGE_FADE}px` : '#000 0'
+            }, ${edges.end ? `#000 calc(100% - ${EDGE_FADE}px), transparent 100%` : '#000 100%'})`,
+          }}
+        >
+          <div ref={tabRowRef} className="relative flex w-max items-center gap-1.5">
+            {/*
+              * Over the outlines, under the labels — and the z-index is the whole of what makes the
+              * liquid look poured rather than slid underneath.
+              *
+              * The marker used to sit behind the tabs outright, so every tab it crossed drew its own
+              * grey outline straight across the accent. That is what read as the liquid *passing
+              * through* the tabs instead of running along them: a rule cutting a drop in half. Each
+              * tab's outline is a shell of its own beneath this now, and the label sits above it, so
+              * the liquid covers the outline it is standing on and the type stays crisp.
+              */}
+            <span
+              ref={markerRef}
+              aria-hidden
+              className="pointer-events-none absolute inset-y-0 z-10 rounded-full bg-[var(--color-accent)]"
+              // left and right are written by the chase, per frame, straight onto this node — they
+              // are deliberately not here. React re-renders this row whenever `covered` changes,
+              // and a style prop carrying the target position would snap the marker to it mid-move.
+              style={{ opacity: placed ? 1 : 0, transition: 'opacity 200ms linear' }}
+            />
+
+            {SLIDES.map((slide, tabIndex) => {
+              const active = tabIndex === index
+              /*
+               * How much of the accent this tab's outline has taken on.
+               *
+               * The outlines are a field around the liquid rather than twelve unrelated rings: the
+               * tab the marker is standing on has no outline at all — the liquid is its outline —
+               * and the two either side of it are pulled toward the accent, fading back to the
+               * plain border further out. Transitioned slower than the marker travels, so the tint
+               * arrives behind it like a wake instead of switching with it.
+               */
+              // White while the accent is actually underneath, muted the moment it is not.
+              const onAccent = (covered & (1 << tabIndex)) !== 0
+              const reach = Math.abs(tabIndex - index)
+              const shellBorder = onAccent
+                ? 'transparent'
+                : reach === 1
+                  ? 'color-mix(in srgb, var(--color-accent) 45%, var(--color-border))'
+                  : reach === 2
+                    ? 'color-mix(in srgb, var(--color-accent) 20%, var(--color-border))'
+                    : 'var(--color-border)'
+              return (
+                <button
+                  key={slide.key}
+                  ref={(node) => {
+                    tabRefs.current[tabIndex] = node
+                  }}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  data-active={active || undefined}
+                  onClick={() => goTo(tabIndex)}
+                  className={cn(
+                    // relative for the shell, and z-index left alone: `relative` on its own does not
+                    // open a stacking context, which is what lets the label below climb past the
+                    // marker layer while the shell stays under it.
+                    'anim-press group relative shrink-0 rounded-full font-semibold',
+                    'px-2.5 py-1 text-[11.5px] sm:px-3 sm:py-1.5 sm:text-[12.5px]',
+                    onAccent
+                      ? 'text-white'
+                      : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]',
+                  )}
+                  style={{
+                    // No delay left to tune: the switch is driven by where the marker actually is,
+                    // so it lands at the moment the tab passes half covered, and needs only to be
+                    // short enough not to lag a fast crossing.
+                    transition: stillness ? 'none' : 'color 120ms linear',
+                  }}
+                >
+                  <span
+                    aria-hidden
+                    className={cn(
+                      'absolute inset-0 rounded-full border',
+                      !onAccent && 'group-hover:bg-[var(--color-hover)]',
+                    )}
+                    style={{
+                      borderColor: shellBorder,
+                      transition: stillness
+                        ? 'none'
+                        : 'border-color 420ms cubic-bezier(0.22, 1, 0.36, 1), background-color 140ms linear',
+                    }}
+                  />
+                  <span className="relative z-20">{slide.tab}</span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
       </div>
     </section>
   )
