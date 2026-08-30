@@ -299,9 +299,10 @@ body {
     clip-path: circle(0 at left var(--theme-reveal-x, 50%) top var(--theme-reveal-y, 50%));
   }
   to {
-    /* A px radius that just clears the furthest corner, from themeReveal.ts. The percentage is
-       the fallback for a transition nothing set up: it is measured off the box's own diagonal, so
-       it always covers. */
+    /* A radius that just clears the furthest corner, from themeReveal.ts — a percentage, like the
+       centre above, so all three are fractions of this pseudo-element's own box rather than of a
+       viewport that may not be the same size as it. The literal is the fallback for a transition
+       nothing set up: it is measured off the box's own diagonal, so it always covers. */
     clip-path: circle(
       var(--theme-reveal-r, 150%) at left var(--theme-reveal-x, 50%) top var(--theme-reveal-y, 50%)
     );

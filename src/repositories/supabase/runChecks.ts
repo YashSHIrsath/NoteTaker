@@ -320,6 +320,25 @@ export function runMapperChecks(): void {
   ])
   assert(layers[0]?.[0]?.id === 'root', 'root folder upserts first')
   assert(layers[1]?.[0]?.id === 'child', 'child folder upserts after parent')
+
+  // The case the ordering rule used to reject outright: one new subfolder under a parent that is
+  // already in the database and so is nowhere in the batch. This threw 'missing parent', which
+  // failed the whole write — creating a subfolder was impossible for as long as that held.
+  const intoExisting = layersByParent([{ id: 'child', parentId: 'saved-last-week' }])
+  assert(intoExisting.length === 1, 'a create whose parent is not in the batch needs one layer')
+  assert(intoExisting[0]?.[0]?.id === 'child', 'it upserts immediately, not never')
+
+  // A parent in the batch still has to be written first, and a genuine cycle is still refused.
+  let cycled = false
+  try {
+    layersByParent([
+      { id: 'a', parentId: 'b' },
+      { id: 'b', parentId: 'a' },
+    ])
+  } catch {
+    cycled = true
+  }
+  assert(cycled, 'a cycle inside one batch is still rejected')
 }
 
 export function assertNotesRepositoryFactory(): void {

@@ -42,7 +42,7 @@ export interface FolderViewProps {
   path: FolderRecord[]
   childFolders: FolderRecord[]
   tasks: Task[]
-  onCreateFolder: (name: string) => void
+  onCreateFolder: (name: string) => void | Promise<unknown>
   onCreateTask: (title: string) => Promise<Task>
 }
 

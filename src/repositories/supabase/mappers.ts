@@ -451,18 +451,30 @@ function completeCatalogue(tags: Tag[], tasks: Task[]): Tag[] {
   return completed.sort((a, b) => a.name.localeCompare(b.name))
 }
 
-/** Parents before children so inserts satisfy folder/subtask foreign keys. */
+/**
+ * Parents before children so inserts satisfy folder/subtask foreign keys.
+ *
+ * Only a parent that is *in this batch* has to wait its turn. A parent that isn't is one that
+ * already exists in the database, and it is by far the common case: creating a subfolder inside a
+ * folder saved last week sends exactly one row, whose parent is a row nobody is writing. Treating
+ * that as unplaceable is what made the first layer come out empty and the whole write fail as a
+ * cycle — so a batch that created a folder tree worked and creating a single subfolder never did.
+ */
 export function layersByParent<T extends { id: string; parentId: string | null }>(items: T[]): T[][] {
+  const batch = new Set(items.map((item) => item.id))
   const remaining = new Map(items.map((item) => [item.id, item]))
   const placed = new Set<string>()
   const layers: T[][] = []
 
   while (remaining.size > 0) {
     const layer = [...remaining.values()].filter(
-      (item) => item.parentId === null || placed.has(item.parentId),
+      (item) =>
+        item.parentId === null || !batch.has(item.parentId) || placed.has(item.parentId),
     )
     if (layer.length === 0) {
-      throw new Error('Cycle or missing parent in nested records.')
+      // Everything left is waiting on something else in the same batch, so they are waiting on
+      // each other. A parent missing entirely is no longer reachable from here.
+      throw new Error('Cycle in nested records.')
     }
     for (const item of layer) {
       remaining.delete(item.id)

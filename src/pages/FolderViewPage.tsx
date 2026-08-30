@@ -30,9 +30,11 @@ export function FolderViewPage() {
       path={getPath(folder.id)}
       childFolders={getChildFolders(folder.id)}
       tasks={getTasksInFolder(folder.id)}
-      onCreateFolder={(name) => {
-        createFolder(name, folder.id)
-      }}
+      // Returned, not fired and forgotten. The dialog keys "did that work" off this promise, so
+      // dropping it closed the dialog on a write that was about to be rejected and rolled back —
+      // the folder appeared, vanished a moment later, and the only trace was an unhandled
+      // rejection in the console.
+      onCreateFolder={(name) => createFolder(name, folder.id)}
       onCreateTask={(title) => createTask(title, folder.id)}
     />
   )
