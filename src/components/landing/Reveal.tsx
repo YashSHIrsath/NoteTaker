@@ -39,7 +39,19 @@ export function Reveal({ children, from = 'up', delay = 0, className, as = 'div'
     <Tag
       ref={ref as never}
       className={cn(
-        'transition-all duration-[680ms] will-change-transform',
+        /*
+         * The three properties the reveal actually moves, rather than `all`.
+         *
+         * `all` also meant every colour on the block re-animated for 680ms on a theme change —
+         * underneath the theme's own reveal, which is already drawing over the whole screen.
+         *
+         * And no `will-change`. It was on every one of these permanently, which is a compositor
+         * layer per revealed block, held for the life of the page whether the block had animated
+         * yet or not. A browser promotes an element with a running transform transition by itself
+         * and drops the layer when the transition ends — the same benefit, without the page going
+         * on paying for it in memory and composite time long after nothing is moving.
+         */
+        'transition-[transform,opacity,filter] duration-[680ms]',
         '[transition-timing-function:cubic-bezier(0.16,1,0.3,1)]',
         // Reduced motion resolves `shown` immediately and this class removes the transition, so the
         // content is simply there — no movement, and no delay before it appears either.

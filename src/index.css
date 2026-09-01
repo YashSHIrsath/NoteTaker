@@ -477,7 +477,14 @@ body {
      and it's the one animation in the app meant to be watched rather than just felt. At 520ms the
      circle was over before the eye caught it. Read back by src/lib/themeReveal.ts, which drives
      the circle from script. */
-  --motion-reveal: 1100ms;
+  /* The theme reveal, and the longest animation in the app by a distance.
+   *
+   * It was 1100ms, which is a long time to hold a growing circle clipped over two full-screen
+   * snapshots — the one animation here whose per-frame cost is the whole viewport, and the one
+   * most likely to drop frames on a phone. Shorter does not make a dropped frame smooth; it makes
+   * far fewer frames the animation has to find, and it stops the switch feeling like something
+   * you wait out. */
+  --motion-reveal: 620ms;
   --motion-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
   /* Slight overshoot — used only for the "it happened" pops (star, pin). */
   --motion-spring: cubic-bezier(0.34, 1.56, 0.64, 1);

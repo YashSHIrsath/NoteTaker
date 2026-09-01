@@ -767,6 +767,7 @@ const MARKER_MAX_STRETCH = 54
 const EDGE_FADE = 22
 
 export function FeatureCarousel() {
+  const sectionRef = useRef<HTMLElement>(null)
   const trackRef = useRef<HTMLDivElement>(null)
   const tabsRef = useRef<HTMLDivElement>(null)
   /** The tabs' own inner row. The marker is positioned against this, so it scrolls with them. */
@@ -820,6 +821,33 @@ export function FeatureCarousel() {
    * moving it again — you would land on the slide after the one you asked for.
    */
   const [restartKey, setRestartKey] = useState(0)
+  /**
+   * Whether the carousel is anywhere near the screen.
+   *
+   * The timer below moves the track with a smooth scroll every three seconds and the dwell bar
+   * animates continuously beside it — and both were running whether or not this section was in
+   * view. On a page this long that is most of a visit, and on a phone it is a scroll animation
+   * competing with the finger for the same main thread, to move something nobody can see.
+   *
+   * Starts true so a carousel already on screen at first paint never misses a beat waiting for the
+   * observer's first callback; if it isn't, that callback corrects it before the first tick.
+   */
+  const [onScreen, setOnScreen] = useState(true)
+
+  useEffect(() => {
+    const element = sectionRef.current
+    if (!element) {
+      return
+    }
+    const observer = new IntersectionObserver(
+      (entries) => setOnScreen(entries.some((entry) => entry.isIntersecting)),
+      // A margin, so it is already moving by the time it is properly on screen rather than
+      // starting the instant its top edge appears.
+      { rootMargin: '96px' },
+    )
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [])
 
   const goTo = useCallback((next: number) => {
     const track = trackRef.current
@@ -1069,7 +1097,7 @@ export function FeatureCarousel() {
   }, [])
 
   useEffect(() => {
-    if (paused || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    if (paused || !onScreen || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       return
     }
     const timer = window.setInterval(() => {
@@ -1086,10 +1114,11 @@ export function FeatureCarousel() {
       })
     }, AUTOPLAY_MS)
     return () => window.clearInterval(timer)
-  }, [paused, restartKey])
+  }, [onScreen, paused, restartKey])
 
   return (
     <section
+      ref={sectionRef}
       aria-roledescription="carousel"
       aria-label="A look inside the app"
       onPointerEnter={() => setPaused(true)}
@@ -1165,7 +1194,9 @@ export function FeatureCarousel() {
           className="anim-carousel-dwell h-full rounded-full bg-[var(--color-accent)]"
           style={{
             animationDuration: `${AUTOPLAY_MS}ms`,
-            animationPlayState: paused ? 'paused' : 'running',
+            // Held off screen as well as under a pointer: an animation nobody is looking at is
+            // still an animation the compositor has to tick.
+            animationPlayState: paused || !onScreen ? 'paused' : 'running',
           }}
           aria-hidden
         />

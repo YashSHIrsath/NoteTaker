@@ -1,6 +1,6 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { Bell, CalendarClock, CheckCircle2, PenLine, Users } from 'lucide-react'
-import { useProgress } from '../../hooks/useLandingScroll'
+import { useProgressTarget } from '../../hooks/useLandingScroll'
 import { cn } from '../../lib/cn'
 
 const STEPS = [
@@ -53,17 +53,52 @@ export function JourneySection() {
   // Measured on the steps themselves rather than on the section: the section includes its heading and
   // its padding, and a line drawn against that is offset from the rows it is supposed to track.
   const stepsRef = useRef<HTMLDivElement | null>(null)
-  const progress = useProgress(stepsRef)
+  const lineRef = useRef<HTMLSpanElement>(null)
+  /**
+   * How many steps the line has passed — the only part of the scroll this section renders.
+   *
+   * The line itself is written straight to the DOM below, because it moves continuously and putting
+   * it in state re-rendered five steps and their markers on every frame of every scroll, whether or
+   * not the section was even on screen. Which step is lit is a different kind of answer: it changes
+   * five times in the section's whole travel, so it is worth a render each time and nothing between.
+   *
+   * Guarded against a ref rather than left to React to notice: setting state to the value it
+   * already holds is not reliably free, and this would be doing it sixty times a second.
+   *
+   * Starts at 1 because the measurement starts at 0, which already reaches the first step — the
+   * marker is lit before you have scrolled, exactly as it was when this was computed in the render.
+   */
+  const [litCount, setLitCount] = useState(1)
+  const litRef = useRef(1)
 
   /*
    * The measurement is taken on the list, not the section, and used as-is.
    *
-   * useProgress now reports where a playhead at the middle of the screen sits within the element — so
-   * for the list of steps that is already exactly "how far down the steps am I", and any remapping
-   * would put the line somewhere other than beside the row being read. The earlier version remapped a
-   * whole-viewport measure and the line arrived four-fifths drawn, which is what made it look stuck.
+   * useProgressTarget reports where a playhead at the middle of the screen sits within the element
+   * — so for the list of steps that is already exactly "how far down the steps am I", and any
+   * remapping would put the line somewhere other than beside the row being read. An earlier version
+   * remapped a whole-viewport measure and the line arrived four-fifths drawn, which is what made it
+   * look stuck.
    */
-  const drawn = progress
+  useProgressTarget(stepsRef, (drawn) => {
+    if (lineRef.current) {
+      // scaleY on a full-height element rather than an animated height: height is a layout property
+      // and would reflow the section on every frame of the scroll.
+      lineRef.current.style.transform = `scaleY(${drawn})`
+    }
+    // A step lights when the line has reached it. Slightly early — the marker filling in just
+    // before the line arrives reads as the line *causing* it, which is the illusion wanted.
+    let reached = 0
+    for (let index = 0; index < STEPS.length; index += 1) {
+      if (drawn >= index / STEPS.length - 0.04) {
+        reached = index + 1
+      }
+    }
+    if (litRef.current !== reached) {
+      litRef.current = reached
+      setLitCount(reached)
+    }
+  })
 
   return (
     <section id="journey" className="border-t border-[var(--color-border)] py-14 sm:py-20">
@@ -92,23 +127,19 @@ export function JourneySection() {
           className="absolute bottom-2 left-[15px] top-2 w-[2px] rounded-full bg-[var(--color-border)] sm:left-[19px]"
         />
         <span
+          ref={lineRef}
           aria-hidden
           className="absolute left-[15px] top-2 w-[2px] origin-top rounded-full bg-[var(--color-accent)] sm:left-[19px]"
           style={{
-            // scaleY on a full-height element rather than an animated height: height is a layout
-            // property and would reflow the section on every frame of the scroll.
             bottom: '0.5rem',
-            transform: `scaleY(${drawn})`,
+            transform: 'scaleY(0)',
             transition: 'transform 120ms linear',
           }}
         />
 
         <ol className="flex flex-col gap-9 sm:gap-11">
           {STEPS.map((step, index) => {
-            // A step lights when the line has reached it. Slightly early — the marker filling in just
-            // before the line arrives reads as the line *causing* it, which is the illusion wanted.
-            const threshold = index / STEPS.length
-            const lit = drawn >= threshold - 0.04
+            const lit = index < litCount
             return (
               <li key={step.title} className="relative">
                 <span

@@ -211,12 +211,73 @@ export function LandingPage() {
   )
 }
 
+/**
+ * The two blooms behind the hero, drifting at different rates against the scroll.
+ *
+ * A component of its own, and that is the whole reason it exists: reading the scroll offset
+ * re-renders whoever reads it on every frame, and this used to be read at the root of the page —
+ * so a bloom moving two pixels reconciled the carousel, the journey, the deck and every card under
+ * them, on a phone, while the finger was still on the glass. Two divs re-render now.
+ *
+ * The parallax is desktop-only, and `wide` is passed down into the hook rather than only into the
+ * transform: on a phone there is nothing to move, so there is nothing to listen for either.
+ */
+function HeroBlooms({ wide }: { wide: boolean }) {
+  const offset = useScrollOffset(wide)
+
+  return (
+    <>
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -right-40 -top-40 h-[36rem] w-[36rem] rounded-full opacity-25 blur-3xl"
+        style={{
+          background: 'radial-gradient(circle at 50% 50%, #ffffff, transparent 70%)',
+          transform: wide ? `translate3d(${offset * 0.06}px, ${offset * 0.16}px, 0)` : undefined,
+        }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -left-24 top-40 h-[26rem] w-[26rem] rounded-full opacity-20 blur-3xl"
+        style={{
+          background:
+            'radial-gradient(circle at 50% 50%, var(--landing-hero-glow), transparent 70%)',
+          transform: wide ? `translate3d(${offset * -0.05}px, ${offset * 0.28}px, 0)` : undefined,
+        }}
+      />
+    </>
+  )
+}
+
+/**
+ * The deck's tilt as the hero leaves — the same arrangement as HeroBlooms, and for the same reason.
+ *
+ * The deck itself is passed in as `children` rather than rendered here, which is what keeps it out
+ * of the re-render: the element is created by LandingContent, which no longer re-renders on scroll,
+ * so React sees the same child on every frame and skips it. Only this wrapper's style changes.
+ */
+function HeroTilt({ wide, children }: { wide: boolean; children: ReactNode }) {
+  const offset = useScrollOffset(wide)
+
+  return (
+    <div
+      style={
+        wide
+          ? {
+              transform: `perspective(1200px) rotateX(${Math.min(9, offset * 0.02)}deg) translateY(${offset * -0.05}px)`,
+              transformOrigin: 'center top',
+            }
+          : undefined
+      }
+    >
+      {children}
+    </div>
+  )
+}
+
 function LandingContent() {
-  // Only the parallax needs the raw offset; the nav measures its own progress, which keeps the
-  // scroller's dimensions out of this render entirely.
-  const offset = useScrollOffset()
   // The scroll-linked flourishes are for screens with room for them. A parallax bloom and a tilting
-  // deck on a 360px viewport are two things moving in a space that has none.
+  // deck on a 360px viewport are two things moving in a space that has none — and below this width
+  // neither one subscribes to the scroll at all.
   const wide = useMediaQuery('(min-width: 1024px)')
 
   return (
@@ -232,27 +293,7 @@ function LandingContent() {
           * and the most easily overdone one — so it is used once, on the one section that is a flat
           * field of colour with nothing else to give it dimension. Transform only, so it composites.
           */}
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -right-40 -top-40 h-[36rem] w-[36rem] rounded-full opacity-25 blur-3xl"
-          style={{
-            background: 'radial-gradient(circle at 50% 50%, #ffffff, transparent 70%)',
-            transform: wide
-              ? `translate3d(${offset * 0.06}px, ${offset * 0.16}px, 0)`
-              : undefined,
-          }}
-        />
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -left-24 top-40 h-[26rem] w-[26rem] rounded-full opacity-20 blur-3xl"
-          style={{
-            background:
-              'radial-gradient(circle at 50% 50%, var(--landing-hero-glow), transparent 70%)',
-            transform: wide
-              ? `translate3d(${offset * -0.05}px, ${offset * 0.28}px, 0)`
-              : undefined,
-          }}
-        />
+        <HeroBlooms wide={wide} />
 
         <div className="relative mx-auto max-w-6xl px-5 sm:px-8">
           <div className="grid items-center gap-8 pb-12 pt-20 sm:gap-10 sm:pb-20 sm:pt-28 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-14">
@@ -305,18 +346,9 @@ function LandingContent() {
             {/* The tilt is desktop-only. On a phone the hero *is* the screen and the deck is most
                 of it, so the same rotation reads as the card stack sliding out of the layout rather
                 than as inertia — and `wide` is false there, which leaves it perfectly still. */}
-            <div
-              style={
-                wide
-                  ? {
-                      transform: `perspective(1200px) rotateX(${Math.min(9, offset * 0.02)}deg) translateY(${offset * -0.05}px)`,
-                      transformOrigin: 'center top',
-                    }
-                  : undefined
-              }
-            >
+            <HeroTilt wide={wide}>
               <NoteStack />
-            </div>
+            </HeroTilt>
           </div>
         </div>
       </section>

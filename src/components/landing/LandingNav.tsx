@@ -1,7 +1,8 @@
+import { useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowRight, Download, LogIn, type LucideIcon } from 'lucide-react'
 import { ProjectLogo } from '../brand/ProjectLogo'
-import { useActiveSection, usePageProgress, useScrollOffset } from '../../hooks/useLandingScroll'
+import { useActiveSection, usePageProgressTarget, useScrolledPast } from '../../hooks/useLandingScroll'
 import { useTheme } from '../../hooks/useTheme'
 import { themeOption } from '../../lib/themes'
 import { originFromElement } from '../../lib/themeReveal'
@@ -66,15 +67,39 @@ const MONO = '"JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Mono", Menlo,
  * wordmark, which truncates.
  */
 export function LandingNav() {
-  const offset = useScrollOffset()
-  const progress = usePageProgress()
   const { theme, toggleTheme } = useTheme()
   const ThemeIcon = themeOption(theme).icon
   /** The section being read, so the index can say where in the document you are. */
   const activeSection = useActiveSection(SECTION_IDS)
-  const t = Math.min(1, offset / SETTLE)
-  /** Settled: the bar has its ground, its rule and its index. */
-  const settled = t > 0.55
+  /**
+   * Settled: the bar has its ground, its rule and its index.
+   *
+   * A boolean off the scroll rather than a number, because that is all the bar ever asked of it.
+   * This used to be `offset / SETTLE > 0.55` computed in the render, which meant the whole bar —
+   * four index entries, three actions, the mark — reconciled on every frame of every scroll to
+   * answer a question that changes twice in a visit.
+   */
+  const settled = useScrolledPast(SETTLE * 0.55)
+
+  /**
+   * The scroll trace and the percentage readout, written to rather than rendered.
+   *
+   * These are the only two things on the bar that really do change continuously, and rendering
+   * them was what kept the per-frame re-render alive after `settled` stopped needing one. A
+   * transform and a text node are both cheaper to set directly than to reconcile, and neither is
+   * something React needs to know about — nothing else on the page reads the number.
+   */
+  const traceRef = useRef<HTMLSpanElement>(null)
+  const percentRef = useRef<HTMLSpanElement>(null)
+  usePageProgressTarget((progress) => {
+    if (traceRef.current) {
+      traceRef.current.style.transform = `scaleX(${progress})`
+    }
+    const percent = `${Math.round(progress * 100)}%`
+    if (percentRef.current && percentRef.current.textContent !== percent) {
+      percentRef.current.textContent = percent
+    }
+  })
 
   const jump = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -152,7 +177,7 @@ export function LandingNav() {
           'transition-[background-color,border-color,backdrop-filter] duration-300',
           '[transition-timing-function:cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none',
           settled
-            ? 'border-[var(--color-text)] bg-[var(--color-surface)]/95 backdrop-blur-md'
+            ? 'border-[var(--color-text)] bg-[var(--color-surface)]/95 sm:backdrop-blur-md'
             : 'border-transparent bg-transparent',
         )}
         style={{ paddingTop: 'env(safe-area-inset-top)' }}
@@ -289,11 +314,12 @@ export function LandingNav() {
               * continuously and imprecisely; this says it exactly. From xl only — at lg the row
               * needs every pixel for the index to stay centred. */}
             <span
+              ref={percentRef}
               className="hidden text-[10px] font-medium tabular-nums text-[var(--color-border-strong)] transition-opacity duration-300 xl:inline"
               style={{ fontFamily: MONO, opacity: settled ? 1 : 0 }}
               aria-hidden
             >
-              {Math.round(progress * 100)}%
+              0%
             </span>
 
             {/* Tighter on a phone in both states. At 360px the row is 32px of page padding, this
@@ -378,8 +404,9 @@ export function LandingNav() {
           style={{ opacity: settled ? 1 : 0 }}
         >
           <span
+            ref={traceRef}
             className="block h-full w-full origin-left bg-[var(--color-accent)]"
-            style={{ transform: `scaleX(${progress})` }}
+            style={{ transform: 'scaleX(0)' }}
           />
         </span>
       </div>
