@@ -5,10 +5,8 @@ import {
   Folder as FolderIcon,
   ListTree,
   LogOut,
-  Moon,
   Plus,
   Star,
-  Sun,
   User,
 } from 'lucide-react'
 import { SearchInput } from './SearchInput'
@@ -36,7 +34,7 @@ export function GlobalSearch({ className }: GlobalSearchProps) {
   const to = useWorkspacePath()
   const { folders, tasks, subtasks, expandSubtask, getFolder, createTask } = useFolders()
   const { signOut } = useAuth()
-  const { theme, isDark, quickThemeIds, toggleTheme } = useTheme()
+  const { theme, quickThemeIds, toggleTheme } = useTheme()
   // One pattern for both mounts of the folder page, matched against the workspace-relative path.
   // Deliberately matchPath rather than two useMatch calls behind a `??`: that is a hook behind a
   // short-circuit, and the hook count then changes with the route.
@@ -69,6 +67,7 @@ export function GlobalSearch({ className }: GlobalSearchProps) {
   // — and only shows up — while you're actually looking at a folder to create it in.
   const currentFolder = folderMatch?.params.folderId ? getFolder(folderMatch.params.folderId) : undefined
   const commandActions: CommandAction[] = useMemo(() => {
+    const upNext = themeOption(nextTheme(quickThemeIds, theme))
     const actions: CommandAction[] = []
     if (currentFolder) {
       actions.push({
@@ -117,10 +116,10 @@ export function GlobalSearch({ className }: GlobalSearchProps) {
       },
       {
         id: 'toggle-theme',
-        // Names where it is going, because with five themes "switch to dark mode" would be a
-        // guess about which dark one.
-        label: `Switch theme — ${themeOption(nextTheme(quickThemeIds, theme)).label}`,
-        icon: isDark ? <Sun className="h-4 w-4" aria-hidden /> : <Moon className="h-4 w-4" aria-hidden />,
+        // Names where it is going, because with six themes "switch to dark mode" would be a
+        // guess about which dark one — and shows that theme's own glyph for the same reason.
+        label: `Switch theme — ${upNext.label}`,
+        icon: <upNext.icon className="h-4 w-4" aria-hidden />,
         run: () => runAction(toggleTheme),
       },
       {
@@ -131,7 +130,7 @@ export function GlobalSearch({ className }: GlobalSearchProps) {
       },
     )
     return actions
-  }, [currentFolder, createTask, navigate, runAction, theme, isDark, quickThemeIds, to, toggleTheme, signOut])
+  }, [currentFolder, createTask, navigate, runAction, theme, quickThemeIds, to, toggleTheme, signOut])
 
   const filteredActions = useMemo(() => {
     const needle = query.trim().toLowerCase()

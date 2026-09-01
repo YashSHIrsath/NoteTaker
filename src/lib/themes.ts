@@ -1,3 +1,5 @@
+import { Droplet, LampDesk, Moon, Notebook, Palette, Sun, type LucideIcon } from 'lucide-react'
+
 /**
  * The themes the app can be set in, and which of them the header offers.
  *
@@ -50,6 +52,16 @@ export interface ThemeOption {
    */
   dark: boolean
   /**
+   * The theme's own glyph.
+   *
+   * Every trigger in the app used to draw `isDark ? Sun : Moon`, which was fine while there were
+   * two themes and became a lie at six: four of them are dark, so the button showed the same sun
+   * whichever one you were in, and pressing it looked like it had done nothing. Each glyph is taken
+   * straight from that theme's own `hint` — a notebook for Paper, a desk lamp for Studio — so the
+   * icon and the sentence describing it say the same thing.
+   */
+  icon: LucideIcon
+  /**
    * The three colours the picker draws this theme with.
    *
    * Duplicated from index.css, and unavoidably: a swatch has to show a theme the document is *not*
@@ -74,6 +86,7 @@ export const CUSTOM_DEFAULT: CustomColors = { ground: '#1a0b33', accent: '#3ff0d
 export const THEMES: readonly ThemeOption[] = [
   {
     id: 'light',
+    icon: Sun,
     label: 'Light',
     hint: 'The original. Cool greys, white cards, indigo.',
     family: 'system',
@@ -82,6 +95,7 @@ export const THEMES: readonly ThemeOption[] = [
   },
   {
     id: 'dark',
+    icon: Moon,
     label: 'Dark',
     hint: 'The original after hours. Blue-black, the same indigo lifted.',
     family: 'system',
@@ -90,6 +104,7 @@ export const THEMES: readonly ThemeOption[] = [
   },
   {
     id: 'paper',
+    icon: Notebook,
     label: 'Paper',
     hint: 'A notebook. Oat chrome, white pages, ink-black type — the one that answers the serif.',
     family: 'signature',
@@ -98,6 +113,7 @@ export const THEMES: readonly ThemeOption[] = [
   },
   {
     id: 'studio',
+    icon: LampDesk,
     label: 'Studio',
     hint: 'A desk lamp at night. The warm near-black the app’s own icon already sits on.',
     family: 'signature',
@@ -106,6 +122,7 @@ export const THEMES: readonly ThemeOption[] = [
   },
   {
     id: 'indigo',
+    icon: Droplet,
     label: 'Indigo',
     hint: 'The mark’s colour as the room. The most this app has ever looked like itself.',
     family: 'signature',
@@ -114,6 +131,7 @@ export const THEMES: readonly ThemeOption[] = [
   },
   {
     id: 'custom',
+    icon: Palette,
     label: 'Custom',
     hint: 'Grape soda, out of the box — and the one theme you can repaint. Pick a page and an accent.',
     family: 'signature',

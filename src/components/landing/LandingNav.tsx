@@ -1,8 +1,9 @@
 import { Link } from 'react-router-dom'
-import { ArrowRight, Download, LogIn, Moon, Sun, type LucideIcon } from 'lucide-react'
+import { ArrowRight, Download, LogIn, type LucideIcon } from 'lucide-react'
 import { ProjectLogo } from '../brand/ProjectLogo'
 import { useActiveSection, usePageProgress, useScrollOffset } from '../../hooks/useLandingScroll'
 import { useTheme } from '../../hooks/useTheme'
+import { themeOption } from '../../lib/themes'
 import { originFromElement } from '../../lib/themeReveal'
 import { cn } from '../../lib/cn'
 
@@ -67,7 +68,8 @@ const MONO = '"JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Mono", Menlo,
 export function LandingNav() {
   const offset = useScrollOffset()
   const progress = usePageProgress()
-  const { isDark, toggleTheme } = useTheme()
+  const { theme, toggleTheme } = useTheme()
+  const ThemeIcon = themeOption(theme).icon
   /** The section being read, so the index can say where in the document you are. */
   const activeSection = useActiveSection(SECTION_IDS)
   const t = Math.min(1, offset / SETTLE)
@@ -317,11 +319,10 @@ export function LandingNav() {
                   settled ? cn('flex', cell) : 'text-white/80 hover:text-white',
                 )}
               >
-                {isDark ? (
-                  <Sun className="h-[15px] w-[15px]" strokeWidth={1.7} aria-hidden />
-                ) : (
-                  <Moon className="h-[15px] w-[15px]" strokeWidth={1.7} aria-hidden />
-                )}
+                {/* The theme you are in, not the one you would land on. Four of the six are dark,
+                  * so a light/dark toggle sat on the same sun through three of them and made the
+                  * button look like it had done nothing. */}
+                <ThemeIcon className="h-[15px] w-[15px]" strokeWidth={1.7} aria-hidden />
               </button>
               {/* Over the hero this is still gated to xl — as a word it is the one link that is also
                 * in the footer, so below xl it gives its width up rather than fighting the others

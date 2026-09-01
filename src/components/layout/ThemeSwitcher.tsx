@@ -1,6 +1,6 @@
 import { useRef, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { createPortal } from 'react-dom'
-import { Check, Moon, Sun } from 'lucide-react'
+import { Check } from 'lucide-react'
 import { IconButton } from '../ui/IconButton'
 import { useAnchoredPanel } from '../../hooks/useAnchoredPanel'
 import { useTheme } from '../../hooks/useTheme'
@@ -39,12 +39,15 @@ const CLOSE_DELAY = 140
  * so the list can never be one you cannot find yourself in.
  */
 export function ThemeSwitcher({ className }: { className?: string }) {
-  const { theme, isDark, setTheme, quickThemeIds } = useTheme()
+  const { theme, setTheme, quickThemeIds } = useTheme()
   // Anchored on the wrapper rather than the button: IconButton does not forward a ref, and the
   // wrapper is the same box anyway — it is what the pointer has to stay inside.
   const panel = useAnchoredPanel<HTMLDivElement>(PANEL_WIDTH)
   const shown = quickThemes(quickThemeIds, theme)
   const upNext = themeOption(nextTheme(quickThemeIds, theme))
+  // The theme in force, not the one a press would bring — the label already says where
+  // pressing goes, and the icon is the only thing that can say where you are.
+  const ThemeIcon = themeOption(theme).icon
   const closeTimer = useRef<number | null>(null)
   /** What opened the last press. A click carries no pointer type of its own, and the button does two
    *  different things depending on it — see the press handler. */
@@ -148,7 +151,7 @@ export function ThemeSwitcher({ className }: { className?: string }) {
           aria-haspopup="menu"
           onClick={onPress}
         >
-          {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+          <ThemeIcon className="h-5 w-5" />
         </IconButton>
       </div>
 
@@ -195,6 +198,13 @@ export function ThemeSwitcher({ className }: { className?: string }) {
                       )}
                     >
                       <Swatch theme={option} />
+                      <option.icon
+                        className={cn(
+                          'h-3.5 w-3.5 shrink-0',
+                          active ? 'text-[var(--color-accent)]' : 'text-[var(--color-text-muted)]',
+                        )}
+                        aria-hidden
+                      />
                       <span
                         className={cn(
                           'min-w-0 flex-1 truncate text-[12.5px] font-semibold',

@@ -54,6 +54,12 @@ function checkCatalogue(): void {
   const chips = THEMES.map((theme) => Object.values(theme.swatch).join('/'))
   assert(new Set(chips).size === chips.length, 'no two themes render as the same swatch')
 
+  // The same argument as the swatches, for the glyph the triggers draw. Two themes sharing an icon
+  // is the exact bug the icons were added to fix: a button that looks identical in two themes reads
+  // as a button that did nothing when you pressed it.
+  const glyphs = THEMES.map((theme) => theme.icon)
+  assert(new Set(glyphs).size === glyphs.length, 'no two themes draw the same icon')
+
   assert(
     THEMES.some((theme) => theme.dark) && THEMES.some((theme) => !theme.dark),
     'both families exist, or the light/dark split has nothing to describe',
