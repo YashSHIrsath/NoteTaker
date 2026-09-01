@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { ClipboardList, Pin, Plus } from 'lucide-react'
 import type { Task } from '../types'
 import { AllTaskTile } from '../components/task/AllTaskTile'
+import { ArrangeToggle } from '../components/task/ArrangeToggle'
 import { TaskGridCanvas } from '../components/task/TaskGridCanvas'
 import { NewTaskDialog } from '../components/task/NewTaskDialog'
 import { TaskFilterMenu } from '../components/task/TaskFilterMenu'
@@ -62,6 +63,10 @@ export function AllTasksPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [folderFilter, setFolderFilter] = useState<string | null>(null)
   const [newTaskOpen, setNewTaskOpen] = useState(false)
+  // Cards are read-only furniture until this is on — see TaskGridCanvas's `arranging`. Held here
+  // rather than in the canvas so both grids on the page (pinned and the rest) enter and leave the
+  // mode together; a page half in it would be a page where half the cards move.
+  const [arranging, setArranging] = useState(false)
   // Coarse on purpose: the status filter needs the clock, and re-running this whole grid once a
   // second to move nothing would be a steep price for it. The cards' own countdowns still tick.
   const now = useServerNowCoarse(tasks.some((task) => task.noteKind === 'due_task'))
@@ -90,6 +95,7 @@ export function AllTasksPage() {
         tasks={taskList}
         scope="tasks"
         className="mt-3"
+        arranging={arranging}
         handleColor={(task) => taskColorStyle(task.color, scatterCategoryForId(task.id)).ink}
       >
         {(task) => (
@@ -105,7 +111,7 @@ export function AllTasksPage() {
       </TaskGridCanvas>
     ) : (
       // The same canvas the tiles use, so a card keeps its place and size whichever style is on.
-      <TaskGridCanvas tasks={taskList} scope="tasks" className="mt-3">
+      <TaskGridCanvas tasks={taskList} scope="tasks" className="mt-3" arranging={arranging}>
         {(task) => (
           <TaskCard
               scope="tasks"
@@ -188,7 +194,8 @@ export function AllTasksPage() {
             <Plus className="h-4 w-4" aria-hidden />
             New Task
           </Button>
-          <div className="ml-auto flex shrink-0 items-center">
+          <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
+            <ArrangeToggle arranging={arranging} onToggle={() => setArranging((on) => !on)} />
             <TaskFilterMenu
               tasks={tasks}
               nowMs={now}

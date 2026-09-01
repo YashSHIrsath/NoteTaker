@@ -54,6 +54,26 @@
   --color-danger: #b42318;
   --color-danger-hover: #912018;
 
+  /* ------------------------------------------------------------ the landing hero
+   *
+   * The two colour fields on the welcome page — the hero and the closing call to action — and the
+   * bloom that drifts behind the first of them. Nothing inside the app reads these.
+   *
+   * They exist because those fields used to be painted in `--color-accent`, which is not the
+   * per-theme colour it looks like: Paper never overrides it, and Dark, Studio and Indigo all lift
+   * it to lavenders within a few percent of each other. Six themes, and the page that introduces
+   * the app had two looks — on the one page where the theme *is* the argument.
+   *
+   * Every value is dark enough to carry white type, and that is a requirement rather than a
+   * coincidence: the hero's heading, its chips and the nav bar sitting over it are all white and
+   * stay that way. The label on the white pill *inside* the field is the field's own colour, which
+   * is why there is no separate ink token to keep in step.
+   *
+   * Light keeps the accent it always had, so this theme's hero is the hero as it was.
+   */
+  --landing-hero: var(--color-accent);
+  --landing-hero-glow: #c7d2fe;
+
   --cat-indigo: var(--color-accent);
   --cat-indigo-soft: var(--color-accent-soft);
   --cat-indigo-ink: var(--color-accent-ink);
@@ -155,6 +175,12 @@
 
   --color-danger: #e5716a;
   --color-danger-hover: #ef938d;
+
+  /* Deepened rather than lifted. The rest of this theme reads the accent off a near-black page,
+     where lavender is right; the hero is the one place it had to hold white type on itself, and at
+     #8b85f0 it barely did. Same hue, taken back down to where the type sits on it. */
+  --landing-hero: #3b36a8;
+  --landing-hero-glow: #8b85f0;
 }
 
 /* --------------------------------------------------------- the dark family's note palette
@@ -276,6 +302,12 @@
   --shadow-sm: 0 1px 3px 0 rgb(58 46 30 / 0.09);
   --shadow-md: 0 4px 14px -2px rgb(58 46 30 / 0.13), 0 1px 3px rgb(58 46 30 / 0.07);
   --shadow-lg: 0 20px 40px -12px rgb(58 46 30 / 0.22);
+
+  /* A notebook's cover. This theme leaves the accent at the light theme's indigo on purpose (see
+     above), so without its own value here its hero would be the light theme's hero exactly —
+     the two themes furthest apart in the catalogue opening on the same screen. */
+  --landing-hero: #4a3a24;
+  --landing-hero-glow: #d9b98a;
 }
 
 /* Studio — a desk lamp at night.
@@ -306,6 +338,16 @@
 
   --color-danger: #e8837a;
   --color-danger-hover: #f0a29b;
+
+  /* The lamp, drawn rather than described: the warm dark the theme is built on, lit by the amber
+     it puts on the desk.
+
+     A shade up from the near-black it wants to be, and measured rather than eyeballed: at #262620
+     the field separated from this theme's own page by 1.12, which is not a field — it is the page
+     with white text on it. This clears it by 1.70, near enough to the 1.83 the dark theme's hero
+     gets, and still carries white type at 10:1. */
+  --landing-hero: #454236;
+  --landing-hero-glow: #e0af4c;
 }
 
 /* Custom — the funky one, and the only theme anybody can repaint.
@@ -340,6 +382,13 @@
 
   --color-danger: #ff7a92;
   --color-danger-hover: #ff9dae;
+
+  /* Mixed rather than picked, because this is the one theme whose colours are not known until
+     somebody chooses them. Whatever accent is set — mint by default, anything by preference —
+     38% of it over a near-black lands dark enough for the white type the hero carries, so the
+     field follows the choice without the choice being able to make it unreadable. */
+  --landing-hero: color-mix(in oklab, var(--color-accent) 38%, #140f22);
+  --landing-hero-glow: var(--color-accent);
 }
 
 /* Indigo — the mark's colour as the room.
@@ -367,6 +416,12 @@
 
   --color-danger: #f0847c;
   --color-danger-hover: #f5a49e;
+
+  /* The mark's colour at full strength. The one theme whose hero can simply be its own name —
+     lifted, like Studio's, until it reads as a field laid on this theme's page rather than as more
+     of it: 1.78 against the ground, white type at 10:1. */
+  --landing-hero: #40358c;
+  --landing-hero-glow: #9d95ff;
 }
 
 *,

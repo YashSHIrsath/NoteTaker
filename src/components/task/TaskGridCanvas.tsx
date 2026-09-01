@@ -103,6 +103,20 @@ export interface TaskGridCanvasProps {
    * grid's. Omit it and the arcs use a neutral, which is right for cards that aren't coloured.
    */
   handleColor?: (task: Task) => string | undefined
+  /**
+   * Whether cards can be moved and resized right now. Off unless a listing says otherwise.
+   *
+   * That default is the point. Both gestures used to be live whenever a listing was on screen,
+   * and on a touch screen that meant a thumb on its way to scrolling — or to opening a note —
+   * could drag a card out of place or pull it a column wider. Neither is a harmless slip: both
+   * are written, so the accident is still there on the next launch. Arranging is now something
+   * you turn on from the listing's header, do, and turn off again.
+   *
+   * While it is on the cards stop taking pointer events (see the CSS), which leaves the grip and
+   * the resize corner as the only live surfaces on the canvas — so an arranging pass can't open a
+   * note or trip a card's own controls either.
+   */
+  arranging?: boolean
   className?: string
 }
 
@@ -123,11 +137,19 @@ export interface TaskGridCanvasProps {
  * rescaled per breakpoint, so an arrangement is the same arrangement on a phone. What the screen
  * changes is the *minimum* card width (see useCardsPerRow) — never where a card sits.
  *
- * Cards are dragged from a grip and resized from the bottom-right corner. Neither gesture stores a
+ * Cards are dragged from a grip and resized from the bottom-right corner, and only once the
+ * listing has been put into arranging mode — see the `arranging` prop. Neither gesture stores a
  * position: a drag stores an order and a resize stores a size, and buildGridLayout decides the rest.
  * See dragConfig below for why the grip is a requirement rather than a preference.
  */
-export function TaskGridCanvas({ tasks, scope, children, handleColor, className }: TaskGridCanvasProps) {
+export function TaskGridCanvas({
+  tasks,
+  scope,
+  children,
+  handleColor,
+  arranging = false,
+  className,
+}: TaskGridCanvasProps) {
   const { updateTaskLayouts, rearrangeTasks } = useFolders()
   const { width, containerRef, mounted } = useContainerWidth({
     // Measure before painting anything: the guessed width must never reach the screen, or its
@@ -292,6 +314,7 @@ export function TaskGridCanvas({ tasks, scope, children, handleColor, className 
       ref={containerRef}
       className={cn(
         'task-grid-canvas relative w-full',
+        arranging && 'task-grid-canvas--arranging',
         mirrored && 'task-grid-canvas--mirrored',
         className,
       )}
@@ -325,12 +348,12 @@ export function TaskGridCanvas({ tasks, scope, children, handleColor, className 
         // Its guard order is what rescues this — handleDragStart checks the handle selector and
         // returns *before* the preventDefault — so a touch anywhere but the grip is never
         // swallowed and still scrolls. Checked against the installed react-draggable, not assumed.
-        dragConfig={{ enabled: true, handle: '.task-grid-drag-handle', threshold: 4 }}
+        dragConfig={{ enabled: arranging, handle: '.task-grid-drag-handle', threshold: 4 }}
         // Bottom-right only. Handles on all four corners were tried and dropped: three of them
         // reach into the space the neighbouring card occupies, which is exactly where they are
         // hardest to see and easiest to hit by accident, and none of them could do anything the
         // bottom-right one couldn't.
-        resizeConfig={{ enabled: true, handles: ['se'] }}
+        resizeConfig={{ enabled: arranging, handles: ['se'] }}
         // The library's own two, plus width quantisation — see snapCardWidth. Passing this replaces
         // the defaults rather than adding to them, which is why gridBounds and minMaxSize are named
         // again here.
@@ -352,13 +375,20 @@ export function TaskGridCanvas({ tasks, scope, children, handleColor, className 
             {/* The grip is the canvas's, not the card's: every view puts a different component in
                 here, and a card that could be moved in one listing and not another would be the
                 same card behaving two ways. Rendered after the card so it stacks above it without
-                needing a z-index fight. */}
-            <span
-              className="task-grid-drag-handle"
-              role="button"
-              aria-label={`Move ${task.title}`}
-              tabIndex={-1}
-            />
+                needing a z-index fight.
+
+                Only while arranging, and that is the belt to `enabled: false`'s braces: with no
+                grip in the DOM nothing matches dragConfig's handle selector, so react-draggable
+                has nothing to bind its non-passive touchstart to and a touch on a card is the
+                page's to scroll with. */}
+            {arranging ? (
+              <span
+                className="task-grid-drag-handle"
+                role="button"
+                aria-label={`Move ${task.title}`}
+                tabIndex={-1}
+              />
+            ) : null}
           </div>
         ))}
       </GridLayout>

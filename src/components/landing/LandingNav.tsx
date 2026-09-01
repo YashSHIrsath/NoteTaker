@@ -352,7 +352,7 @@ export function LandingNav() {
                 caps,
                 settled
                   ? 'h-9 border-[var(--color-text)] text-[var(--color-text)] hover:bg-[var(--color-text)] hover:text-[var(--color-surface)]'
-                  : 'h-[38px] border-white bg-white text-[var(--color-accent)] hover:bg-white/90',
+                  : 'h-[38px] border-white bg-white text-[var(--landing-hero)] hover:bg-white/90',
               )}
             >
               {/* Three lengths, because this must never be the thing that wraps the bar. */}

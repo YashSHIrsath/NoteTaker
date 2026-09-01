@@ -10,6 +10,7 @@ import { FolderBoardView } from './FolderBoardView'
 import { CreateFolderDialog } from './CreateFolderDialog'
 import { TaskCard } from '../task/TaskCard'
 import { AllTaskTile } from '../task/AllTaskTile'
+import { ArrangeToggle } from '../task/ArrangeToggle'
 import { TaskGridCanvas } from '../task/TaskGridCanvas'
 import { TaskEditorDialog } from '../task/TaskEditorDialog'
 import { useFolders } from '../../hooks/useFolders'
@@ -67,6 +68,9 @@ export function FolderView({
   const [activeTag, setActiveTag] = useState<string | null>(null)
   const [kindFilter, setKindFilter] = useState<KindFilter>('all')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  // Cards stay put until this is on — see TaskGridCanvas's `arranging`. One flag for the whole
+  // view, so the pinned grid and the one below it are always in the same mode.
+  const [arranging, setArranging] = useState(false)
   const isCompact = useIsCompact()
   // The compact folders sheet is only ever open or closed — it's pinned to the bottom bar, so
   // there's nothing to anchor or measure against the control that opens it.
@@ -149,6 +153,7 @@ export function FolderView({
         tasks={taskList}
         scope="folder"
         className="mt-3"
+        arranging={arranging}
         handleColor={(task) => taskColorStyle(task.color, scatterCategoryForId(task.id)).ink}
       >
         {(task) => (
@@ -163,7 +168,7 @@ export function FolderView({
       </TaskGridCanvas>
     ) : (
       // The same canvas the tiles use, so a card keeps its place and size whichever style is on.
-      <TaskGridCanvas tasks={taskList} scope="folder" className="mt-3">
+      <TaskGridCanvas tasks={taskList} scope="folder" className="mt-3" arranging={arranging}>
         {(task) => (
           <TaskCard
             scope="folder"
@@ -275,6 +280,11 @@ export function FolderView({
                 <Folder className="h-4 w-4" aria-hidden />
                 <span className="hidden sm:inline">New Folder</span>
               </Button>
+              {/* Only in list mode: the board draws its columns with plain grids, so there is no
+                  arrangement there to edit. */}
+              {effectiveViewMode === 'list' ? (
+                <ArrangeToggle arranging={arranging} onToggle={() => setArranging((on) => !on)} />
+              ) : null}
               {childFolders.length > 0 ? (
                 <div className="inline-flex h-8 items-center gap-0.5 rounded-full border border-[var(--color-border)] bg-[var(--color-hover)] p-1 sm:h-9">
                   <button

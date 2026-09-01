@@ -225,7 +225,7 @@ function LandingContent() {
       <div className="text-[var(--color-text)]">
       {/* The hero is a single tinted field with the wordmark and links sitting straight on it —
           no separate header bar, so the type is the first thing on the page. */}
-      <section className="relative overflow-hidden bg-[var(--color-accent)] text-white">
+      <section className="relative overflow-hidden bg-[var(--landing-hero)] text-white">
         {/* Parallax, and only here.
           *
           * Two blooms drifting at different rates against a scroll is the cheapest possible depth cue
@@ -246,7 +246,8 @@ function LandingContent() {
           aria-hidden
           className="pointer-events-none absolute -left-24 top-40 h-[26rem] w-[26rem] rounded-full opacity-20 blur-3xl"
           style={{
-            background: 'radial-gradient(circle at 50% 50%, #c7d2fe, transparent 70%)',
+            background:
+              'radial-gradient(circle at 50% 50%, var(--landing-hero-glow), transparent 70%)',
             transform: wide
               ? `translate3d(${offset * -0.05}px, ${offset * 0.28}px, 0)`
               : undefined,
@@ -284,7 +285,7 @@ function LandingContent() {
 
               <Link
                 to="/signup"
-                className="anim-press mt-7 inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-[12.5px] font-bold uppercase tracking-[0.12em] text-[var(--color-accent)] transition-transform hover:scale-[1.02] sm:mt-9 sm:px-7 sm:py-3.5 sm:text-[13px] sm:tracking-[0.14em]"
+                className="anim-press mt-7 inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-[12.5px] font-bold uppercase tracking-[0.12em] text-[var(--landing-hero)] transition-transform hover:scale-[1.02] sm:mt-9 sm:px-7 sm:py-3.5 sm:text-[13px] sm:tracking-[0.14em]"
               >
                 Get started
                 <ArrowRight className="h-4 w-4" aria-hidden />
@@ -520,7 +521,7 @@ function LandingContent() {
         </section>
 
         <section className="border-t border-[var(--color-border)] py-14 sm:py-20">
-          <div className="flex flex-col items-start gap-5 rounded-3xl bg-[var(--color-accent)] p-7 text-white sm:flex-row sm:items-center sm:justify-between sm:p-9">
+          <div className="flex flex-col items-start gap-5 rounded-3xl bg-[var(--landing-hero)] p-7 text-white sm:flex-row sm:items-center sm:justify-between sm:p-9">
             <div>
               <h2
                 className="text-[24px] font-extrabold tracking-tight sm:text-[30px]"
@@ -534,7 +535,7 @@ function LandingContent() {
             </div>
             <Link
               to="/signup"
-              className="anim-press inline-flex shrink-0 items-center gap-2 rounded-full bg-white px-6 py-3 text-[13px] font-bold uppercase tracking-[0.14em] text-[var(--color-accent)] transition-transform hover:scale-[1.02]"
+              className="anim-press inline-flex shrink-0 items-center gap-2 rounded-full bg-white px-6 py-3 text-[13px] font-bold uppercase tracking-[0.14em] text-[var(--landing-hero)] transition-transform hover:scale-[1.02]"
             >
               Create account
               <ArrowRight className="h-4 w-4" aria-hidden />

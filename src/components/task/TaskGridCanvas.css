@@ -237,3 +237,41 @@
     transition: none;
   }
 }
+
+/* ------------------------------------------------------------ arranging mode
+
+   Moving and resizing are off until the listing's Edit button turns them on (the `arranging` prop
+   in TaskGridCanvas). Everything below is the difference being *visible*: a card you are about to
+   pick up should not look like a card you are reading.
+
+   The two handles are the only live surfaces while it is on. The card itself stops taking pointer
+   events, so an arranging pass cannot open a note, tick one off, or hit its colour picker on the
+   way past — the same class of accident the mode exists to prevent, just from the other side.
+   Scrolling survives it: a pointer-events: none subtree hands the touch straight to the scroller
+   underneath, which is why this is set here rather than by swallowing clicks in JS. */
+.task-grid-canvas--arranging .task-grid-cell > *:not(.react-resizable-handle):not(.task-grid-drag-handle) {
+  pointer-events: none;
+  user-select: none;
+  /* No radius of its own — an outline follows the card's, whatever each view gave it. */
+  outline: 1.5px dashed var(--task-grid-handle, var(--color-border-strong));
+  outline-offset: 2px;
+  box-shadow: var(--shadow-md);
+}
+
+/* Both handles are already at full opacity on hover; a touch screen has no hover, and this is the
+   one mode where they are the thing you are aiming at. */
+.task-grid-canvas--arranging .react-resizable-handle,
+.task-grid-canvas--arranging .task-grid-drag-handle {
+  opacity: 1;
+}
+
+/* A wider grip while arranging. Off-mode it is a hint you find; on-mode it is a target you hit,
+   and a thumb is about 44px. The bar it draws grows with it so the two stay in proportion. */
+.task-grid-canvas--arranging .task-grid-drag-handle {
+  width: calc(var(--grid-handle-hit) * 1.75);
+}
+
+.task-grid-canvas--arranging .task-grid-drag-handle::after {
+  width: 34px;
+  height: 5px;
+}

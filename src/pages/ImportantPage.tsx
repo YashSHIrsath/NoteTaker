@@ -6,6 +6,7 @@ import { StarButton } from '../components/common/StarButton'
 import { RowDeleteButton } from '../components/common/RowDeleteButton'
 import { FolderActions } from '../components/folder/FolderActions'
 import { AllTaskTile } from '../components/task/AllTaskTile'
+import { ArrangeToggle } from '../components/task/ArrangeToggle'
 import { TaskFilterMenu } from '../components/task/TaskFilterMenu'
 import { TaskGridCanvas } from '../components/task/TaskGridCanvas'
 import { TaskEditorDialog } from '../components/task/TaskEditorDialog'
@@ -83,6 +84,9 @@ export function ImportantPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [folderFilter, setFolderFilter] = useState<string | null>(null)
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
+  // Cards are fixed in place until this is on — see TaskGridCanvas's `arranging`. One flag for
+  // both groups, so pinned and the rest are never in different modes.
+  const [arranging, setArranging] = useState(false)
   const { headerRef, contentRef } = useFloatingHeader()
   // Which side this whole view slides in from — the side of the bar you came from.
   const pageEnter = usePageEnter()
@@ -132,6 +136,7 @@ export function ImportantPage() {
             tasks={list}
             scope="important"
             className="mt-3"
+            arranging={arranging}
             handleColor={(task) => taskColorStyle(task.color, scatterCategoryForId(task.id)).ink}
           >
             {(task) => (
@@ -312,12 +317,21 @@ export function ImportantPage() {
           {tab === 'tasks' ? (
             <div
               className={cn(
-                'inline-flex h-9 shrink-0 items-center rounded-full p-1',
+                'inline-flex h-9 shrink-0 items-center gap-1 rounded-full p-1',
                 'border border-[var(--color-border)]/60 bg-[var(--color-surface)]/70 backdrop-blur-md',
                 'shadow-[var(--shadow-md)] supports-[backdrop-filter:blur(0px)]:bg-[var(--color-surface)]/80',
                 'lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none lg:backdrop-blur-none',
               )}
             >
+              {/* Only for the tile style: the other one draws plain cards in a plain grid, with no
+                  arrangement of its own to edit. */}
+              {viewStyle === 'clipboard' ? (
+                <ArrangeToggle
+                  size="fill"
+                  arranging={arranging}
+                  onToggle={() => setArranging((on) => !on)}
+                />
+              ) : null}
               <TaskFilterMenu
                 tasks={importantTasks}
                 nowMs={now}
