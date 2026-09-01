@@ -1,5 +1,5 @@
 import { createPortal } from 'react-dom'
-import { Check, Hash, SlidersHorizontal } from 'lucide-react'
+import { Check, FolderClosed, Hash, SlidersHorizontal } from 'lucide-react'
 import type { Task } from '../../types'
 import { useAnchoredPanel } from '../../hooks/useAnchoredPanel'
 import {
@@ -8,6 +8,7 @@ import {
   filterSummary,
   kindCounts,
   statusCounts,
+  type FolderFilterOption,
   type KindFilter,
   type StatusFilter,
 } from '../../lib/taskFilters'
@@ -59,9 +60,17 @@ export interface TaskFilterMenuProps {
   /** Null when no tag is being filtered on. Omit `tags` entirely to hide the section. */
   tag?: string | null
   tags?: string[]
+  /**
+   * The folder being filtered on, by id, or null for all of them. Omit `folders` to hide the
+   * section — which is what a folder view does, since it is already one folder and narrowing to it
+   * would change nothing.
+   */
+  folder?: string | null
+  folders?: FolderFilterOption[]
   onKindChange: (next: KindFilter) => void
   onStatusChange: (next: StatusFilter) => void
   onTagChange?: (next: string | null) => void
+  onFolderChange?: (next: string | null) => void
   /**
    * 'fill' makes the pill take its height from whatever wraps it, for rows where it has to line
    * up exactly with a neighbouring control (the Starred page's tab switch).
@@ -85,9 +94,12 @@ export function TaskFilterMenu({
   status,
   tag = null,
   tags,
+  folder = null,
+  folders,
   onKindChange,
   onStatusChange,
   onTagChange,
+  onFolderChange,
   size = 'md',
   className,
 }: TaskFilterMenuProps) {
@@ -98,14 +110,22 @@ export function TaskFilterMenu({
   // can't make the status numbers move under your finger.
   const kinds = kindCounts(tasks)
   const statuses = statusCounts(tasks, nowMs)
-  const { label, activeCount } = filterSummary(kind, status, tag)
+  // The pill spells out a name, so it wants the folder's rather than its id — and resolving it
+  // here means a selection whose folder has gone stops being counted as a live filter, matching
+  // filterByFolder, which stops applying it.
+  const folderName = folders?.find((option) => option.id === folder)?.name ?? null
+  const { label, activeCount } = filterSummary(kind, status, tag, folderName)
   const filtering = activeCount > 0
   const showTags = Boolean(tags && tags.length > 0 && onTagChange)
+  // More than one, because with a single folder every note is in it: the option would be offered,
+  // picked, and change nothing.
+  const showFolders = Boolean(folders && folders.length > 1 && onFolderChange)
 
   const reset = () => {
     onKindChange('all')
     onStatusChange('all')
     onTagChange?.(null)
+    onFolderChange?.(null)
   }
 
   return (
@@ -253,6 +273,71 @@ export function TaskFilterMenu({
                     )
                   })}
                 </div>
+
+                {/* Between the status ladder and the tags, because a folder and a tag are the same
+                    kind of question — which subset of the listing — where type and status are
+                    questions about each note on its own. */}
+                {showFolders ? (
+                  <>
+                    <SectionLabel>Folder</SectionLabel>
+                    <div role="radiogroup" aria-label="Filter by folder">
+                      {[null, ...(folders ?? [])].map((option) => {
+                        const id = option === null ? null : option.id
+                        const selected = folder === id || (option === null && folderName === null)
+                        return (
+                          <button
+                            key={id ?? '__all__'}
+                            type="button"
+                            role="radio"
+                            aria-checked={selected}
+                            // Clicking the folder already chosen clears it, the way a tag does —
+                            // it is the same gesture and should have the same effect.
+                            onClick={() => onFolderChange?.(folder === id ? null : id)}
+                            className={cn(
+                              'flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[12.5px] transition-colors hover:bg-[var(--color-hover)]',
+                              selected
+                                ? 'bg-[var(--color-accent-soft)] font-semibold text-[var(--color-accent)]'
+                                : 'text-[var(--color-text-muted)]',
+                            )}
+                          >
+                            {option === null ? (
+                              <span className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                            ) : (
+                              <FolderClosed
+                                className="h-3.5 w-3.5 shrink-0 opacity-60"
+                                strokeWidth={1.8}
+                                aria-hidden
+                              />
+                            )}
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate">
+                                {option === null ? 'All folders' : option.name}
+                              </span>
+                              {/* Only where it says something. Two folders can share a name in
+                                  different parts of the tree, and a root folder's trail is just
+                                  "Notes", which is every folder's trail. */}
+                              {option !== null && option.trail ? (
+                                <span className="block truncate text-[10.5px] font-normal opacity-70">
+                                  {option.trail}
+                                </span>
+                              ) : null}
+                            </span>
+                            <span className="shrink-0 text-[11px] tabular-nums opacity-60">
+                              {option === null ? tasks.length : option.count}
+                            </span>
+                            <Check
+                              className={cn(
+                                'h-3.5 w-3.5 shrink-0',
+                                selected ? 'opacity-100' : 'opacity-0',
+                              )}
+                              aria-hidden
+                            />
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </>
+                ) : null}
 
                 {showTags ? (
                   <>

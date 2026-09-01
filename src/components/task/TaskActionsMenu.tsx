@@ -1,9 +1,8 @@
-import { Fragment, useState, type ReactNode } from 'react'
+import { Fragment, useId, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import {
   CalendarClock,
   FolderInput,
-  Ellipsis,
   MoreVertical,
   Pin,
   PinOff,
@@ -19,6 +18,42 @@ import { useFolders } from '../../hooks/useFolders'
 import { useDeleteTask } from '../../hooks/useDeleteTask'
 import { useAnchoredPanel } from '../../hooks/useAnchoredPanel'
 import { cn } from '../../lib/cn'
+
+/**
+ * The compact trigger's mark: a disc with a pencil cut out of it.
+ *
+ * It replaces three dots, and the reason is the control beside it. In a card's corner this menu
+ * shares a capsule with the colour swatch, which is a small filled circle — so the pair was a round
+ * thing next to a row of dots, two different kinds of shape doing the same job at the same size. A
+ * disc of its own makes them read as one set, and the pencil is what keeps it from reading as a
+ * second colour: the same coin, with a mark on it.
+ *
+ * Cut out with a mask rather than drawn on top, so the pencil is a *hole* and whatever is behind the
+ * disc shows through it. That is what lets this work anywhere without being told the card's colour —
+ * inside the capsule it shows the capsule's tint, on a bare surface it shows the surface. Drawing the
+ * pencil in a second colour would have meant plumbing the card's own background down to here, and
+ * getting it wrong on a custom colour.
+ *
+ * Hand-drawn rather than a lucide pencil over a lucide circle: at 13px a stroked icon inside another
+ * stroked icon is two hairlines and a smudge. A silhouette punched out of a solid disc is one shape,
+ * and a hole has area where a stroke has none.
+ */
+function PencilDisc({ className }: { className?: string }) {
+  // The id goes into a url(#…) fragment reference, which is not a CSS selector — but React's own ids
+  // contain colons, and stripping them keeps this valid anywhere the markup is inspected or copied.
+  const maskId = `pencil-disc-${useId().replace(/:/g, '')}`
+  return (
+    <svg viewBox="0 0 16 16" className={className} aria-hidden focusable="false">
+      <mask id={maskId}>
+        {/* White keeps, black cuts. */}
+        <rect width="16" height="16" fill="#fff" />
+        {/* A pencil on the diagonal: flat end top-right, point bottom-left. */}
+        <path d="M9.95 4.15L11.85 6.05L7.15 10.75L4.5 11.5L5.25 8.85Z" fill="#000" />
+      </mask>
+      <circle cx="8" cy="8" r="8" fill="currentColor" mask={`url(#${maskId})`} />
+    </svg>
+  )
+}
 
 const MENU_WIDTH = 216
 
@@ -141,15 +176,17 @@ export function TaskActionsMenu({
           }}
           onPointerDown={(event) => event.stopPropagation()}
         >
-          {/* Flat, and with no ring of its own.
+          {/* A disc in the capsule, dots on their own.
             *
-            * The compact trigger lives inside TaskCardControls, which is already a ring — a circled
-            * ellipsis there was a ring inside a ring inside a card. Horizontal rather than stacked
-            * because the pill it sits in is horizontal, and dots across its short axis fought the
-            * shape. Where this trigger stands on its own the vertical dots stay: nothing encloses
-            * them there, so the axis of the row is what they should follow. */}
+            * Compact, this sits beside the colour swatch in one capsule, and the swatch is a 13px
+            * filled circle — so the mark here is the same circle at the same size, told apart by the
+            * pencil cut out of it and by its colour (the card's ink, where the swatch carries the
+            * card's own colour). See PencilDisc.
+            *
+            * Where the trigger stands on its own there is nothing to match, and nothing enclosing it
+            * either, so the vertical dots stay: the axis of the row is what they should follow. */}
           {compact ? (
-            <Ellipsis className="h-4 w-4" aria-hidden />
+            <PencilDisc className="h-[13px] w-[13px]" />
           ) : (
             <MoreVertical className="h-4 w-4" aria-hidden />
           )}

@@ -1,5 +1,5 @@
-import type { Folder, Task, TaskLifecycle } from '../types'
-import { collectFolderSubtreeIds, getChildFolders } from './folders'
+import type { Folder, FolderNode, Task, TaskLifecycle } from '../types'
+import { buildFolderForest, collectFolderSubtreeIds, getChildFolders } from './folders'
 import { taskLifecycle } from './taskLifecycle'
 
 /**
@@ -141,6 +141,102 @@ export function statusCounts(tasks: Task[], nowMs: number): Record<StatusFilter,
 export function kindCounts(tasks: Task[]): Record<KindFilter, number> {
   const dueTasks = tasks.filter((task) => task.noteKind === 'due_task').length
   return { all: tasks.length, notes: tasks.length - dueTasks, tasks: dueTasks }
+}
+
+/* ----------------------------------------------------------------- where it lives
+ *
+ * The flat listings — Tasks and Starred — draw from the whole tree, which is what makes them
+ * useful and also what makes them hard to read once there is a lot in them: every note in the
+ * account, in one grid, with the folder it came from written in 11px at the bottom of the card. You
+ * could narrow by type, by status and by tag, but not by the one thing the listing had actually
+ * flattened away.
+ *
+ * A folder view needs none of this. It is already one folder, so the filter is only offered where
+ * the listing spans several.
+ */
+
+/** One folder the filter can narrow to, and how many notes picking it would leave. */
+export interface FolderFilterOption {
+  id: string
+  name: string
+  /** Where it sits, as "Notes › Work" — empty for a root folder, whose trail says nothing. */
+  trail: string
+  /** Notes anywhere beneath it, which is what picking it shows. */
+  count: number
+}
+
+/**
+ * The notes in one folder — meaning in it or anywhere under it.
+ *
+ * The subtree rather than the folder alone, because that is what a person means by "the notes in
+ * Work": a folder that holds only sub-folders would otherwise offer itself as a filter and then
+ * empty the page. It is also the reading every other count in this file already uses — see
+ * folderSummary.
+ *
+ * A folder id that no longer exists filters nothing rather than everything. A selection can outlive
+ * the folder it names (someone deletes it, or a shared space removes it), and an empty page with no
+ * visible cause is worse than the filter quietly standing down.
+ */
+export function filterByFolder(
+  tasks: Task[],
+  folders: Folder[],
+  folderId: string | null,
+): Task[] {
+  if (!folderId || !folders.some((folder) => folder.id === folderId)) {
+    return tasks
+  }
+  const scope = new Set(collectFolderSubtreeIds(folders, folderId))
+  return tasks.filter((task) => scope.has(task.folderId))
+}
+
+/**
+ * The folders worth offering, in the order the sidebar shows them.
+ *
+ * Tree order, not alphabetical: a parent sits directly above its children, so the list reads as the
+ * tree somebody built rather than as a shuffled index of names. Folders with nothing beneath them
+ * are left out entirely — an option that empties the page is not a filter.
+ *
+ * Counted from the notes handed in, so Starred offers only the folders that hold starred notes and
+ * says how many. Two folders can share a name in different parts of the tree, which is what `trail`
+ * is for.
+ */
+export function folderFilterOptions(folders: Folder[], tasks: Task[]): FolderFilterOption[] {
+  const direct = new Map<string, number>()
+  for (const task of tasks) {
+    direct.set(task.folderId, (direct.get(task.folderId) ?? 0) + 1)
+  }
+
+  const forest = buildFolderForest(folders)
+  const subtree = new Map<string, number>()
+  const count = (node: FolderNode): number => {
+    const total =
+      (direct.get(node.id) ?? 0) + node.children.reduce((sum, child) => sum + count(child), 0)
+    subtree.set(node.id, total)
+    return total
+  }
+  for (const root of forest) {
+    count(root)
+  }
+
+  const options: FolderFilterOption[] = []
+  const walk = (node: FolderNode, trail: readonly string[]): void => {
+    const total = subtree.get(node.id) ?? 0
+    if (total > 0) {
+      options.push({
+        id: node.id,
+        name: node.name,
+        trail: trail.length === 0 ? '' : ['Notes', ...trail].join(' › '),
+        count: total,
+      })
+    }
+    for (const child of node.children) {
+      walk(child, [...trail, node.name])
+    }
+  }
+  for (const root of forest) {
+    walk(root, [])
+  }
+  return options
 }
 
 /** Everything the Tree's readout needs, counted in one pass over the workspace. */
@@ -295,14 +391,29 @@ export function emptyFilterMessage(
   status: StatusFilter,
   fallback: string,
   tag?: string | null,
+  folder?: string | null,
 ): string {
+  // A folder and a tag are both "and only these", so they read as one clause. Joined here rather
+  // than templated into each sentence below, because either can be on without the other.
+  const narrowed = [folder ? `in "${folder}"` : '', tag ? `under "${tag}"` : '']
+    .filter(Boolean)
+    .join(' ')
+
   if (status !== 'all') {
     const option = STATUS_FILTERS.find((item) => item.key === status)
     const line = option?.empty || 'Nothing here matches that status.'
-    return tag ? `${line.replace(/\.$/, '')} under "${tag}".` : line
+    if (!narrowed) {
+      return line
+    }
+    // Each status sentence ends "…here.", and "here in \"Work\"" says the same thing twice — the
+    // clause being appended is a more precise "here", so it takes its place.
+    return `${line.replace(/ here(?=\.)/, '').replace(/\.$/, '')} ${narrowed}.`
   }
   if (tag) {
-    return `No notes tagged "${tag}" here.`
+    return folder ? `No notes tagged "${tag}" in "${folder}".` : `No notes tagged "${tag}" here.`
+  }
+  if (folder) {
+    return `Nothing in "${folder}" yet.`
   }
   if (kind === 'tasks') {
     return 'No due-date tasks here — use the clock button on a note to give it a deadline.'
@@ -324,6 +435,8 @@ export function filterSummary(
   kind: KindFilter,
   status: StatusFilter,
   tag: string | null,
+  /** The chosen folder's *name*, not its id — this is what the pill would spell out. */
+  folder?: string | null,
 ): { label: string; activeCount: number } {
   const parts: string[] = []
   if (kind !== 'all') {
@@ -331,6 +444,11 @@ export function filterSummary(
   }
   if (status !== 'all') {
     parts.push(STATUS_FILTERS.find((item) => item.key === status)?.short ?? status)
+  }
+  // Before the tag, because a folder is the coarser of the two and the pill only ever shows the
+  // first name — "Work" is a more useful thing to read on a button than "invoices".
+  if (folder) {
+    parts.push(folder)
   }
   if (tag) {
     parts.push(tag)

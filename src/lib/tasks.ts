@@ -7,6 +7,19 @@ export function compareTasksBySortOrder(a: Task, b: Task): number {
   return a.id.localeCompare(b.id)
 }
 
+/**
+ * Flow order: sortOrder, then id. What every listing falls back to for cards nobody has arranged.
+ *
+ * The id is not a tidy-up. `sortOrder` is unique within a folder and restarts at 0 in the next one,
+ * so a listing that spans folders — Tasks, Starred — has almost every row tied with several others.
+ * Those pages used to render the provider's array as it came, which is what the load returned for
+ * `ORDER BY sort_order`, and Postgres gives no order to tied rows: rewriting any one of them can
+ * change which comes back first. Saving a card's size was enough to reshuffle the page.
+ */
+export function inBaseOrder(tasks: Task[]): Task[] {
+  return [...tasks].sort(compareTasksBySortOrder)
+}
+
 export function getTaskById(tasks: Task[], id: string): Task | undefined {
   return tasks.find((task) => task.id === id)
 }

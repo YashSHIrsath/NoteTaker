@@ -52,16 +52,22 @@ const MONO = '"JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Mono", Menlo,
  *
  * ---------------------------------------------------------------- the grid
  *
- * `1fr auto 1fr`: the index holds the middle and the two ends split the slack equally, so the
- * anchors are centred on the bar rather than on whatever is left between the mark and the actions.
- * Plain `1fr`, not `minmax(0,1fr)` — an end can take an equal share of the slack but can never be
- * squeezed below the content in it, so the two ends can never overlap the middle. The middle is
- * the only track allowed to give, via its own `min-w-0`, and it clips rather than colliding.
+ * `1fr auto 1fr`, from 1120px up: the index holds the middle and the two ends split the slack
+ * equally, so the anchors are centred on the bar rather than on whatever is left between the mark
+ * and the actions. Plain `1fr`, not `minmax(0,1fr)` — an end can take an equal share of the slack
+ * but is never squeezed below the content in it, so the two ends can never overlap the middle.
+ *
+ * Below 1120px there is no index to centre, so the bar is a flex row with space-between, which
+ * cannot lay one item over another whatever the width. That is not a cosmetic change: both ends
+ * carried `min-w-0`, which overrides the `1fr` floor and lets a track collapse to nothing — and a
+ * collapsed track with `justify-self: end` starts its contents 24px in from the left edge, on top
+ * of the wordmark. `min-w-0` now lives only on the two things allowed to clip: the index, and the
+ * wordmark, which truncates.
  */
 export function LandingNav() {
   const offset = useScrollOffset()
   const progress = usePageProgress()
-  const { theme, toggleTheme } = useTheme()
+  const { isDark, toggleTheme } = useTheme()
   /** The section being read, so the index can say where in the document you are. */
   const activeSection = useActiveSection(SECTION_IDS)
   const t = Math.min(1, offset / SETTLE)
@@ -82,6 +88,18 @@ export function LandingNav() {
   const caps = 'text-[11.5px] font-semibold uppercase tracking-[0.1em] whitespace-nowrap'
 
   /**
+   * A cell on the rule — the shape the theme toggle and both secondary actions take once the bar
+   * has its ground. Narrower on a phone, where three of these plus the box is most of the row; see
+   * the arithmetic on the actions group below.
+   *
+   * The `display` is deliberately not in here. It is each caller's to set, because one of these
+   * cells stands down on a small screen, and `hidden` competing with `flex` in one class list is
+   * settled by Tailwind's own output order rather than by the order they are written in.
+   */
+  const cell =
+    'h-[26px] w-[30px] border-l border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text)] sm:w-[38px]'
+
+  /**
    * A secondary action: its name over the hero, its icon on the rule.
    *
    * Both spellings stay in the DOM and swap by collapsing their width to zero, so the change rides
@@ -89,7 +107,13 @@ export function LandingNav() {
    * fixed-width cell divided from its neighbour by a hairline — a toolbar, which is what turns
    * three loose glyphs into one deliberate group.
    */
-  const secondaryAction = (to: string, text: string, Icon: LucideIcon, restLayout: string) => (
+  const secondaryAction = (
+    to: string,
+    text: string,
+    Icon: LucideIcon,
+    restLayout: string,
+    settledLayout = 'flex',
+  ) => (
     <Link
       to={to}
       // Only when there are no words to read: given both, a screen reader announces the label and
@@ -100,9 +124,7 @@ export function LandingNav() {
         'anim-press shrink-0 items-center justify-center transition-all duration-300',
         '[transition-timing-function:cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none',
         caps,
-        settled
-          ? 'flex h-[26px] w-[38px] border-l border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
-          : restLayout,
+        settled ? cn(cell, settledLayout) : restLayout,
       )}
     >
       <span
@@ -135,7 +157,13 @@ export function LandingNav() {
       >
         <div
           className={cn(
-            'mx-auto grid w-full max-w-[96rem] grid-cols-[1fr_auto_1fr] items-center gap-3 px-4 sm:px-7',
+            'mx-auto flex w-full max-w-[96rem] items-center justify-between gap-3 px-4 sm:px-7',
+            // The three-track grid only earns its keep once the index is on screen. Below that the
+            // middle track is display:none and the grid is two items at opposite ends — which is
+            // what a flex row with space-between is, and unlike the grid it cannot put one item on
+            // top of the other. `justify-between` is inert in grid mode, where the 1fr tracks have
+            // already taken all the space.
+            'min-[1120px]:grid min-[1120px]:grid-cols-[1fr_auto_1fr]',
             'transition-[height] duration-300 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)]',
             'motion-reduce:transition-none',
           )}
@@ -146,7 +174,11 @@ export function LandingNav() {
             type="button"
             onClick={() => document.getElementById('top')?.scrollIntoView({ behavior: 'smooth' })}
             aria-label="Mindstack — back to top"
-            className="anim-press flex min-w-0 shrink-0 items-center gap-2.5 justify-self-start"
+            // The one thing on the row allowed to give, and it gives by truncating the wordmark
+            // rather than by pushing anything: `min-w-0` here plus `truncate` on the span. It used
+            // to be `shrink-0` as well, which does nothing to a grid item and stopped it shrinking
+            // in flex mode — so on a phone the bar had no give at all and the two ends met.
+            className="anim-press flex min-w-0 items-center gap-2.5 justify-self-start"
           >
             <ProjectLogo
               className={cn(
@@ -241,8 +273,16 @@ export function LandingNav() {
             })}
           </div>
 
-          {/* ---------------------------------------------------------- the actions */}
-          <div className="flex min-w-0 shrink-0 items-center justify-self-end">
+          {/* ---------------------------------------------------------- the actions
+            *
+            * No `min-w-0`, and that is the fix rather than an omission. `1fr` is `minmax(auto, 1fr)`,
+            * so the track's floor is whatever is in it — but `min-width: 0` overrides that floor and
+            * lets the track collapse to nothing, and a collapsed track with `justify-self: end`
+            * leaves its contents laid out from a point 24px in from the left edge. Which is where
+            * they were found on a phone: the theme toggle and the download cell underneath the
+            * wordmark. Nothing here shrinks; the imprint gives instead.
+            */}
+          <div className="flex shrink-0 items-center justify-self-end">
             {/* How far down the page you are, as a figure. The line on the rule says it
               * continuously and imprecisely; this says it exactly. From xl only — at lg the row
               * needs every pixel for the index to stay centred. */}
@@ -254,28 +294,30 @@ export function LandingNav() {
               {Math.round(progress * 100)}%
             </span>
 
+            {/* Tighter on a phone in both states. At 360px the row is 32px of page padding, this
+              * group and the box, and the wordmark gets what's left — which at desktop spacing was
+              * about 40px, or "Min…". Halving the margins and narrowing the cells gives the
+              * wordmark ~130px, which fits "Mindstack" whole. */}
             <div
               className={cn(
                 'flex items-center transition-all duration-300',
                 '[transition-timing-function:cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none',
                 settled
-                  ? 'ml-5 mr-[18px] gap-0 border-r border-[var(--color-border)]'
-                  : 'mr-6 gap-5',
+                  ? 'ml-2 mr-2 gap-0 border-r border-[var(--color-border)] sm:ml-5 sm:mr-[18px]'
+                  : 'mr-3 gap-4 sm:mr-6 sm:gap-5',
               )}
             >
               <button
                 type="button"
                 onClick={(event) => toggleTheme(originFromElement(event.currentTarget))}
-                aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+                aria-label="Switch theme"
                 className={cn(
                   'anim-press flex shrink-0 items-center justify-center transition-all duration-300',
                   '[transition-timing-function:cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none',
-                  settled
-                    ? 'h-[26px] w-[38px] border-l border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
-                    : 'text-white/80 hover:text-white',
+                  settled ? cn('flex', cell) : 'text-white/80 hover:text-white',
                 )}
               >
-                {theme === 'dark' ? (
+                {isDark ? (
                   <Sun className="h-[15px] w-[15px]" strokeWidth={1.7} aria-hidden />
                 ) : (
                   <Moon className="h-[15px] w-[15px]" strokeWidth={1.7} aria-hidden />
@@ -284,7 +326,16 @@ export function LandingNav() {
               {/* Over the hero this is still gated to xl — as a word it is the one link that is also
                 * in the footer, so below xl it gives its width up rather than fighting the others
                 * for it. On the rule it is a cell, which costs little enough to always show. */}
-              {secondaryAction('/get-app', 'Get app', Download, 'hidden text-white/80 hover:text-white xl:flex')}
+              {/* Below sm it stands down on the rule as well as over the hero. It is the one link
+                * that is also in the footer, so it is the one that gives its cell up when the row
+                * is 360px wide. */}
+              {secondaryAction(
+                '/get-app',
+                'Get app',
+                Download,
+                'hidden text-white/80 hover:text-white xl:flex',
+                'hidden sm:flex',
+              )}
               {secondaryAction('/login', 'Sign in', LogIn, 'flex text-white/80 hover:text-white')}
             </div>
 
@@ -295,7 +346,7 @@ export function LandingNav() {
             <Link
               to="/signup"
               className={cn(
-                'anim-press rounded-full flex shrink-0 items-center gap-2 rounded-[2px] border-[1.5px] px-[17px] transition-all duration-300',
+                'anim-press rounded-full flex shrink-0 items-center gap-1.5 rounded-[2px] border-[1.5px] px-3 transition-all duration-300 sm:gap-2 sm:px-[17px]',
                 '[transition-timing-function:cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none',
                 caps,
                 settled

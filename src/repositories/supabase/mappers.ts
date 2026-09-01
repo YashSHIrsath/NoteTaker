@@ -168,7 +168,7 @@ export function taskToRow(task: Task): TaskRow {
 }
 
 /** jsonb comes back as `unknown`, and a hand-edited or half-written row shouldn't crash a load:
- *  every field is read on its own and anything that isn't a finite number is simply absent. */
+ *  every field is read on its own and anything of the wrong shape is simply absent. */
 function toPlacement(value: unknown): TaskGridPlacement | null {
   if (typeof value !== 'object' || value === null) {
     return null
@@ -180,6 +180,14 @@ function toPlacement(value: unknown): TaskGridPlacement | null {
     if (typeof number === 'number' && Number.isFinite(number)) {
       placement[key] = number
     }
+  }
+  // Which folder an `order` was minted in — see TaskGridPlacement.orderFolderId. Read on its own
+  // rather than with the numbers above because it is the one field that isn't one, and dropped
+  // when blank: an empty string is not a folder, and treating it as one would make every
+  // folder-scope order stop applying at once.
+  const orderFolderId = source.orderFolderId
+  if (typeof orderFolderId === 'string' && orderFolderId.length > 0) {
+    placement.orderFolderId = orderFolderId
   }
   return Object.keys(placement).length > 0 ? placement : null
 }

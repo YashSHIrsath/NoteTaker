@@ -87,8 +87,22 @@ export interface TaskGridPlacement {
   /** Height in grid rows, if this card has been resized in this listing. */
   h?: number
   /** Where this card sits in the listing's order, if it has been dragged. Cards without one
-   *  follow behind, in the order the listing hands them over. */
+   *  follow behind, in flow order — see inDisplayOrder. */
   order?: number
+  /**
+   * The folder `order` was minted in. Only ever set for the `folder` scope, and only meaningful
+   * there.
+   *
+   * All folder views share one scope, which is right for size — a card is one card and keeps the
+   * size it was given — and wrong for order, because an order only means anything relative to
+   * siblings. Without this, a note moved to another folder arrived holding a position minted among
+   * notes it no longer sits beside, colliding with whatever was already there.
+   *
+   * Absent means "wherever this note is now", which is how every order written before this was
+   * already being read. So nothing resets on the first load; an order only stops applying once the
+   * note actually moves.
+   */
+  orderFolderId?: string
 }
 
 /** Every arrangement a task has, by the listing it was arranged in. Absent scopes fall back to

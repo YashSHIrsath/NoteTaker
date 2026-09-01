@@ -409,7 +409,11 @@ export function FolderView({
                 // Stops above the bottom bar rather than sliding under it — at bottom-0 the bar
                 // (z-40, and floating over everything) covered the sheet's own header and its
                 // "know where you are" row, which is what you most wanted to reach.
-                'absolute bottom-[calc(var(--bottom-nav-inset)+0.5rem)] z-10',
+                //
+                // A full 1rem of it, not the 0.5rem it had: the bar is its own floating surface with
+                // its own shadow, and at 8px the sheet's bottom edge read as resting on the bar
+                // rather than as a second panel above it. The gap has to be visible to be a gap.
+                'absolute bottom-[calc(var(--bottom-nav-inset)+1rem)] z-10',
                 // The bar's gutter and width cap, so the two line up edge to edge.
                 'inset-x-3 mx-auto max-w-md',
                 // Grown from its bottom edge — i.e. out of the bar sitting right below it —

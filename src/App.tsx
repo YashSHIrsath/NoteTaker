@@ -18,6 +18,7 @@ import { ProfilePage } from './pages/ProfilePage'
 import { SharedSpacesPage } from './pages/SharedSpacesPage'
 import { InvitePage } from './pages/InvitePage'
 import { SpaceActivityPage } from './pages/SpaceActivityPage'
+import { ErrorBoundary } from './components/common/ErrorBoundary'
 import { IS_NATIVE } from './lib/platform'
 
 /**
@@ -57,74 +58,79 @@ function workspaceRoutes() {
 
 function App() {
   return (
-    <ThemeProvider>
-      <Router>
-        <AuthProvider>
-          <Routes>
-            {/* Web only. The APK is the app itself, not a place to read a pitch or a policy:
-              *  signed out it offers exactly sign in and create account. These three stay on the
-              *  website, where a store listing or an email can link to them. */}
-            {IS_NATIVE ? null : (
-              <>
-                {/* Readable signed in or out — a policy you can only see by signing out is no use. */}
-                <Route path="/privacy" element={<PrivacyPage />} />
-                <Route path="/terms" element={<TermsPage />} />
-                <Route element={<GuestOnly />}>
-                  <Route path="/welcome" element={<LandingPage />} />
-                  <Route path="/get-app" element={<GetAppPage />} />
-                </Route>
-              </>
-            )}
-
-            <Route element={<GuestOnly />}>
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/signup" element={<SignupPage />} />
-            </Route>
-
-            {/* Outside the auth gate on purpose. Whoever follows an invite link may have no account
-              *  at all — that is the case the link exists for — and RequireAuth redirects without
-              *  keeping where you were going, which is exactly how an invitation gets lost. The page
-              *  parks the token before anything else can move you. */}
-            <Route path="/invite/:token" element={<InvitePage />} />
-            <Route element={<RequireAuth />}>
-              {/* Which spaces exist for this account, above both workspaces — the list spans them,
-                *  and the space shell needs it to know its own name and colour. */}
-              <Route element={<SpacesShell />}>
-                {/* The account's own notes. */}
-                <Route element={<AuthenticatedApp />}>
-                  <Route element={<AppLayout />}>
-                    {workspaceRoutes()}
-                    {/* A list of workspaces rather than a page of one, so it is not part of
-                      *  workspaceRoutes and has no /s/:spaceId twin. Tapping it from inside a space
-                      *  is how you get back out. */}
-                    <Route path="/spaces" element={<SharedSpacesPage />} />
-                    {/* Bookmarks, and the notification links already sent out, still say /important. */}
-                    <Route path="/important" element={<Navigate to="/" replace />} />
+    // Outside the providers on purpose: this one catches what the page-level boundary cannot —
+    // a provider, the router, the theme. It can only offer a reload, but a reload button beats a
+    // blank screen, which is what an uncaught render error leaves behind.
+    <ErrorBoundary scope="The app">
+      <ThemeProvider>
+        <Router>
+          <AuthProvider>
+            <Routes>
+              {/* Web only. The APK is the app itself, not a place to read a pitch or a policy:
+                *  signed out it offers exactly sign in and create account. These three stay on the
+                *  website, where a store listing or an email can link to them. */}
+              {IS_NATIVE ? null : (
+                <>
+                  {/* Readable signed in or out — a policy you can only see by signing out is no use. */}
+                  <Route path="/privacy" element={<PrivacyPage />} />
+                  <Route path="/terms" element={<TermsPage />} />
+                  <Route element={<GuestOnly />}>
+                    <Route path="/welcome" element={<LandingPage />} />
+                    <Route path="/get-app" element={<GetAppPage />} />
                   </Route>
-                </Route>
+                </>
+              )}
 
-                {/* A shared space: the same pages, pointed at content several people hold together.
-                  *  The prefix is what makes a link to one shared note, the back button and a refresh
-                  *  all keep working — an ambient "current space" with unchanged URLs breaks all three. */}
-                <Route path="/s/:spaceId" element={<SpaceApp />}>
-                  <Route element={<AppLayout />}>
-                    {workspaceRoutes()}
-                    {/* Space-only, and so not part of workspaceRoutes: personal notes have no
-                      *  activity log, because there is nobody to attribute anything to. */}
-                    <Route path="activity" element={<SpaceActivityPage />} />
-                    <Route path="*" element={<SpaceFallback />} />
+              <Route element={<GuestOnly />}>
+                <Route path="/login" element={<LoginPage />} />
+                <Route path="/signup" element={<SignupPage />} />
+              </Route>
+
+              {/* Outside the auth gate on purpose. Whoever follows an invite link may have no account
+                *  at all — that is the case the link exists for — and RequireAuth redirects without
+                *  keeping where you were going, which is exactly how an invitation gets lost. The page
+                *  parks the token before anything else can move you. */}
+              <Route path="/invite/:token" element={<InvitePage />} />
+              <Route element={<RequireAuth />}>
+                {/* Which spaces exist for this account, above both workspaces — the list spans them,
+                  *  and the space shell needs it to know its own name and colour. */}
+                <Route element={<SpacesShell />}>
+                  {/* The account's own notes. */}
+                  <Route element={<AuthenticatedApp />}>
+                    <Route element={<AppLayout />}>
+                      {workspaceRoutes()}
+                      {/* A list of workspaces rather than a page of one, so it is not part of
+                        *  workspaceRoutes and has no /s/:spaceId twin. Tapping it from inside a space
+                        *  is how you get back out. */}
+                      <Route path="/spaces" element={<SharedSpacesPage />} />
+                      {/* Bookmarks, and the notification links already sent out, still say /important. */}
+                      <Route path="/important" element={<Navigate to="/" replace />} />
+                    </Route>
+                  </Route>
+
+                  {/* A shared space: the same pages, pointed at content several people hold together.
+                    *  The prefix is what makes a link to one shared note, the back button and a refresh
+                    *  all keep working — an ambient "current space" with unchanged URLs breaks all three. */}
+                  <Route path="/s/:spaceId" element={<SpaceApp />}>
+                    <Route element={<AppLayout />}>
+                      {workspaceRoutes()}
+                      {/* Space-only, and so not part of workspaceRoutes: personal notes have no
+                        *  activity log, because there is nobody to attribute anything to. */}
+                      <Route path="activity" element={<SpaceActivityPage />} />
+                      <Route path="*" element={<SpaceFallback />} />
+                    </Route>
                   </Route>
                 </Route>
               </Route>
-            </Route>
 
-            {/* A stale link, a typo, or a /welcome bookmark opened inside the app: land on the
-              *  home route, which then sends a signed-out visitor to sign in. */}
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </AuthProvider>
-      </Router>
-    </ThemeProvider>
+              {/* A stale link, a typo, or a /welcome bookmark opened inside the app: land on the
+                *  home route, which then sends a signed-out visitor to sign in. */}
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </AuthProvider>
+        </Router>
+      </ThemeProvider>
+    </ErrorBoundary>
   )
 }
 

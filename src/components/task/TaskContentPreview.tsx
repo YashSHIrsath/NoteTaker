@@ -47,7 +47,7 @@ function serializeToHtml(blocks: ReturnType<typeof buildInitialBlocks>): string 
  * instance, so a folder-grid card shows exactly what the task contains. */
 export function TaskContentPreview({ taskId, content }: TaskContentPreviewProps) {
   const { getAttachmentsForTask, getSubtasksForTask, updateTaskContent } = useFolders()
-  const { theme } = useTheme()
+  const { isDark } = useTheme()
   const containerRef = useRef<HTMLDivElement>(null)
 
   const html = useMemo(
@@ -226,7 +226,7 @@ export function TaskContentPreview({ taskId, content }: TaskContentPreviewProps)
     <div ref={containerRef} className="task-blocknote task-blocknote-preview">
       {/* bn-root carries BlockNote's own theme variables (the class its editor container uses);
           deliberately *not* bn-editor — see the note on sharedSerializer above. */}
-      <div className="bn-root" data-color-scheme={theme === 'dark' ? 'dark' : 'light'}>
+      <div className="bn-root" data-color-scheme={isDark ? 'dark' : 'light'}>
         <div
           className="bn-static-content bn-default-styles"
           // BlockNote's serializer builds this via DOM APIs (text is escaped by construction),

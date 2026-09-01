@@ -37,6 +37,15 @@ export interface PickerDialogProps {
  * Centred, the size stops depending on where the field is. Nothing scrolls except on a genuinely
  * short screen, and the whole month is visible at once, which is the only way a calendar is any use.
  *
+ * Centred on a phone as well, unlike the dialogs it opens over.
+ *
+ * Those are bottom sheets on purpose — they are opened from a card and their controls should be
+ * where a thumb is — and they sit clear of the bottom bar, about 76px up. A picker anchored to the
+ * bottom too, but with only its own 12px of padding, therefore landed 64px *below* the sheet that
+ * opened it: a second sheet, lower than the first, poking out underneath it and hugging the very
+ * bottom of the screen. Two bottom-anchored surfaces at two different offsets read as one of them
+ * being crooked. A picker is a dialog over a dialog, so it goes in the middle.
+ *
  * z-[120] clears the app's whole stacking ladder — 50 a dialog, 60 a menu over one, 100 a dialog
  * opened from a dialog, 110 the last word. A picker is opened from any of those.
  */
@@ -77,7 +86,7 @@ export function PickerDialog({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[120] flex items-end justify-center p-3 sm:items-center sm:p-4"
+      className="fixed inset-0 z-[120] flex items-center justify-center p-3 sm:p-4"
       /* A portal renders into <body>, but React still routes events up the component tree — so a
          click in here would reach the card this was ultimately opened from, whose job is to open the
          note. Stopped at the root rather than on every control inside. */
@@ -96,7 +105,11 @@ export function PickerDialog({
         aria-modal="true"
         aria-label={title}
         className={cn(
-          'anim-dialog-in relative flex max-h-[calc(100dvh-1.5rem)] w-full flex-col overflow-hidden',
+          // The cap is the padding above, doubled — 1.5rem for p-3, 2rem for sm:p-4. Stated per
+          // breakpoint because one number for both let the dialog grow 8px past its own gutter
+          // on a wide screen, which is where a centred surface starts touching an edge.
+          'anim-dialog-in relative flex w-full flex-col overflow-hidden',
+          'max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2rem)]',
           'rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-lg)]',
           size === 'lg' ? 'max-w-3xl' : 'max-w-[22rem]',
         )}

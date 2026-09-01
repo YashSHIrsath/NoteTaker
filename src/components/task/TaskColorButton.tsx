@@ -1,8 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Check, Pipette } from 'lucide-react'
+import { Check, Dices, Pipette } from 'lucide-react'
 import type { TaskColor, TaskPaletteColor } from '../../types'
-import { TASK_PALETTE, isCustomColor, paletteSwatch } from '../../lib/taskColor'
+import { TASK_PALETTE, isCustomColor, paletteSwatch, randomTaskColor } from '../../lib/taskColor'
 import { cn } from '../../lib/cn'
 
 export interface TaskColorButtonProps {
@@ -194,22 +194,22 @@ export function TaskColorButton({ activeColor, selected, onSelect, compact = fal
                   />
                 </label>
 
-                {/* Clearing the choice isn't the same as picking today's color: it hands the
-                    decision back to the view, so the card keeps following its folder (or the
-                    scatter) later. */}
+                {/* A color the palette doesn't offer, without a trip through the OS picker. Like the
+                    custom input beside it, this commits without closing the panel, so a roll that
+                    isn't right can be rolled again on the next click. */}
                 <button
                   type="button"
-                  role="menuitemradio"
-                  aria-checked={selected === null}
-                  onClick={() => choose(null)}
+                  role="menuitem"
+                  aria-label="Random color"
+                  title="Random color"
+                  onClick={() => onSelect(randomTaskColor(selected))}
                   className={cn(
-                    'anim-press shrink-0 rounded-full px-2.5 py-1 text-[11.5px] font-semibold transition-colors',
-                    selected === null
-                      ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
-                      : 'text-[var(--color-text-muted)] hover:bg-[var(--color-hover)] hover:text-[var(--color-text)]',
+                    'anim-press inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11.5px] font-semibold transition-colors',
+                    'text-[var(--color-text-muted)] hover:bg-[var(--color-hover)] hover:text-[var(--color-text)]',
                   )}
                 >
-                  Auto
+                  <Dices className="h-3.5 w-3.5" aria-hidden />
+                  Random
                 </button>
               </div>
             </div>,

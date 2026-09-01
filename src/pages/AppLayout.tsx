@@ -4,6 +4,9 @@ import { Header } from '../components/layout/Header'
 import { Sidebar } from '../components/layout/Sidebar'
 import { BottomNav } from '../components/layout/BottomNav'
 import { useFolders } from '../hooks/useFolders'
+import { PullToRefresh } from '../components/common/PullToRefresh'
+import { ErrorBoundary } from '../components/common/ErrorBoundary'
+import { useRefreshWorkspace } from '../hooks/useRefreshWorkspace'
 import type { SidebarNavId } from '../types'
 import { useTrackNavSection } from '../hooks/usePageEnterDirection'
 import { useAuth } from '../hooks/useAuth'
@@ -41,6 +44,8 @@ export function AppLayout() {
   const folderMatch = matchPath('/folder/:folderId', relativePath)
   const taskMatch = matchPath('/task/:taskId', relativePath)
   const { getChildFolders, getPath, getTask, uiState, toggleMyNotesSidebar } = useFolders()
+  // One gesture, one meaning, on every page below: ask the server for everything this screen shows.
+  const refresh = useRefreshWorkspace()
   const rootFolders = getChildFolders(null)
 
   const folderId = folderMatch?.params.folderId
@@ -166,8 +171,18 @@ export function AppLayout() {
           className="hidden lg:flex"
         />
 
-        <main className="min-w-0 flex-1 overflow-y-auto">
-          <Outlet />
+        {/* `overscroll-y-contain` is not decoration: without it Chrome on Android answers a pull
+          * at the top of the page with its own reload, throwing away the app's state to fetch the
+          * same data PullToRefresh is already fetching in place. */}
+        <main className="min-w-0 flex-1 overflow-y-auto overscroll-y-contain">
+          <PullToRefresh onRefresh={refresh}>
+            {/* Keyed by the path: a screen that threw is left behind by navigating away, which is
+              * why this one sits inside the shell — the header and the bottom bar stay live, so
+              * there is somewhere to navigate *to*. */}
+            <ErrorBoundary resetKey={location.pathname}>
+              <Outlet />
+            </ErrorBoundary>
+          </PullToRefresh>
         </main>
       </div>
 

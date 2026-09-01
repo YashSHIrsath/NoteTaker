@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 import { GridLayout, useContainerWidth, verticalCompactor, type LayoutItem } from 'react-grid-layout'
+import { gridBounds, minMaxSize, type LayoutConstraint } from 'react-grid-layout/core'
 import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
 import './TaskGridCanvas.css'
@@ -13,13 +14,70 @@ import {
   GRID_ROW_HEIGHT,
   buildGridLayout,
   minWidthFor,
-  orderFromLayout,
+  orderAfterDrop,
   snapWidth,
+  snapWidthUp,
+  type GridItemLayout,
 } from '../../lib/taskGrid'
 import { cn } from '../../lib/cn'
 
 /** Kept only as the value react-grid-layout falls back to; nothing is painted at it. */
 const INITIAL_WIDTH = 1280
+
+/**
+ * Quantises a resize while the pointer is still moving.
+ *
+ * Two things depend on this, and they are the two complaints the resize handle attracted.
+ *
+ * A card's width is a whole number of card-widths, and this is what makes the *shown* width one of
+ * those too. Snapping only on the way to storage is what made "resize it slightly" fail: the width
+ * the pointer produced rounded back to the width the card already had, so there was nothing to write
+ * — and because nothing was written, the layout prop never changed, and react-grid-layout adopts a
+ * prop only when its value does. The card sat there at a width nothing had recorded until reload.
+ *
+ * And it rounds *up* (snapWidthUp), so a card claims the next unit the moment it grows past the one
+ * it has rather than at the halfway mark. The grid paints the card being resized at the raw pointer
+ * width, so with nearest-snapping the card spent half of every gesture drawn across its neighbour
+ * while the layout still said it fitted — nothing moved until the pointer crossed halfway, then
+ * everything jumped at once. Rounding up means the neighbour steps aside on the first pixel of
+ * overlap and the card grows into the room it was given.
+ *
+ * Reads `item.minW`, which buildGridLayout already sets per card, so there is no closure over the
+ * current setting to keep in step.
+ *
+ * Runs last, after the library's own two: gridBounds caps the width at the columns left to the
+ * right of the card and minMaxSize at the card's own min and max, and both of those bounds are
+ * whole multiples of minW here, so snapping inside them cannot climb back out.
+ */
+const snapCardWidth: LayoutConstraint = {
+  name: 'snapCardWidth',
+  constrainSize: (item, w, h) => ({ w: snapWidthUp(w, item.minW ?? 1), h }),
+}
+
+const CONSTRAINTS: LayoutConstraint[] = [gridBounds, minMaxSize, snapCardWidth]
+
+/** Whether the grid is showing exactly the arrangement the packer would draw. Compared field by
+ *  field rather than by identity: react-grid-layout holds its own copy of the layout and rewrites
+ *  it on every gesture. */
+function sameArrangement(
+  shown: readonly LayoutItem[],
+  drawn: readonly GridItemLayout[],
+): boolean {
+  if (shown.length !== drawn.length) {
+    return false
+  }
+  const byId = new Map(shown.map((item) => [item.i, item]))
+  return drawn.every((card) => {
+    const item = byId.get(card.i)
+    return (
+      item !== undefined &&
+      item.x === card.x &&
+      item.y === card.y &&
+      item.w === card.w &&
+      item.h === card.h
+    )
+  })
+}
 
 /** How much wider the cards start than they end, as a fraction of the canvas.
  *
@@ -65,12 +123,12 @@ export interface TaskGridCanvasProps {
  * rescaled per breakpoint, so an arrangement is the same arrangement on a phone. What the screen
  * changes is the *minimum* card width (see useCardsPerRow) — never where a card sits.
  *
- * Cards cannot be dragged, only resized — see the note on dragConfig below for why that is a
- * requirement rather than a preference. Reordering lives where it always did: a card's position
- * follows the order it was created in, and the ⋮-less move button sends it to another folder.
+ * Cards are dragged from a grip and resized from the bottom-right corner. Neither gesture stores a
+ * position: a drag stores an order and a resize stores a size, and buildGridLayout decides the rest.
+ * See dragConfig below for why the grip is a requirement rather than a preference.
  */
 export function TaskGridCanvas({ tasks, scope, children, handleColor, className }: TaskGridCanvasProps) {
-  const { updateTaskLayouts } = useFolders()
+  const { updateTaskLayouts, rearrangeTasks } = useFolders()
   const { width, containerRef, mounted } = useContainerWidth({
     // Measure before painting anything: the guessed width must never reach the screen, or its
     // correction becomes an animation of its own on top of the one below.
@@ -133,10 +191,41 @@ export function TaskGridCanvas({ tasks, scope, children, handleColor, className 
   )
 
   /**
-   * Saves on gesture end, not on every layout change. onLayoutChange also fires on mount and on
-   * any re-render, and writing there would persist the layout the grid was just handed — turning
-   * every render into a save.
+   * The cards, in the order they are drawn.
+   *
+   * The grid positions each cell absolutely, so the DOM order decides nothing about the layout — and
+   * everything about the tab order. Rendered in the order the page handed them over, tabbing through
+   * a listing jumped around the screen, because that array is not the arrangement. buildGridLayout
+   * returns its cards row by row, which is reading order, so following it lines the two up.
    */
+  const cards = useMemo(() => {
+    const byId = new Map(tasks.map((task) => [task.id, task]))
+    return layout.flatMap((item) => {
+      const task = byId.get(item.i)
+      return task ? [task] : []
+    })
+  }, [layout, tasks])
+
+  /**
+   * Puts the grid back on the arrangement the packer draws, when it is holding something else.
+   *
+   * react-grid-layout keeps its own layout state and adopts the `layout` prop only when that prop's
+   * *value* changes. So a gesture that ends with nothing to store leaves the grid showing whatever
+   * it compacted mid-gesture — its compaction packs upward only, where the packer here also fills
+   * gaps sideways, so the two are not the same arrangement. Remounting is the one way to hand back
+   * a layout that is, by definition, unchanged.
+   *
+   * Bumped only when the grid has actually drifted, which is rare: dropping a card somewhere the
+   * packer cannot place it, so it goes back where it was. A drop that changes the order writes, the
+   * prop changes, and the grid adopts it without any of this.
+   */
+  const [resyncKey, setResyncKey] = useState(0)
+  const resyncIfDrifted = (shown: readonly LayoutItem[]) => {
+    if (!sameArrangement(shown, layout)) {
+      setResyncKey((key) => key + 1)
+    }
+  }
+
   /**
    * Saves only the card that was actually resized.
    *
@@ -144,14 +233,15 @@ export function TaskGridCanvas({ tasks, scope, children, handleColor, className 
    * though it had been chosen, which is how "resizing one card changes another's size" starts.
    * One gesture, one card, one write; everything else stays derived.
    *
-   * The width is snapped to a whole unit on the way in rather than on the way out, so what gets
-   * stored is what will be rendered — no drift between the two.
+   * The width arrives already snapped, because snapCardWidth quantised it while the pointer was
+   * moving. Snapping again here costs nothing and keeps the stored value correct if that constraint
+   * is ever reordered out of effect.
    */
-  const persistResize = (resized: LayoutItem | null) => {
+  const persistResize = (shown: readonly LayoutItem[], resized: LayoutItem | null) => {
     if (!resized) {
       return
     }
-    updateTaskLayouts(scope, [
+    const wrote = updateTaskLayouts(scope, [
       {
         taskId: resized.i,
         placement: {
@@ -160,26 +250,41 @@ export function TaskGridCanvas({ tasks, scope, children, handleColor, className 
         },
       },
     ])
+    if (!wrote) {
+      resyncIfDrifted(shown)
+    }
   }
 
   /**
    * A drop is stored as an order, not as a position.
    *
-   * Where the card landed is read off the settled layout in reading order — down the rows, then
-   * across — and every card in this listing gets its index written, because an order only means
-   * anything relative to the others. Nothing else about them is touched, so a card that has never
-   * been resized still takes its width from the "cards per row" setting.
+   * Which order is the whole question, and it used to be answered by reading the settled layout
+   * top-to-bottom then left-to-right. That is a different algorithm from the one that draws the
+   * arrangement, so the order stored was not a description of it — see orderAfterDrop, which
+   * resolves the dropped cell through the packer itself instead.
    *
-   * Storing (x, y) instead would freeze the arrangement to the width it was made at and let a
-   * drop leave holes behind it; an order goes back through the same first-fit packer as
-   * everything else, which is what keeps rows filled without stretching anyone.
+   * The order that comes back is this grid's, and a grid is not the listing: pinned cards are drawn
+   * separately and the filters hide what they hide. Turning it into the listing's order is
+   * rearrangeTasks' job, because only the context can see the cards that aren't on screen.
+   *
+   * Storing (x, y) instead would freeze the arrangement to the width it was made at and let a drop
+   * leave holes behind it; an order goes back through the same first-fit packer as everything else,
+   * which is what keeps rows filled without stretching anyone.
    */
-  const persistOrder = (settled: readonly LayoutItem[]) => {
-    const order = orderFromLayout(settled)
-    updateTaskLayouts(
-      scope,
-      [...order].map(([taskId, index]) => ({ taskId, placement: { order: index } })),
-    )
+  const persistOrder = (shown: readonly LayoutItem[], moved: LayoutItem | null) => {
+    if (!moved) {
+      return
+    }
+    // Where the card came to rest, not where the pointer was released: the grid may have shifted it
+    // during compaction, and what the reader saw at release is the position they meant.
+    const dropped = shown.find((item) => item.i === moved.i) ?? moved
+    const visible = orderAfterDrop(tasks, cardsPerRow, scope, moved.i, {
+      x: dropped.x,
+      y: dropped.y,
+    })
+    if (!rearrangeTasks(scope, moved.i, visible)) {
+      resyncIfDrifted(shown)
+    }
   }
 
   return (
@@ -198,6 +303,8 @@ export function TaskGridCanvas({ tasks, scope, children, handleColor, className 
           screen and there is no relayout to watch. */}
       {mounted ? (
       <GridLayout
+        // Remounts the grid when it has drifted off the packer's arrangement — see resyncIfDrifted.
+        key={resyncKey}
         width={renderWidth}
         layout={layout}
         // Only for live feedback mid-resize — it shoves the overlapped neighbour down as you
@@ -224,10 +331,14 @@ export function TaskGridCanvas({ tasks, scope, children, handleColor, className 
         // hardest to see and easiest to hit by accident, and none of them could do anything the
         // bottom-right one couldn't.
         resizeConfig={{ enabled: true, handles: ['se'] }}
-        onResizeStop={(_layout, _oldItem, newItem) => persistResize(newItem)}
-        onDragStop={(settled) => persistOrder(settled)}
+        // The library's own two, plus width quantisation — see snapCardWidth. Passing this replaces
+        // the defaults rather than adding to them, which is why gridBounds and minMaxSize are named
+        // again here.
+        constraints={CONSTRAINTS}
+        onResizeStop={(shown, _oldItem, newItem) => persistResize(shown, newItem)}
+        onDragStop={(shown, _oldItem, movedItem) => persistOrder(shown, movedItem)}
       >
-        {tasks.map((task) => (
+        {cards.map((task) => (
           // RGL positions this element, so the card inside must fill it rather than size itself —
           // h-full on the wrapper is what makes a resized cell actually change the card.
           <div

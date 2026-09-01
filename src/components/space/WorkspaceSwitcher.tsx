@@ -1,4 +1,4 @@
-import { Fragment } from 'react'
+import { Fragment, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { Check, ChevronsUpDown, House, Users } from 'lucide-react'
@@ -15,6 +15,15 @@ const PANEL_WIDTH = 260
 export interface WorkspaceSwitcherProps {
   /** The sidebar's narrow mode: the label goes, the control stays. */
   collapsed?: boolean
+  /**
+   * What to press, when the caller has something better than a name.
+   *
+   * The header has the app's mark sitting where a workspace switcher belongs, and two marks in the
+   * same corner would be one too many. Given this, the switcher wears it — the panel, the anchoring
+   * and every rule about when there is nothing to switch to stay exactly the same, because they are
+   * the part worth having in one place.
+   */
+  trigger?: ReactNode
   className?: string
 }
 
@@ -51,7 +60,7 @@ function WorkspaceDot({ space }: { space?: SpaceSummary }) {
  * Rendered as a plain label rather than a control when there is genuinely nothing to switch to — a
  * dropdown whose only entry is the thing you are already looking at is a worse answer than a word.
  */
-export function WorkspaceSwitcher({ collapsed = false, className }: WorkspaceSwitcherProps) {
+export function WorkspaceSwitcher({ collapsed = false, trigger, className }: WorkspaceSwitcherProps) {
   const navigate = useNavigate()
   const workspace = useWorkspace()
   const { owned, joined, getSpace } = useSpaces()
@@ -65,6 +74,9 @@ export function WorkspaceSwitcher({ collapsed = false, className }: WorkspaceSwi
   const hasSomewhereElse = spaces.length > 0 || workspace.kind === 'space'
 
   if (!hasSomewhereElse) {
+    if (trigger) {
+      return <span className={cn('inline-flex min-w-0 items-center', className)}>{trigger}</span>
+    }
     return (
       <span
         className={cn(
@@ -103,7 +115,7 @@ export function WorkspaceSwitcher({ collapsed = false, className }: WorkspaceSwi
             collapsed && 'h-8 w-8 justify-center px-0',
           )}
         >
-          {collapsed ? (
+          {trigger ?? (collapsed ? (
             <WorkspaceDot space={current} />
           ) : (
             <>
@@ -118,7 +130,7 @@ export function WorkspaceSwitcher({ collapsed = false, className }: WorkspaceSwi
                 aria-hidden
               />
             </>
-          )}
+          ))}
         </button>
       </div>
 

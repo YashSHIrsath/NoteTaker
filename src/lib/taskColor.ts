@@ -55,7 +55,9 @@ function paletteStyle(name: TaskPaletteColor): TaskColorStyle {
   }
 }
 
-function hexLuminance(hex: string): number {
+/** Relative luminance, 0–1. Exported because the custom theme decides whether it is a light or a
+ *  dark theme from the ground somebody picked — see lib/themes.ts. */
+export function hexLuminance(hex: string): number {
   const value = hex.slice(1)
   const channels = [0, 2, 4].map((offset) => parseInt(value.slice(offset, offset + 2), 16) / 255)
   const [r, g, b] = channels.map((channel) =>
@@ -95,4 +97,113 @@ export function taskColorStyle(color: TaskColor | null, fallback: FolderCategory
 /** Swatch fill for a palette entry, for the picker. */
 export function paletteSwatch(name: TaskPaletteColor): string {
   return `var(--task-${name}-solid)`
+}
+
+/**
+ * Where each palette entry sits on the color wheel, in degrees.
+ *
+ * Only `randomTaskColor` reads these. The swatches themselves are CSS variables, which JS can't
+ * measure until they're painted, so the angles are written down here — they're what keeps a
+ * random color off the twelve colors the picker already offers.
+ */
+const PALETTE_HUES: Record<TaskPaletteColor, number> = {
+  rose: 350,
+  pink: 330,
+  orange: 25,
+  amber: 38,
+  lime: 85,
+  emerald: 160,
+  teal: 175,
+  cyan: 190,
+  blue: 217,
+  indigo: 239,
+  violet: 258,
+  slate: 215,
+}
+
+/** How far a random hue must stay from every palette hue, in degrees. Below about 12° two colors
+ *  read as the same one side by side, which would make the roll look broken rather than random. */
+const MIN_HUE_GAP = 16
+
+/** Kept away from washed-out and near-black: the card is a solid fill of this color, and both
+ *  extremes make one indistinguishable from the surface behind it. */
+const RANDOM_SATURATION = { min: 52, span: 34 }
+const RANDOM_LIGHTNESS = { min: 44, span: 22 }
+
+function hslToHex(hue: number, saturation: number, lightness: number): string {
+  const s = saturation / 100
+  const l = lightness / 100
+  const amplitude = s * Math.min(l, 1 - l)
+  const channel = (offset: number): string => {
+    const k = (offset + hue / 30) % 12
+    const value = l - amplitude * Math.max(-1, Math.min(k - 3, 9 - k, 1))
+    return Math.round(value * 255)
+      .toString(16)
+      .padStart(2, '0')
+  }
+  return `#${channel(0)}${channel(8)}${channel(4)}`
+}
+
+/** Hue of a `#rrggbb`, in degrees. Grey has no hue; 0 is as good an answer as any. */
+export function hexHue(hex: string): number {
+  const [r = 0, g = 0, b = 0] = [0, 2, 4].map(
+    (offset) => parseInt(hex.slice(1 + offset, 3 + offset), 16) / 255,
+  )
+  const max = Math.max(r, g, b)
+  const span = max - Math.min(r, g, b)
+  if (span === 0) {
+    return 0
+  }
+  const sixth = max === r ? (g - b) / span : max === g ? (b - r) / span + 2 : (r - g) / span + 4
+  return ((sixth * 60) % 360 + 360) % 360
+}
+
+/**
+ * A color the palette doesn't offer — the "surprise me" next to the twelve swatches.
+ *
+ * Rather than rolling a hue and re-rolling until one happens to miss the palette, this measures
+ * the arcs *between* the palette hues and lands inside one of them, picked in proportion to its
+ * width so no gap is favoured. That terminates in one pass and can't return a near-copy of a
+ * swatch. `avoid` (the color already on the card) is treated as a thirteenth hue to steer around,
+ * so rolling again always visibly changes something.
+ */
+export function randomTaskColor(avoid: TaskColor | null = null): string {
+  const hues = Object.values(PALETTE_HUES)
+  if (avoid && isCustomColor(avoid)) {
+    hues.push(hexHue(avoid))
+  }
+  const sorted = [...hues].sort((a, b) => a - b)
+
+  const arcs = sorted
+    .map((start, index) => {
+      const next = sorted[(index + 1) % sorted.length] ?? start
+      // Wrapping past 360 is what makes the arc from the last hue back to the first a real gap
+      // rather than a negative one.
+      const span = ((next - start + 360) % 360) || 360
+      return { start, width: span - MIN_HUE_GAP * 2 }
+    })
+    .filter((arc) => arc.width > 0)
+
+  // Only reachable if the palette ever grew dense enough to close every gap; an unconstrained hue
+  // beats throwing at the one moment somebody asked for a color.
+  let hue = Math.random() * 360
+  if (arcs.length > 0) {
+    const total = arcs.reduce((sum, arc) => sum + arc.width, 0)
+    let cursor = Math.random() * total
+    let chosen = arcs[arcs.length - 1]!
+    for (const arc of arcs) {
+      if (cursor < arc.width) {
+        chosen = arc
+        break
+      }
+      cursor -= arc.width
+    }
+    hue = (chosen.start + MIN_HUE_GAP + Math.random() * chosen.width) % 360
+  }
+
+  return hslToHex(
+    hue,
+    RANDOM_SATURATION.min + Math.random() * RANDOM_SATURATION.span,
+    RANDOM_LIGHTNESS.min + Math.random() * RANDOM_LIGHTNESS.span,
+  )
 }

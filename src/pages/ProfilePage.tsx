@@ -13,6 +13,7 @@ import {
   Home,
   LogOut,
   Monitor,
+  Palette,
   Sparkles,
   Type,
   User as UserIcon,
@@ -39,9 +40,11 @@ import {
 } from '../hooks/useDisplaySettings'
 import { Notice } from '../components/ui/Notice'
 import { FontSettings } from '../components/settings/FontSettings'
+import { ThemeSettings } from '../components/settings/ThemeSettings'
 import { NavigationSettings } from '../components/settings/NavigationSettings'
 import { SpaceAvatar } from '../components/space/SpaceAvatar'
 import { SpaceSettingsPanel } from '../components/space/SpaceSettingsPanel'
+import { Masonry } from '../components/ui/Masonry'
 import { InviteMemberDialog } from '../components/space/InviteMemberDialog'
 import { useSpaces } from '../hooks/useSpaces'
 import { useWorkspace } from '../hooks/useWorkspace'
@@ -355,8 +358,25 @@ export function ProfilePage() {
       // sign-out button on it — sat under the bar with nothing left to scroll.
       className="h-full overflow-y-auto bg-[var(--color-surface-muted)] px-4 pb-28 pt-5 sm:px-6 lg:pb-5"
     >
-      {/* One centred column instead of cards hugging the left edge of a wide window. */}
-      <div className="mx-auto w-full max-w-2xl space-y-4">
+      {/*
+        * One column on a phone; a collage on a wide screen.
+        *
+        * This page was a 2xl column at every width, which on a desktop meant two thirds of the
+        * window was empty and the settings — eight cards, none of them tall — were a scroll several
+        * screens long past a lot of nothing. The cards are unrelated to each other and vary in
+        * height, which is exactly what CSS columns are for: they fill top-to-bottom and the short
+        * ones close up behind the tall ones, so there is no dead space to leave.
+        *
+        * CSS columns were tried first and could not be relied on. Balancing gives up in the face of
+        * a tall card that must not be split: it moves the whole thing to the next column, and with
+        * the theme picker in here that left column one ending half a screen early and everything
+        * else stacked down the right — the same empty half a window, just on the other side.
+        *
+        * A grid cannot do that. Every card gets a cell, `items-start` keeps each one its own height
+        * rather than stretching it to its neighbour, and the distribution is even by construction
+        * because it is counted rather than balanced.
+        */}
+      <div className="mx-auto w-full max-w-2xl space-y-4 lg:max-w-[74rem]">
         {/* ---------------------------------------------------------------- hero
 
             The page used to open with a small "Profile" heading and then repeat the name and email
@@ -382,7 +402,11 @@ export function ProfilePage() {
             }}
           />
 
-          <div className="relative flex items-center gap-4">
+          {/* Stacked on a phone, side by side from `lg`. The identity is three short lines and the
+            * numbers are three chips: on a wide screen putting one under the other left a band of
+            * empty card between them and pushed everything below it a screenful down. */}
+          <div className="relative lg:flex lg:items-center lg:justify-between lg:gap-10">
+          <div className="relative flex min-w-0 items-center gap-4">
             {/*
               * Inside a space this whole row is the space, not you.
               *
@@ -491,7 +515,7 @@ export function ProfilePage() {
               about a hundred pixels each, which is why every one of these read "Fol…", "Not…",
               "Me…". The two counts are short enough to sit side by side; the join date is a whole
               sentence of a value, so below sm it takes the row to itself. */}
-          <div className="relative mt-5 grid grid-cols-2 gap-2 sm:grid-cols-3">
+          <div className="relative mt-5 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:mt-0 lg:w-[26rem] lg:shrink-0">
             <StatChip
               icon={<Folder className="h-4 w-4" aria-hidden />}
               label="Folders"
@@ -529,6 +553,7 @@ export function ProfilePage() {
               />
             )}
           </div>
+          </div>
         </section>
 
         {/* ---------------------------------------------------------- this space
@@ -562,6 +587,18 @@ export function ProfilePage() {
           </Card>
         ) : null}
 
+        {/*
+          * From here down the cards are unrelated to each other and vary in height, so from `lg` they
+          * are packed rather than laid in rows — see Masonry for why neither a plain grid nor CSS
+          * columns can do it. The hero and the space's own panel stay full width above this: one is
+          * the page's subject and the other is the space's, and neither is a settings card sitting
+          * beside another settings card.
+          *
+          * Two columns and no third tier. The page is capped at 74rem, so a third would put every
+          * card in about 380px — and the notes-style card alone holds two preview tiles side by
+          * side. Wide enough to read beats one more column.
+          */}
+        <Masonry className="lg:grid-cols-2">
         {/* ---------------------------------------------------------------- history
           *
           * Owner and admin only, which is the same rule the header's button follows. Everyone in a
@@ -663,13 +700,27 @@ export function ProfilePage() {
           <NavigationSettings />
         </Card>
 
+        {/* ------------------------------------------------------------ theme
+          *
+          * Per-device, not per-account, and the one setting on this page that is. Which room you
+          * want is a fact about the screen in front of you — a bright office, a dark bedroom — so it
+          * stays with the device rather than following you onto someone else's. Same reasoning as
+          * tiles per row further down, which is stored per screen size for the same reason.
+          */}
+        <Card order={cardOrder(3)}>
+          <CardTitle icon={<Palette className="h-3.5 w-3.5" aria-hidden />} category="amber">
+            Theme
+          </CardTitle>
+          <ThemeSettings />
+        </Card>
+
         {/* ---------------------------------------------------------- typography
           *
           * Personal, and never a space's. Two people in a shared space read the same notes, but which
           * face those are easier to read in is a property of the reader — unlike the tab order and the
           * note style above and below it, which describe the workspace and are shared.
           */}
-        <Card order={cardOrder(3)}>
+        <Card order={cardOrder(4)}>
           <CardTitle icon={<Type className="h-3.5 w-3.5" aria-hidden />} category="rose">
             Typography
           </CardTitle>
@@ -677,7 +728,7 @@ export function ProfilePage() {
         </Card>
 
         {/* --------------------------------------------------------- notes style */}
-        <Card order={cardOrder(4)}>
+        <Card order={cardOrder(5)}>
           <CardTitle icon={<ClipboardList className="h-3.5 w-3.5" aria-hidden />} category="indigo">
             Notes style
           </CardTitle>
@@ -747,7 +798,7 @@ export function ProfilePage() {
         </Card>
 
         {/* ------------------------------------------------------- smallest card */}
-        <Card order={cardOrder(5)}>
+        <Card order={cardOrder(6)}>
           <CardTitle icon={<LayoutGrid className="h-3.5 w-3.5" aria-hidden />} category="teal">
             Cards per row
           </CardTitle>
@@ -843,7 +894,7 @@ export function ProfilePage() {
             workspace is not the thing you came to this screen for, and it is one tap further on.
             Outside one it is the sign out, the one destructive thing here, in an outline that
             fills on hover rather than shouting every time the page opens. */}
-        <Card order={cardOrder(6)} className="flex flex-wrap items-center justify-between gap-3">
+        <Card order={cardOrder(7)} className="flex flex-wrap items-center justify-between gap-3">
           {currentSpace ? (
             <>
               <span className="text-[13px] text-[var(--color-text-muted)]">
@@ -879,6 +930,7 @@ export function ProfilePage() {
             </>
           )}
         </Card>
+        </Masonry>
       </div>
 
       {/* The one thing on this screen that still wants a dialog: inviting is a short form with a

@@ -23,6 +23,9 @@ import { runAuthFlowChecks } from '../../services/auth/authFlowChecks'
 import { runCalendarChecks } from '../../services/ui/calendarChecks'
 import { runFontChecks } from '../../services/ui/fontChecks'
 import { runSortableChecks } from '../../services/ui/sortableChecks'
+import { runTaskFilterChecks } from '../../services/ui/taskFilterChecks'
+import { runThemeChecks } from '../../services/ui/themeChecks'
+import { runTaskGridChecks } from '../../services/ui/taskGridChecks'
 import { PERSONAL_WORKSPACE, spaceWorkspace } from '../../lib/workspace'
 import { runSearchChecks } from '../../services/search/searchChecks'
 import { runSchedulingChecks } from '../../services/scheduling/schedulingChecks'
@@ -791,6 +794,9 @@ export async function runAllRepositoryChecks(): Promise<void> {
   runAuthFlowChecks()
   runCalendarChecks()
   runSortableChecks()
+  runTaskGridChecks()
+  runTaskFilterChecks()
+  runThemeChecks()
   runFontChecks()
   runMissingColumnMessageChecks()
   await runSupabaseApplyChecks()

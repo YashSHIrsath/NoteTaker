@@ -1,22 +1,29 @@
 import { useState } from 'react'
-import { DoorOpen, History, Moon, Sun, LogOut, Users } from 'lucide-react'
+import { DoorOpen, History, LogOut, RefreshCw, Users } from 'lucide-react'
 import { IconButton } from '../ui/IconButton'
 import { ProjectLogo } from '../brand/ProjectLogo'
+import { LogoLoader } from '../brand/LogoLoader'
+import { WorkspaceSwitcher } from '../space/WorkspaceSwitcher'
 import { GlobalSearch } from '../search/GlobalSearch'
+import { ThemeSwitcher } from './ThemeSwitcher'
 import { SpaceAvatar } from '../space/SpaceAvatar'
 import { SpacesMenu } from '../space/SpacesMenu'
 import { useAuth } from '../../hooks/useAuth'
 import { useSpaces } from '../../hooks/useSpaces'
-import { useTheme } from '../../hooks/useTheme'
-import { useToggleFeedback } from '../../hooks/useToggleFeedback'
+import { useRefreshWorkspace } from '../../hooks/useRefreshWorkspace'
 import { useSpaceId } from '../../hooks/useWorkspace'
 import { roleCanManageMembers } from '../../lib/spaceRoles'
 import { cn } from '../../lib/cn'
-import { originFromElement } from '../../lib/themeReveal'
 import { useNavigate } from 'react-router-dom'
 
 export interface HeaderProps {
   className?: string
+}
+
+/** The app's mark. Drawn in two places in this header — as the workspace switcher's face on a
+ *  phone, and on its own from `lg` — so it is one definition rather than two that drift. */
+function Mark() {
+  return <ProjectLogo className="h-4 w-[22px] text-[var(--color-accent)]" label="Mindstack" />
 }
 
 /** The blob: somebody is waiting on you. Ringed in the header's own surface so it reads as sitting
@@ -32,8 +39,6 @@ function PendingDot() {
 
 export function Header({ className }: HeaderProps) {
   const { signOut } = useAuth()
-  const { theme, toggleTheme } = useTheme()
-  const themePopping = useToggleFeedback(theme === 'dark')
   // Only inside a shared space: personal notes have no activity log, because there is nobody to
   // attribute anything to. And only for an owner or admin — everyone else sees what a space is and
   // who is in it, not a record of what each of them did.
@@ -42,6 +47,27 @@ export function Header({ className }: HeaderProps) {
   const currentSpace = spaceId ? getSpace(spaceId) : undefined
   const canSeeHistory = currentSpace ? roleCanManageMembers(currentSpace.role) : false
   const navigate = useNavigate()
+
+  /**
+   * The same refresh the pull-down gesture performs, for everyone who cannot pull one.
+   *
+   * A pointer has no equivalent of dragging past the top of a list, and the poll behind all of this
+   * is on a twenty-second timer — long enough that somebody who *knows* a colleague just changed
+   * something wants to be able to say so. The spin is held for a moment even when the read comes
+   * back instantly, because a button that flickers reads as a button that did nothing.
+   */
+  const refreshWorkspace = useRefreshWorkspace()
+  const [refreshing, setRefreshing] = useState(false)
+  const handleRefresh = () => {
+    if (refreshing) {
+      return
+    }
+    setRefreshing(true)
+    void Promise.all([
+      refreshWorkspace(),
+      new Promise((resolve) => window.setTimeout(resolve, 500)),
+    ]).finally(() => setRefreshing(false))
+  }
   const [spacesOpen, setSpacesOpen] = useState(false)
 
   const handleSignOut = () => {
@@ -62,9 +88,24 @@ export function Header({ className }: HeaderProps) {
       )}
     >
       <div className="flex shrink-0 items-center gap-2">
-        {/* The mark stands in for the name where the name is too wide — on a phone the wordmark
-            was competing with the search field, and the mark says the same thing in 20px. */}
-        <ProjectLogo className="h-4 w-[22px] text-[var(--color-accent)]" label="Mindstack" />
+        {/*
+          * On a phone the mark is the workspace switcher; on a wide screen it is just the mark.
+          *
+          * Which workspace you are in and how to leave it is the sidebar's job — and below `lg`
+          * there is no sidebar, so it was nobody's. The top-left corner is where that control lives
+          * in every app that has one, and the mark is already sitting in it.
+          *
+          * The same WorkspaceSwitcher as the sidebar's, wearing the mark instead of a name, so the
+          * two cannot drift about what a workspace is or which one you are in. From `lg` the plain
+          * mark comes back, because the sidebar's copy is on screen twelve pixels below it.
+          */}
+        <WorkspaceSwitcher
+          className="lg:hidden"
+          trigger={<Mark />}
+        />
+        <span className="hidden lg:inline">
+          <Mark />
+        </span>
         {/* The app's own name, in a space as much as in your own notes.
           *
           * This briefly showed the space's name instead, which put a workspace label where the
@@ -144,15 +185,21 @@ export function Header({ className }: HeaderProps) {
         ) : null}
 
         <IconButton
-          label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-          onClick={(event) => toggleTheme(originFromElement(event.currentTarget))}
+          label={refreshing ? 'Refreshing' : 'Refresh'}
+          tooltip="Refresh"
+          onClick={handleRefresh}
+          aria-busy={refreshing}
         >
-          {theme === 'dark' ? (
-            <Sun className={cn('h-5 w-5', themePopping && 'anim-pop')} />
+          {/* The mark playing, not a spinning arrow: loading looks the same here as it does on
+            * the splash and under a pull. */}
+          {refreshing ? (
+            <LogoLoader size="sm" className="text-[var(--color-accent)]" />
           ) : (
-            <Moon className={cn('h-5 w-5', themePopping && 'anim-pop')} />
+            <RefreshCw className="h-5 w-5" />
           )}
         </IconButton>
+
+        <ThemeSwitcher />
 
         {/* A Starred shortcut used to sit here, shown from lg. Which is precisely where the
             sidebar is — with Starred already in it, as a labelled row. The header was offering a

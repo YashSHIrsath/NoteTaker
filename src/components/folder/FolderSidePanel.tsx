@@ -30,7 +30,15 @@ export function FolderSidePanel({
   className,
   variant = 'sidebar',
 }: FolderSidePanelProps) {
-  const [locationOpen, setLocationOpen] = useState(false)
+  /**
+   * Open to begin with, and open again on the next load whatever you did to it last time.
+   *
+   * Deliberately not remembered. This is the panel's answer to "where am I", which is the question
+   * you have when you *arrive* — so it is worth its space by default, and closing it is a "not just
+   * now" rather than a setting. Held in local state rather than in uiState for exactly that reason:
+   * a reload is a fresh arrival.
+   */
+  const [locationOpen, setLocationOpen] = useState(true)
   const { folders: allFolders } = useFolders()
   const isSheet = variant === 'sheet'
   const isFloating = isSheet || variant === 'popover'

@@ -17,6 +17,7 @@ import { CommandActionList, type CommandAction } from './CommandActionList'
 import { useFolders } from '../../hooks/useFolders'
 import { useAuth } from '../../hooks/useAuth'
 import { useTheme } from '../../hooks/useTheme'
+import { nextTheme, themeOption } from '../../lib/themes'
 import { collectSubtaskAncestorIds } from '../../lib/subtasks'
 import { focusTaskTitle } from '../../lib/focusTaskTitle'
 import { searchNotes, type SearchResult } from '../../services/search/searchNotes'
@@ -35,7 +36,7 @@ export function GlobalSearch({ className }: GlobalSearchProps) {
   const to = useWorkspacePath()
   const { folders, tasks, subtasks, expandSubtask, getFolder, createTask } = useFolders()
   const { signOut } = useAuth()
-  const { theme, toggleTheme } = useTheme()
+  const { theme, isDark, quickThemeIds, toggleTheme } = useTheme()
   // One pattern for both mounts of the folder page, matched against the workspace-relative path.
   // Deliberately matchPath rather than two useMatch calls behind a `??`: that is a hook behind a
   // short-circuit, and the hook count then changes with the route.
@@ -116,8 +117,10 @@ export function GlobalSearch({ className }: GlobalSearchProps) {
       },
       {
         id: 'toggle-theme',
-        label: theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode',
-        icon: theme === 'dark' ? <Sun className="h-4 w-4" aria-hidden /> : <Moon className="h-4 w-4" aria-hidden />,
+        // Names where it is going, because with five themes "switch to dark mode" would be a
+        // guess about which dark one.
+        label: `Switch theme — ${themeOption(nextTheme(quickThemeIds, theme)).label}`,
+        icon: isDark ? <Sun className="h-4 w-4" aria-hidden /> : <Moon className="h-4 w-4" aria-hidden />,
         run: () => runAction(toggleTheme),
       },
       {
@@ -128,7 +131,7 @@ export function GlobalSearch({ className }: GlobalSearchProps) {
       },
     )
     return actions
-  }, [currentFolder, createTask, navigate, runAction, theme, to, toggleTheme, signOut])
+  }, [currentFolder, createTask, navigate, runAction, theme, isDark, quickThemeIds, to, toggleTheme, signOut])
 
   const filteredActions = useMemo(() => {
     const needle = query.trim().toLowerCase()

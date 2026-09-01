@@ -15,10 +15,12 @@ import { useWorkspacePath } from '../hooks/useWorkspace'
 import { useServerNowCoarse } from '../hooks/useServerNow'
 import { folderPathLabel, getImportantFolders } from '../lib/folders'
 import { isPinnedIn } from '../lib/taskGrid'
-import { getImportantTasks } from '../lib/tasks'
+import { getImportantTasks, inBaseOrder } from '../lib/tasks'
 import {
   applyTaskFilters,
   emptyFilterMessage,
+  filterByFolder,
+  folderFilterOptions,
   type KindFilter,
   type StatusFilter,
 } from '../lib/taskFilters'
@@ -79,18 +81,24 @@ export function ImportantPage() {
   const [activeTag, setActiveTag] = useState<string | null>(null)
   const [kindFilter, setKindFilter] = useState<KindFilter>('all')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [folderFilter, setFolderFilter] = useState<string | null>(null)
   const [openTaskId, setOpenTaskId] = useState<string | null>(null)
   const { headerRef, contentRef } = useFloatingHeader()
   // Which side this whole view slides in from — the side of the bar you came from.
   const pageEnter = usePageEnter()
   const importantFolders = getImportantFolders(folders)
-  const importantTasks = getImportantTasks(tasks)
+  // In a defined order before anything filters, splits or draws it — see inBaseOrder. This page
+  // reads the provider's array straight, and a flat listing's rows are all but tied on sort_order.
+  const importantTasks = inBaseOrder(getImportantTasks(tasks))
   // Coarse: the status filter needs the clock, and the whole card list re-renders with it.
   const now = useServerNowCoarse(importantTasks.some((task) => task.noteKind === 'due_task'))
   const allTagsInScope = Array.from(new Set(importantTasks.flatMap((task) => task.tags))).sort()
-  const byTag = activeTag
-    ? importantTasks.filter((task) => task.tags.includes(activeTag))
-    : importantTasks
+  // Counted from the starred notes alone, so this page offers the folders that actually hold
+  // something starred rather than every folder in the account.
+  const folderOptions = folderFilterOptions(folders, importantTasks)
+  const folderName = folderOptions.find((option) => option.id === folderFilter)?.name ?? null
+  const inFolder = filterByFolder(importantTasks, folders, folderFilter)
+  const byTag = activeTag ? inFolder.filter((task) => task.tags.includes(activeTag)) : inFolder
   const visibleImportantTasks = applyTaskFilters(byTag, kindFilter, statusFilter, now)
   // Pinning is per-listing, so Starred asks about its own scope and nothing else.
   const pinnedImportantTasks = visibleImportantTasks.filter((task) => isPinnedIn(task, 'important'))
@@ -317,9 +325,12 @@ export function ImportantPage() {
                 status={statusFilter}
                 tag={activeTag}
                 tags={allTagsInScope}
+                folder={folderFilter}
+                folders={folderOptions}
                 onKindChange={setKindFilter}
                 onStatusChange={setStatusFilter}
                 onTagChange={setActiveTag}
+                onFolderChange={setFolderFilter}
                 size="fill"
               />
             </div>
@@ -398,6 +409,7 @@ export function ImportantPage() {
                 statusFilter,
                 'Nothing starred yet — star a task to keep it here.',
                 activeTag,
+                folderName,
               )}
             </p>
           ) : (

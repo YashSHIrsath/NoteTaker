@@ -13,6 +13,8 @@ import { useServerNowCoarse } from '../hooks/useServerNow'
 import {
   applyTaskFilters,
   emptyFilterMessage,
+  filterByFolder,
+  folderFilterOptions,
   type KindFilter,
   type StatusFilter,
 } from '../lib/taskFilters'
@@ -24,6 +26,7 @@ import {
 import { getRootCategoryForFolder, scatterCategoryForId } from '../lib/folderColor'
 import { taskColorStyle } from '../lib/taskColor'
 import { isPinnedIn } from '../lib/taskGrid'
+import { inBaseOrder } from '../lib/tasks'
 import { focusTaskTitle } from '../lib/focusTaskTitle'
 import { useDisplaySettings } from '../hooks/useDisplaySettings'
 import { usePageEnter } from '../hooks/usePageEnterDirection'
@@ -42,7 +45,11 @@ const SECTION_TITLE: Partial<Record<StatusFilter, string>> = {
 }
 
 export function AllTasksPage() {
-  const { folders, tasks } = useFolders()
+  const { folders, tasks: loadedTasks } = useFolders()
+  // Put in a defined order before anything filters, splits or draws it. The provider hands over
+  // whatever the load returned, and for a flat listing that is rows tied on sort_order — see
+  // inBaseOrder. Cards used to move between reloads without anyone touching them.
+  const tasks = inBaseOrder(loadedTasks)
   // The Notes style preference applies wherever notes are listed, this page included — it used
   // to be honoured only by the folder views and Important, so picking "Professional" appeared
   // to do nothing here.
@@ -53,6 +60,7 @@ export function AllTasksPage() {
   const [activeTag, setActiveTag] = useState<string | null>(null)
   const [kindFilter, setKindFilter] = useState<KindFilter>('all')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [folderFilter, setFolderFilter] = useState<string | null>(null)
   const [newTaskOpen, setNewTaskOpen] = useState(false)
   // Coarse on purpose: the status filter needs the clock, and re-running this whole grid once a
   // second to move nothing would be a steep price for it. The cards' own countdowns still tick.
@@ -63,7 +71,13 @@ export function AllTasksPage() {
   const pageEnter = usePageEnter()
 
   const allTagsInScope = Array.from(new Set(tasks.flatMap((task) => task.tags))).sort()
-  const byTag = activeTag ? tasks.filter((task) => task.tags.includes(activeTag)) : tasks
+  // This page is every folder at once, which is what it is for and also why it needs a way back to
+  // one of them. Offered from the whole scope, so the list of folders doesn't shrink as the other
+  // filters bite — the same rule the tag list and the counts already follow.
+  const folderOptions = folderFilterOptions(folders, tasks)
+  const folderName = folderOptions.find((option) => option.id === folderFilter)?.name ?? null
+  const inFolder = filterByFolder(tasks, folders, folderFilter)
+  const byTag = activeTag ? inFolder.filter((task) => task.tags.includes(activeTag)) : inFolder
   const visibleTasks = applyTaskFilters(byTag, kindFilter, statusFilter, now)
   const pinnedTasks = visibleTasks.filter((task) => isPinnedIn(task, 'tasks'))
   const otherTasks = visibleTasks.filter((task) => !isPinnedIn(task, 'tasks'))
@@ -182,9 +196,12 @@ export function AllTasksPage() {
               status={statusFilter}
               tag={activeTag}
               tags={allTagsInScope}
+              folder={folderFilter}
+              folders={folderOptions}
               onKindChange={setKindFilter}
               onStatusChange={setStatusFilter}
               onTagChange={setActiveTag}
+              onFolderChange={setFolderFilter}
             />
           </div>
         </div>
@@ -216,6 +233,7 @@ export function AllTasksPage() {
                 statusFilter,
                 'No tasks yet — use New Task to create one in any folder.',
                 activeTag,
+                folderName,
               )}
             </p>
           ) : otherTasks.length === 0 ? (

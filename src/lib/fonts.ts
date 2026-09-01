@@ -63,6 +63,17 @@ export const FONT_OPTIONS: FontOption[] = [
 
   /* ------------------------------------------------------------------ modern sans */
   {
+    id: 'geist',
+    label: 'Geist',
+    hint: 'Plain, close-set and precise. Neutral enough to disappear at 11px and still hold a title.',
+    roles: ['body', 'heading'],
+    stack: `"Geist", ${SANS_FALLBACK}`,
+    // 800 as well as the body weights, because this one is offered for both roles and a heading is
+    // only ever set heavy. The italic is a real one, not a synthesised slant — checked, because a
+    // body face without one leaves every emphasised run in a note to the browser's oblique.
+    google: 'Geist:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400',
+  },
+  {
     id: 'dm-sans',
     label: 'DM Sans',
     hint: 'Low-contrast geometric. Quiet, current, and never in the way of what it is setting.',

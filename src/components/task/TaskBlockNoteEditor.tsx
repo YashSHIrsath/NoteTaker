@@ -61,7 +61,7 @@ export function TaskBlockNoteEditor({
     addPdfAttachment,
     addDocumentAttachment,
   } = useFolders()
-  const { theme } = useTheme()
+  const { isDark } = useTheme()
   const [previewAttachment, setPreviewAttachment] = useState<Attachment | null>(null)
   // Unmounting the side menu the instant the toggle flips would cut its slide-out short, so it
   // outlives the switch by exactly one animation.
@@ -354,7 +354,7 @@ export function TaskBlockNoteEditor({
         <BlockNoteView
           editor={editor}
           editable={!readOnly}
-          theme={theme === 'dark' ? 'dark' : 'light'}
+          theme={isDark ? 'dark' : 'light'}
           sideMenu={false}
         >
           {handlesMounted && !readOnly ? <TaskBlockSideMenu /> : null}

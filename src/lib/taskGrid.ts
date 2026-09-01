@@ -1,3 +1,4 @@
+import { compareTasksBySortOrder } from './tasks'
 import type { Task, TaskGridLayout, TaskGridPlacement, TaskGridScope } from '../types'
 
 /**
@@ -70,61 +71,173 @@ export function placementForScope(task: Task, scope: TaskGridScope): TaskGridPla
 }
 
 /**
- * The order a listing shows its cards in: the one the reader dragged them into, then everything
- * they haven't touched, in the order the listing handed them over.
+ * The order this listing shows one card in, or null when it has none that applies.
  *
- * Dragging is expressed as an order rather than as a free (x, y), and that is what keeps the two
- * rules below intact. A dropped card is re-flowed through the same first-fit packer as everything
- * else, so it can't land in a hole, overlap a neighbour, or leave a gap behind it — and the
- * arrangement stays the same arrangement at every screen width, which a stored pixel position
- * could not be.
+ * `folder` is one scope shared by every folder view. That is right for size and wrong for order —
+ * see TaskGridPlacement.orderFolderId — so a folder-scope order is honoured only in the folder it
+ * was minted in. An order with no folder recorded predates that rule and is read as belonging
+ * wherever the note is now, which is exactly what it was already being used as.
  */
-function inDisplayOrder(tasks: Task[], scope: TaskGridScope): Task[] {
-  const order = new Map<string, number>()
-  for (const task of tasks) {
-    const stored = placementForScope(task, scope)?.order
-    if (typeof stored === 'number') {
-      order.set(task.id, stored)
-    }
+export function storedOrder(task: Task, scope: TaskGridScope): number | null {
+  const placement = placementForScope(task, scope)
+  if (!placement || typeof placement.order !== 'number') {
+    return null
   }
-  if (order.size === 0) {
-    return tasks
+  if (
+    scope === 'folder' &&
+    placement.orderFolderId !== undefined &&
+    placement.orderFolderId !== task.folderId
+  ) {
+    return null
   }
-  // A copy: the array belongs to the caller, and a view that re-sorted its own task list in place
-  // would reorder every other view holding the same array.
-  //
-  // Compared rather than subtracted, so "no order" can be a missing entry instead of a sentinel
-  // number — and because Array#sort is stable, untouched cards keep the order they arrived in.
-  return [...tasks].sort((a, b) => {
-    const left = order.get(a.id)
-    const right = order.get(b.id)
-    if (left === right) {
-      return 0
-    }
-    if (left === undefined) {
-      return 1
-    }
-    if (right === undefined) {
-      return -1
-    }
-    return left - right
-  })
+  return placement.order
 }
 
 /**
- * The order to write back after a drag, read off the layout the grid just settled into.
+ * The order a listing shows its cards in: the one the reader dragged them into, then everything
+ * they haven't touched, in flow order.
  *
- * Reading order — down the rows, then across each one — is what the reader sees, so it is what
- * gets stored. Every card in the listing is written, because an order is only meaningful relative
- * to the others; sizes are deliberately not, so a card that has never been resized keeps taking
- * its width from the "cards per row" setting.
+ * Total, and independent of the array it was handed. That is the whole point of it. Cards with no
+ * stored order used to keep the position the array arrived in, and the flat listings hand over
+ * whatever Postgres returned for `ORDER BY sort_order` — a column that restarts at 0 in every
+ * folder, so almost every row is tied. Ties have no order, and rewriting a row is enough to change
+ * which tied row comes back first: saving a card's *size* could reshuffle the page on the next
+ * load, and did.
+ *
+ * So the comparison ends at the id, which is unique and never changes. Nothing above it can leave
+ * two cards indistinguishable.
  */
-export function orderFromLayout(
-  layout: readonly { i: string; x: number; y: number }[],
-): Map<string, number> {
-  const sorted = [...layout].sort((a, b) => (a.y === b.y ? a.x - b.x : a.y - b.y))
-  return new Map(sorted.map((item, index) => [item.i, index]))
+export function inDisplayOrder(tasks: Task[], scope: TaskGridScope): Task[] {
+  // A copy: the array belongs to the caller, and a view that re-sorted its own task list in place
+  // would reorder every other view holding the same array.
+  return [...tasks].sort((a, b) => compareForDisplay(a, b, scope))
 }
+
+function compareForDisplay(a: Task, b: Task, scope: TaskGridScope): number {
+  const left = storedOrder(a, scope)
+  const right = storedOrder(b, scope)
+  if (left !== right) {
+    // An arranged card comes before one nobody has arranged, whatever its index.
+    if (left === null) {
+      return 1
+    }
+    if (right === null) {
+      return -1
+    }
+    return left - right
+  }
+  return compareTasksBySortOrder(a, b)
+}
+
+/**
+ * The cards one listing can ever show, given a card that is in it.
+ *
+ * Membership, not visibility. The filters and the pinned/unpinned split keep cards off a grid
+ * without taking them out of the listing's order — see spliceVisibleOrder.
+ */
+export function tasksInScope(tasks: Task[], scope: TaskGridScope, member: Task): Task[] {
+  if (scope === 'folder') {
+    return tasks.filter((task) => task.folderId === member.folderId)
+  }
+  if (scope === 'important') {
+    return tasks.filter((task) => task.isImportant)
+  }
+  return tasks
+}
+
+/**
+ * The whole listing's order, with the cards that were on screen rearranged into `visible`.
+ *
+ * A grid is never the whole listing. Pinned notes are drawn in a grid of their own, the tag, kind
+ * and status filters hide whatever they hide, and all of it shares one order. Writing 0…n−1 over
+ * the cards one grid happened to be showing is what put four notes on index 0 and let clearing a
+ * filter interleave them.
+ *
+ * So the slots stay where they are and only their occupants move: walk the full order, and wherever
+ * it holds one of the cards that were on screen, put the next one from the new visible order there
+ * instead. A hidden card between two visible ones stays between them, which is the only reading of
+ * "drop it here" that survives the filter being cleared.
+ */
+export function spliceVisibleOrder(full: readonly string[], visible: readonly string[]): string[] {
+  const known = new Set(full)
+  // Filtered to what the listing actually holds, so the slots and the queue cannot fall out of
+  // step and shift every card after the mismatch by one.
+  const queue = visible.filter((id) => known.has(id))
+  const moving = new Set(queue)
+  let next = 0
+  return full.map((id) => (moving.has(id) ? queue[next++] : id))
+}
+
+/**
+ * Where a dropped card belongs in this grid's order.
+ *
+ * This is the piece that was missing, and its absence was the largest defect in the feature. The
+ * order used to be read straight off the layout react-grid-layout settled into, sorted by y and
+ * then x — but the arrangement is *drawn* by buildGridLayout, which is first-fit and pulls a later
+ * narrow card up into an earlier row's gap. Two different packers on either side of one round trip,
+ * so the order stored was not a description of the arrangement: a fifth of all orders rendered as
+ * something else, and better than a quarter of drops landed somewhere other than what was saved.
+ * Sorting by exact y made it worse as soon as two cards had different heights, because a settled
+ * layout is a masonry rather than rows.
+ *
+ * So the drop is resolved *through* the packer instead of around it. Every position the card could
+ * be inserted at is packed, and the one that puts it nearest the cell it was released over wins.
+ * The packer is then the only thing that decides where a card sits, and an order becomes something
+ * it can reproduce.
+ *
+ * Cost is one pack per candidate position, so quadratic in the cards on screen. It runs once, on
+ * pointer-up, over a list somebody is looking at.
+ */
+export function orderAfterDrop(
+  tasks: Task[],
+  cardsPerRow: number,
+  scope: TaskGridScope,
+  draggedId: string,
+  drop: { x: number; y: number },
+): string[] {
+  const ordered = inDisplayOrder(tasks, scope)
+  const home = ordered.findIndex((task) => task.id === draggedId)
+  if (home < 0) {
+    return ordered.map((task) => task.id)
+  }
+  const dragged = ordered[home]
+  const rest = ordered.filter((task) => task.id !== draggedId)
+
+  let bestIndex = home
+  let bestScore = Number.POSITIVE_INFINITY
+  for (let index = 0; index <= rest.length; index += 1) {
+    const candidate = [...rest.slice(0, index), dragged, ...rest.slice(index)]
+    // packInOrder, not buildGridLayout: the latter sorts by the *stored* order first, which would
+    // undo the very permutation being tested and score every candidate identically.
+    const placed = packInOrder(candidate, cardsPerRow, scope).find((item) => item.i === draggedId)
+    if (!placed) {
+      continue
+    }
+    // Both distances in units of roughly one card, so a row away weighs about as much as a column
+    // away and neither drowns the other: y is in grid rows, x in grid columns.
+    const score = Math.abs(placed.y - drop.y) / DEFAULT_H + Math.abs(placed.x - drop.x) / GRID_COLS
+    if (score < bestScore - SCORE_EPSILON) {
+      bestScore = score
+      bestIndex = index
+      continue
+    }
+    // A tie goes to the position closest to where the card already was, so a drop the packer cannot
+    // honour leaves the card where it is rather than flinging it to the first of a row of equally
+    // wrong candidates.
+    if (
+      Math.abs(score - bestScore) <= SCORE_EPSILON &&
+      Math.abs(index - home) < Math.abs(bestIndex - home)
+    ) {
+      bestIndex = index
+    }
+  }
+
+  return [...rest.slice(0, bestIndex), dragged, ...rest.slice(bestIndex)].map((task) => task.id)
+}
+
+/** Two candidate placements this close are the same placement; the scores are ratios of integers
+ *  and comparing them exactly would let floating-point noise decide a drop. */
+const SCORE_EPSILON = 1e-9
 
 /** The widths that tile the canvas exactly. A card's minimum is always one of these. */
 const COLUMN_DIVISORS = [1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 24, 30, 40, 60, 120]
@@ -159,9 +272,44 @@ export function minWidthFor(cardsPerRow: number): number {
   )
 }
 
-/** Every width a card may have: whole multiples of the minimum, never a partial unit. */
+/**
+ * Every width a card may have: whole multiples of the minimum, never a partial unit.
+ *
+ * Applied to the *live* resize as well as the stored one — see snapCardWidth in TaskGridCanvas.
+ * Snapping only on the way to storage is what made a small resize look like it had worked and then
+ * vanish on reload: the width the pointer produced rounded back to the width the card already had,
+ * so there was nothing to save, and nothing to correct the screen with either.
+ */
 export function snapWidth(width: number, minWidth: number): number {
   const units = Math.max(1, Math.round(width / minWidth))
+  return Math.min(GRID_COLS, units * minWidth)
+}
+
+/** How much a card may grow before it is treated as claiming the next unit: a quarter of one grid
+ *  column, which is a couple of pixels. It exists so a card sitting exactly on a unit boundary
+ *  doesn't claim the next one the instant the handle is touched. */
+const SNAP_UP_TOLERANCE = 0.25
+
+/**
+ * The width a card *claims* mid-resize: the smallest whole number of card-widths that contains it.
+ *
+ * Snapping to the nearest unit is right for storing a width and wrong for showing one, because the
+ * grid paints the card being resized at the raw pointer width while its layout slot stays at the
+ * snapped one (calcGridItemPosition takes the resize position over the grid geometry). So with
+ * nearest-snapping, a card dragged half a unit wider is drawn straddling its neighbour while the
+ * layout still says it fits — the neighbour sits there overlapped until the pointer passes the
+ * halfway mark, and only then does everything jump.
+ *
+ * Rounding up means the card claims the next unit as soon as it grows past the one it has: the
+ * neighbour moves out of the way on the first pixel of overlap, and the card fills the space it was
+ * given as you keep pulling. Nothing is ever drawn over anything.
+ *
+ * Shrinking is the same rule read backwards — the slot is given up once the card fits inside the
+ * smaller one — so the gesture behaves the same in both directions and cannot oscillate: the result
+ * is already a multiple of the minimum, so applying it again changes nothing.
+ */
+export function snapWidthUp(width: number, minWidth: number): number {
+  const units = Math.max(1, Math.ceil((width - SNAP_UP_TOLERANCE) / minWidth))
   return Math.min(GRID_COLS, units * minWidth)
 }
 
@@ -190,9 +338,29 @@ export interface GridItemLayout extends TaskGridLayout {
  *
  * Widths are whole multiples of the minimum (see snapWidth), so a run of cards tiles a row exactly
  * and these two rules don't fight each other.
+ *
+ * This function is the *only* authority on where a card sits. Nothing reads a position back out of
+ * the grid and stores it — see orderAfterDrop for what happens when two packers disagree.
  */
 export function buildGridLayout(
   tasks: Task[],
+  cardsPerRow: number,
+  scope: TaskGridScope,
+): GridItemLayout[] {
+  return packInOrder(inDisplayOrder(tasks, scope), cardsPerRow, scope)
+}
+
+/**
+ * The packing on its own, over a sequence somebody has already decided.
+ *
+ * Split out from buildGridLayout because deciding the order and drawing it are two jobs, and
+ * orderAfterDrop needs the second without the first: it asks "where would this card sit if it went
+ * here?", and buildGridLayout would answer by sorting the sequence back into stored order and
+ * drawing that instead — the same arrangement for every candidate, which is exactly what the
+ * checks caught.
+ */
+export function packInOrder(
+  ordered: readonly Task[],
   cardsPerRow: number,
   scope: TaskGridScope,
 ): GridItemLayout[] {
@@ -204,7 +372,6 @@ export function buildGridLayout(
     height: number
   }
   const rows: Row[] = []
-  const ordered = inDisplayOrder(tasks, scope)
 
   // Pass one: assign each card to the first row with horizontal room for it.
   //
@@ -265,5 +432,7 @@ export function samePlacement(a: TaskGridPlacement | null, b: TaskGridPlacement)
   // The version is deliberately not compared: `a` has already been converted by
   // placementForScope, so an old row and a new write can agree on every real field. Treating the
   // stamp alone as a change would rewrite every card on the first load after a version bump.
-  return a.w === b.w && a.h === b.h && a.order === b.order
+  return (
+    a.w === b.w && a.h === b.h && a.order === b.order && a.orderFolderId === b.orderFolderId
+  )
 }

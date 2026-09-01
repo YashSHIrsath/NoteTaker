@@ -33,7 +33,14 @@ import type {
 } from '../types'
 import { getTaskById, getTasksByFolder, nextTaskSortOrder, reorderSiblingTasks as applyTaskReorder } from '../lib/tasks'
 import { getSubtasksByTask } from '../lib/subtasks'
-import { PLACEMENT_VERSION, placementForScope, samePlacement } from '../lib/taskGrid'
+import {
+  PLACEMENT_VERSION,
+  inDisplayOrder,
+  placementForScope,
+  samePlacement,
+  spliceVisibleOrder,
+  tasksInScope,
+} from '../lib/taskGrid'
 import { getAttachmentsByTask } from '../lib/attachments'
 import {
   beginExclusiveAction,
@@ -114,10 +121,27 @@ interface FolderContextValue {
    * within it only the fields given — a drag writes an order and leaves the size alone, a resize
    * writes a size and leaves the order alone.
    */
+  /** True when something was actually written. The canvas needs to know: if nothing changed, the
+   *  grid is still holding whatever it compacted mid-gesture and has to be told to let go. */
   updateTaskLayouts: (
     scope: TaskGridScope,
     entries: Array<{ taskId: string; placement: Partial<TaskGridPlacement> }>,
-  ) => void
+  ) => boolean
+  /**
+   * Records where a card was dragged to in one listing.
+   *
+   * `visibleOrderedIds` is the order of the cards that were on screen, which is never the whole
+   * listing: pinned notes are drawn in a grid of their own and the filters hide whatever they hide.
+   * The listing's real order is worked out from here, over every card the listing can hold — see
+   * spliceVisibleOrder for why writing 0…n−1 over one grid's cards could not work.
+   *
+   * Returns whether anything was written, like updateTaskLayouts and for the same reason.
+   */
+  rearrangeTasks: (
+    scope: TaskGridScope,
+    draggedTaskId: string,
+    visibleOrderedIds: string[],
+  ) => boolean
   updateTaskTitle: (taskId: string, title: string) => void
   deleteTask: (taskId: string) => Promise<{ folderId: string; deletedTaskIds: string[] }>
   toggleTaskImportant: (taskId: string) => void
@@ -137,6 +161,15 @@ interface FolderContextValue {
   getRemindersForTask: (taskId: string) => Reminder[]
   addReminder: (taskId: string, draft: ReminderDraft) => Promise<void>
   deleteReminder: (reminderId: string) => Promise<void>
+  /**
+   * Re-reads the workspace without tearing the screen down: the pull-to-refresh gesture and the
+   * background poll both call this.
+   *
+   * Resolves when the read has been applied, or immediately when there is nothing to do — a refresh
+   * is skipped, not queued, while an edit of yours is still on its way to the server. It never
+   * throws: a failed refresh leaves what is on screen alone.
+   */
+  refreshNotes: () => Promise<void>
   /** Re-reads every reminder from the server. The scheduler writes last_run_at and next_run_at
    *  from outside this app entirely, so a reminder that fires while a page is open only becomes
    *  visible by asking again. */
@@ -186,6 +219,17 @@ interface FolderContextValue {
 const FolderContext = createContext<FolderContextValue | null>(null)
 const CONTENT_SAVE_DELAY_MS = 400
 
+/**
+ * How often an open workspace asks the server whether anything changed.
+ *
+ * There is no realtime channel in this build, so the only alternative to asking on a timer is not
+ * asking at all — which is what made a note somebody else added invisible until the app was closed
+ * and opened again. Twenty seconds is short enough that a change lands while you are still looking
+ * at the same screen, and long enough that a full snapshot read is not the thing keeping the
+ * connection busy.
+ */
+const WORKSPACE_POLL_MS = 20_000
+
 function createId(): string {
   return crypto.randomUUID()
 }
@@ -200,6 +244,22 @@ function addId(ids: string[], id: string): string[] {
 
 function removeId(ids: string[], id: string): string[] {
   return ids.filter((item) => item !== id)
+}
+
+/**
+ * A value two reads can be compared by.
+ *
+ * Only `refreshNotes` uses it, and only to decide whether a poll found anything. Applying an
+ * identical read is not free: every list would get new array identities and the whole workspace
+ * would re-render, three times a minute, to show exactly what it already showed.
+ */
+function notesFingerprint(snapshot: {
+  folders: Folder[]
+  tasks: Task[]
+  subtasks: Subtask[]
+  tags: Tag[]
+}): string {
+  return JSON.stringify([snapshot.folders, snapshot.tasks, snapshot.subtasks, snapshot.tags])
 }
 
 /**
@@ -525,6 +585,140 @@ export function FolderProvider({ children }: { children: ReactNode }) {
       cancelled = true
     }
   }, [applyNotes, attachmentRepository, loadGeneration, notesRepository, userId])
+
+  /** True while something on screen hasn't reached the server yet: a queued op, a batch in flight,
+   *  a rejected batch waiting on Retry, or a keystroke still inside the typing debounce. */
+  const hasUnsentWork = useCallback(
+    () =>
+      pendingOpsRef.current.length > 0 ||
+      persistInflightRef.current !== null ||
+      pendingRetryRef.current !== null ||
+      contentTimerRef.current !== null,
+    [],
+  )
+
+  const refreshInflightRef = useRef<Promise<void> | null>(null)
+
+  /**
+   * Re-reads the workspace in place — what the poll below and the pull-to-refresh both call.
+   *
+   * The load effect above cannot do this job: it clears `ready`, which replaces the app with a
+   * splash. That is right for a first load and for Retry, and wrong for a refresh, where the whole
+   * point is that you stay where you are — same scroll position, same open note, same sidebar.
+   *
+   * Two things it deliberately leaves alone. `uiState`, because that is per-device state the server
+   * has no opinion about; re-applying the copy from local storage would fold up folders you had
+   * just opened. And everything, while an edit is unsent — the server's copy is *older* than the
+   * screen at that moment, so applying it would undo the edit, and the op still queued would then
+   * be applied to rows it was never queued from.
+   */
+  const refreshNotes = useCallback(async (): Promise<void> => {
+    const inflight = refreshInflightRef.current
+    if (inflight) {
+      // A poll landing on a pull is one read, not two — and the pull still waits for an answer.
+      await inflight
+      return
+    }
+    const requestUserId = userIdRef.current
+    if (!requestUserId || hasUnsentWork()) {
+      return
+    }
+    const run = (async () => {
+      try {
+        const loaded = await notesRepository.load()
+        if (
+          !shouldApplySessionResult({
+            cancelled: false,
+            requestUserId,
+            currentUserId: userIdRef.current,
+          }) ||
+          // An edit made while the read was in flight is newer than what came back.
+          hasUnsentWork()
+        ) {
+          return
+        }
+        const current = notesFingerprint({
+          folders: foldersRef.current,
+          tasks: tasksRef.current,
+          subtasks: subtasksRef.current,
+          tags: tagsRef.current,
+        })
+        if (current === notesFingerprint(loaded)) {
+          return
+        }
+        applyNotes(loaded)
+        lastConfirmedRef.current = snapshotFromParts(
+          loaded.folders,
+          loaded.tasks,
+          loaded.subtasks,
+          loaded.tags,
+          uiStateRef.current,
+        )
+      } catch {
+        /* A refresh that fails deserves no banner: what is on screen is still the best answer
+           available, and the next poll — or the next pull — asks again. */
+      }
+    })()
+    refreshInflightRef.current = run
+    try {
+      await run
+    } finally {
+      refreshInflightRef.current = null
+    }
+  }, [applyNotes, hasUnsentWork, notesRepository])
+
+  /**
+   * Keeps the workspace current without a reload.
+   *
+   * A space is the case that made this necessary — someone else's note simply never appeared — but
+   * the timer runs in personal notes too, where the second writer is the same account on another
+   * device. Neither is served by a document that is only ever as fresh as the moment it was opened.
+   *
+   * Coming back to the app refreshes as well, on top of the interval: a tab focused, a phone
+   * unlocked, an app resumed. That is the exact gesture that used to mean "close it and open it
+   * again to see the change", so it is the one that should already have asked.
+   *
+   * Nothing polls while the tab is hidden. A phone in a pocket with the app open should not be
+   * asking anything.
+   */
+  useEffect(() => {
+    if (!ready) {
+      return
+    }
+    const poll = () => {
+      void refreshNotes()
+    }
+    let timer: number | null = null
+    const start = () => {
+      if (timer === null) {
+        timer = window.setInterval(poll, WORKSPACE_POLL_MS)
+      }
+    }
+    const stop = () => {
+      if (timer !== null) {
+        window.clearInterval(timer)
+        timer = null
+      }
+    }
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        poll()
+        start()
+      } else {
+        stop()
+      }
+    }
+    window.addEventListener('focus', poll)
+    document.addEventListener('visibilitychange', onVisibility)
+    if (document.visibilityState === 'visible') {
+      start()
+    }
+    return () => {
+      stop()
+      window.removeEventListener('focus', poll)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [ready, refreshNotes])
 
   /**
    * Reminders and the clock, loaded once per session alongside the notes.
@@ -975,9 +1169,12 @@ export function FolderProvider({ children }: { children: ReactNode }) {
   )
 
   const updateTaskLayouts = useCallback(
-    (scope: TaskGridScope, entries: Array<{ taskId: string; placement: Partial<TaskGridPlacement> }>) => {
+    (
+      scope: TaskGridScope,
+      entries: Array<{ taskId: string; placement: Partial<TaskGridPlacement> }>,
+    ): boolean => {
       if (entries.length === 0) {
-        return
+        return false
       }
       const byId = new Map(entries.map((entry) => [entry.taskId, entry.placement]))
       const patches: NotesOp[] = []
@@ -1003,14 +1200,49 @@ export function FolderProvider({ children }: { children: ReactNode }) {
       // A drag that ends where it started, or a re-render handing back the layout it was given,
       // would otherwise write and save on every pointer-up.
       if (patches.length === 0) {
-        return
+        return false
       }
       applyNotes({ folders: foldersRef.current, tasks, subtasks: subtasksRef.current })
       enqueue(patches, WRITE_INTENT.boardRearranged)
       // Discrete, like every other non-typing action here: the gesture is over when this runs.
       void persistNotes().catch(() => undefined)
+      return true
     },
     [applyNotes, enqueue, persistNotes],
+  )
+
+  /**
+   * The listing's order after a drag, minted over every card the listing can hold.
+   *
+   * Renumbered from 0 across the whole scope rather than patched around the card that moved, and
+   * that is deliberate: the indices this feature has been writing are neither unique nor dense —
+   * each grid renumbered from 0, so a listing drawn as two grids had two cards on index 0, and a
+   * drag under a filter renumbered only what it could see. Renumbering the scope normalises all of
+   * that on the first drag, after which samePlacement keeps every later drag down to the span
+   * between where the card was and where it went.
+   *
+   * The cost is one row update per card the first time a listing is arranged, which the personal
+   * write path sends as one request each. That is the next thing to fix, and it is a property of
+   * the write path rather than of the order.
+   */
+  const rearrangeTasks = useCallback(
+    (scope: TaskGridScope, draggedTaskId: string, visibleOrderedIds: string[]): boolean => {
+      const dragged = tasksRef.current.find((task) => task.id === draggedTaskId)
+      if (!dragged) {
+        return false
+      }
+      const members = tasksInScope(tasksRef.current, scope, dragged)
+      const full = inDisplayOrder(members, scope).map((task) => task.id)
+      const next = spliceVisibleOrder(full, visibleOrderedIds)
+      // Stamped only where it means something. A folder-scope order belongs to one folder and every
+      // card in this scope is in that folder; the flat listings have no folder to belong to.
+      const orderFolderId = scope === 'folder' ? dragged.folderId : undefined
+      return updateTaskLayouts(
+        scope,
+        next.map((taskId, order) => ({ taskId, placement: { order, orderFolderId } })),
+      )
+    },
+    [updateTaskLayouts],
   )
 
   const updateTaskTitle = useCallback(
@@ -1728,6 +1960,7 @@ export function FolderProvider({ children }: { children: ReactNode }) {
       moveTaskToFolder,
       updateTaskContent,
       updateTaskLayouts,
+      rearrangeTasks,
       updateTaskTitle,
       deleteTask,
       toggleTaskImportant,
@@ -1738,6 +1971,7 @@ export function FolderProvider({ children }: { children: ReactNode }) {
       addReminder,
       deleteReminder,
       refreshReminders,
+      refreshNotes,
       reminderError,
       updateTaskTags,
       tags,
@@ -1793,6 +2027,7 @@ export function FolderProvider({ children }: { children: ReactNode }) {
       moveTaskToFolder,
       updateTaskContent,
       updateTaskLayouts,
+      rearrangeTasks,
       updateTaskTitle,
       deleteTask,
       toggleTaskImportant,
@@ -1803,6 +2038,7 @@ export function FolderProvider({ children }: { children: ReactNode }) {
       addReminder,
       deleteReminder,
       refreshReminders,
+      refreshNotes,
       reminderError,
       updateTaskTags,
       tags,

@@ -5,7 +5,7 @@
    inline style). They were being tree-shaken out of the light theme, so in light mode
    `var(--cat-teal-card)` resolved to nothing and a sticky-note tile rendered with no fill at
    all — text floating on the page background. Dark mode looked fine only because its values
-   live in the plain :root[data-theme="dark"] block below, which is never tree-shaken. */
+   live in the plain [data-theme] blocks below, which are never tree-shaken. */
 @theme static {
   --font-sans: "Inter", "Segoe UI", "Helvetica Neue", system-ui, sans-serif;
   /* The wordmark's face, and nothing else's.
@@ -155,7 +155,26 @@
 
   --color-danger: #e5716a;
   --color-danger-hover: #ef938d;
+}
 
+/* --------------------------------------------------------- the dark family's note palette
+ *
+ * Every dark theme shares this, and the selector is the whole point of the split.
+ *
+ * These values used to live inside the `[data-theme="dark"]` block above, which was correct while
+ * dark was the only dark theme. Add a second one and it inherits nothing from here — it falls
+ * through to the light values in `@theme static`, and every note card comes out a pale pastel on a
+ * near-black page with its ink unreadable on it. Nothing would have thrown; the cards would simply
+ * have been wrong.
+ *
+ * So a dark theme now declares only what makes it that theme — its grounds, its accent, its type
+ * colour — and the notes, which belong to no theme in particular, live here.
+ *
+ * Keyed on the *family* rather than on a list of theme ids, and that is not just tidiness: the
+ * custom theme's family is not knowable from here at all. It depends on the ground somebody picked,
+ * so ThemeProvider works it out and stamps `data-theme-family` alongside `data-theme`. A list would
+ * have had to guess. */
+:root[data-theme-family="dark"] {
   --cat-teal: #4dc9bb;
   --cat-teal-soft: #16332f;
   --cat-teal-ink: #8fe4d9;
@@ -200,6 +219,154 @@
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
   --shadow-md: 0 4px 14px -2px rgb(0 0 0 / 0.45), 0 1px 3px rgb(0 0 0 / 0.3);
   --shadow-lg: 0 24px 48px -12px rgb(0 0 0 / 0.55);
+}
+
+/* --------------------------------------------------------------------- the app's own themes
+ *
+ * Three rooms, opted into. See lib/themes.ts for what they are and why they exist; this is only
+ * where they keep their numbers.
+ *
+ * Each declares the five *-base grounds and the handful of colours that don't derive from them —
+ * and nothing else. `--color-surface`, `--color-surface-muted`, `--color-surface-raised`,
+ * `--color-border` and `--color-hover` are all `var(--*-base)` in `@theme static`, and a custom
+ * property reference resolves against whatever won on the element, so redefining the base is
+ * enough. The dark block above restates them; that is redundancy, not a requirement, and repeating
+ * it here would be five more lines per theme to keep in step for no effect.
+ *
+ * The note palette is deliberately untouched by all three. Each was measured against it first: the
+ * two dark ones each gain a little fill separation over `dark`, and Paper's pairing was chosen for
+ * it — see the note on its grounds. */
+
+/* Paper — a notebook: warm chrome, white pages.
+ *
+ * The two grounds are doing different jobs, and the split is the reason this theme works at all. An
+ * earlier version put the oat on `--surface-base` as well, so note cards sat on it — and the twelve
+ * fills span a range of lightnesses, so a pale ground lands *inside* that range and something always
+ * converges with it. Lime came out at 1.02 against the page: a card with no visible edge. Darkening
+ * the oat only changed which fill vanished.
+ *
+ * Cards sit on `--surface-base`, so that stays a near-white — warm, but a white — and separates the
+ * fills at 1.16, which is better than the 1.11 the cool light theme gives them. The oat is on
+ * `--surface-muted-base`, which is the chrome: sidebars, page grounds, filter pills, headers. Worst
+ * fill there is 1.08 against 1.11 today, close enough to be no change in practice.
+ *
+ * A notebook is white pages in a tan cover, which is the same arrangement. */
+:root[data-theme="paper"] {
+  --surface-base: #fffefb;
+  --surface-muted-base: #faf6ef;
+  --surface-raised-base: #fffefb;
+  --border-base: #eae3d6;
+  --hover-base: #f3ede1;
+
+  --color-border-strong: #cabfa9;
+
+  --color-text: #211c15;
+  --color-text-muted: #6d6355;
+
+  /* The accent is left where it is. Indigo on paper reads as fountain-pen blue, which is the one
+     colour association this theme gets for free — only the tints behind it are warmed, because a
+     cool lilac chip on an oat ground is the one place the original palette shows its temperature. */
+  --color-accent-soft: #ece9fb;
+  --color-accent-soft-hover: #e2defa;
+
+  --color-danger: #a83224;
+  --color-danger-hover: #8d2a1e;
+
+  /* Warmed to match: a neutral grey shadow over oat reads as a smudge rather than as a lift. */
+  --shadow-sm: 0 1px 3px 0 rgb(58 46 30 / 0.09);
+  --shadow-md: 0 4px 14px -2px rgb(58 46 30 / 0.13), 0 1px 3px rgb(58 46 30 / 0.07);
+  --shadow-lg: 0 20px 40px -12px rgb(58 46 30 / 0.22);
+}
+
+/* Studio — a desk lamp at night.
+ *
+ * Warm-neutral rather than blue-black, and that is not a preference: the favicon draws the mark on
+ * #1a1a18 while the dark theme puts it on cool #15161b, so the app and its own icon have never
+ * agreed about the ground. This is the app agreeing with the icon.
+ *
+ * The accent is the logo's indigo lifted until it carries on a warm ground — 8.08 against the page,
+ * the strongest of the five, which is what keeps a quiet room from reading as a dim one. */
+:root[data-theme="studio"] {
+  --surface-base: #1c1c19;
+  --surface-muted-base: #141412;
+  --surface-raised-base: #262622;
+  --border-base: #2f2f2a;
+  --hover-base: #252520;
+
+  --color-border-strong: #43433c;
+
+  --color-text: #f0eee8;
+  --color-text-muted: #9c988c;
+
+  --color-accent: #a9a2f7;
+  --color-accent-hover: #bdb7fa;
+  --color-accent-soft: #2a2840;
+  --color-accent-soft-hover: #343154;
+  --color-accent-ink: #cdc9fb;
+
+  --color-danger: #e8837a;
+  --color-danger-hover: #f0a29b;
+}
+
+/* Custom — the funky one, and the only theme anybody can repaint.
+ *
+ * What is here is its *default*: grape soda, a saturated purple room with an electric mint accent.
+ * It is the one theme that breaks this file's own rule about chrome staying neutral, on purpose —
+ * and it still had to earn it. The dark note fills separate from this ground at 1.36 against the
+ * 1.33 they get from the plain dark theme, so a room this loud costs the notes nothing.
+ *
+ * Choose your own colours in settings and ThemeProvider writes them over these as inline custom
+ * properties on <html>, exactly the way a chosen font is written over the default one (see
+ * useAppFonts). Two colours are asked for — the ground and the accent — and everything else is
+ * mixed from them, because fifteen colour pickers is not a theme editor, it is a way to make an
+ * unreadable app. */
+:root[data-theme="custom"] {
+  --surface-base: #26124a;
+  --surface-muted-base: #1a0b33;
+  --surface-raised-base: #33185f;
+  --border-base: #43217a;
+  --hover-base: #3a1c6b;
+
+  --color-border-strong: #5c34a0;
+
+  --color-text: #fbf2ff;
+  --color-text-muted: #c3a3ea;
+
+  --color-accent: #3ff0d0;
+  --color-accent-hover: #6df5de;
+  --color-accent-soft: #123f4a;
+  --color-accent-soft-hover: #1a5361;
+  --color-accent-ink: #9ffbe9;
+
+  --color-danger: #ff7a92;
+  --color-danger-hover: #ff9dae;
+}
+
+/* Indigo — the mark's colour as the room.
+ *
+ * The most distinctive of the three and the one with a cost attached: a violet ground flatters the
+ * violet, blue and indigo notes and quietly disadvantages the other nine. That is why it is offered
+ * rather than made the default. */
+:root[data-theme="indigo"] {
+  --surface-base: #191627;
+  --surface-muted-base: #12101c;
+  --surface-raised-base: #221e33;
+  --border-base: #2c2740;
+  --hover-base: #241f38;
+
+  --color-border-strong: #413a5c;
+
+  --color-text: #eceaf6;
+  --color-text-muted: #9a94b4;
+
+  --color-accent: #9d95ff;
+  --color-accent-hover: #b3adff;
+  --color-accent-soft: #2a2450;
+  --color-accent-soft-hover: #342d63;
+  --color-accent-ink: #cdc7ff;
+
+  --color-danger: #f0847c;
+  --color-danger-hover: #f5a49e;
 }
 
 *,
@@ -487,6 +654,21 @@ body {
   }
 }
 
+/* The theme menu, which grows leftward out of the icon it hangs off — see ThemeSwitcher.
+   The difference from anim-panel-in is the direction: that one drops out of a control in a row,
+   this one arrives from the right, because its control is in the corner and there is nowhere to
+   drop from. */
+@keyframes anim-panel-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(10px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 @keyframes anim-overlay-in {
   from {
     opacity: 0;
@@ -604,8 +786,8 @@ body {
    Both forms, because the class is stamped on :root itself — so it is the same element as the
    theme attribute, not a descendant of it — while the compound selector alone would miss any
    nested use. */
-:root[data-theme="dark"].space-theme,
-:root[data-theme="dark"] .space-theme {
+:root[data-theme-family="dark"].space-theme,
+:root[data-theme-family="dark"] .space-theme {
   --color-surface: color-mix(in oklab, var(--space-tint) 10%, var(--surface-base));
   --color-surface-muted: color-mix(in oklab, var(--space-tint) 8%, var(--surface-muted-base));
   --color-surface-raised: color-mix(in oklab, var(--space-tint) 13%, var(--surface-raised-base));
@@ -796,6 +978,11 @@ body {
   transform-origin: top right;
 }
 
+.anim-panel-in-right {
+  animation: anim-panel-in-right var(--motion-base) var(--motion-ease) backwards;
+  transform-origin: top right;
+}
+
 .anim-overlay-in {
   animation: anim-overlay-in var(--motion-fast) var(--motion-ease) backwards;
 }
@@ -978,6 +1165,7 @@ body.dnd-touch-active {
   .anim-loader-bar,
   .anim-delayed-in,
   .anim-panel-in,
+  .anim-panel-in-right,
   .anim-slide-in-left,
   .anim-overlay-in,
   .anim-overlay-out,

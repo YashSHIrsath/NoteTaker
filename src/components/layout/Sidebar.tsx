@@ -12,8 +12,6 @@ import { useAuth } from '../../hooks/useAuth'
 import { getFolderCategory } from '../../lib/folderColor'
 import { WorkspaceSwitcher } from '../space/WorkspaceSwitcher'
 import { SpaceAvatar } from '../space/SpaceAvatar'
-import { SpaceMembersDialog } from '../space/SpaceMembersDialog'
-import { InviteMemberDialog } from '../space/InviteMemberDialog'
 import { useWorkspace } from '../../hooks/useWorkspace'
 import { useSpaces } from '../../hooks/useSpaces'
 import { useNavigate } from 'react-router-dom'
@@ -59,7 +57,7 @@ export function Sidebar({
    * say "Personal workspace" as a literal, which was true right up until spaces existed.
    */
   const workspace = useWorkspace()
-  const { owned, joined, invites, getSpace, invite } = useSpaces()
+  const { owned, joined, invites, getSpace } = useSpaces()
   const navigate = useNavigate()
   const spaces = [...owned, ...joined]
 
@@ -70,16 +68,6 @@ export function Sidebar({
    * question — and the first entry in the list is the way out. Remembered per device, the same way
    * the sidebar's own collapsed state is.
    */
-  /*
-   * The footer opens the space, rather than leaving it.
-   *
-   * Clicking it used to navigate to the Shared spaces page, which took you out of the space you were
-   * looking at — the same mistake the Spaces row made. What is actually wanted from there is the
-   * space itself: its picture, what it is for, and who is in it.
-   */
-  const [spaceSettingsOpen, setSpaceSettingsOpen] = useState(false)
-  const [spaceInviteOpen, setSpaceInviteOpen] = useState(false)
-
   const [spacesExpanded, setSpacesExpanded] = useState(() => {
     const stored = window.localStorage.getItem(SPACES_EXPANDED_KEY)
     return stored === null ? workspace.kind === 'space' : stored === '1'
@@ -306,7 +294,16 @@ export function Sidebar({
             */}
           <button
             type="button"
-            onClick={currentSpace ? () => setSpaceSettingsOpen(true) : onOpenProfile}
+            /*
+             * The space's own screen, not a popup over the notes.
+             *
+             * This used to open a dialog on a wide screen while a phone got the whole page — two
+             * presentations of the same thing, and the popup was the worse one: it held the space's
+             * identity, its note and every member's role inside a box floating over the notes it
+             * was describing. The page is workspace-scoped, so this is the same press in both
+             * places and there is only one layout to keep right.
+             */
+            onClick={onOpenProfile}
             aria-current={!currentSpace && profileActive ? 'page' : undefined}
             title={collapsed ? (currentSpace ? currentSpace.name : displayName) : undefined}
             className={cn(
@@ -389,26 +386,6 @@ export function Sidebar({
         </div>
       </div>
 
-      {/* The space's own settings, opened from the footer. Both dialogs portal to the body, so the
-        * sidebar's own overflow cannot clip them. */}
-      {currentSpace ? (
-        <>
-          <SpaceMembersDialog
-            open={spaceSettingsOpen}
-            space={currentSpace}
-            currentUserId={user?.id ?? null}
-            onClose={() => setSpaceSettingsOpen(false)}
-            onChanged={() => undefined}
-            onInvite={() => setSpaceInviteOpen(true)}
-          />
-          <InviteMemberDialog
-            open={spaceInviteOpen}
-            spaceName={currentSpace.name}
-            onClose={() => setSpaceInviteOpen(false)}
-            onInvite={(email, role) => invite(currentSpace.id, email, role)}
-          />
-        </>
-      ) : null}
     </aside>
   )
 }

@@ -311,7 +311,11 @@ export class SupabaseNotesDataRepository implements NotesDataRepository {
     for (const chunk of chunkIds(ids, ID_FILTER_CHUNK)) {
       const query = this.client.from(table).select(columns).in(column, chunk)
       const { data, error } = await (orderBy
-        ? query.order(orderBy, { ascending: true })
+        ? // `id` as a secondary key, not as decoration. `sort_order` is unique within a folder and
+          // restarts at 0 in the next one, so a listing that spans folders has almost every row
+          // tied — and Postgres gives no order to tied rows. Rewriting a row can change which of
+          // them comes back first, which meant saving a card's size could reshuffle a page.
+          query.order(orderBy, { ascending: true }).order('id', { ascending: true })
         : query)
       throwIfError(error, fallback)
       rows.push(...((data ?? []) as unknown as Row[]))
