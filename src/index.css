@@ -14,14 +14,35 @@
      reach this token. */
   --font-brand: "Sansita", "Iowan Old Style", Georgia, serif;
 
-  /* The two faces in force, both overridable per account from <html> (see useAppFonts).
+  /* The app's handwriting.
+     A note-taking app whose headings are set in a hand says what it is before a word is read, and
+     Kalam is the one hand that survives the whole range this token is used at — 72px on the landing
+     hero down to a 14.5px card title. The delicate ones (Caveat, Sacramento) are lovely large and
+     illegible small, which is why they are offered as a choice and not as the default.
+     Shipped in index.html alongside Inter and Sansita, because a default face that arrives over the
+     network is a first paint in a fallback. */
+  --font-hand: "Kalam", "Bradley Hand", "Segoe Print", "Comic Sans MS", cursive;
+
+  /* Two more hands, and the welcome page is the only thing that reads them.
+     Three faces rather than one because a page set entirely in Kalam has no hierarchy left — size
+     and weight end up doing all of it, and the whole thing flattens. These give each job a face
+     that is actually good at it:
+       --font-hand      Kalam         headings. Chunky felt-tip, a drawn 700, holds 14.5px to 72px.
+       --font-hand-text Shantell Sans the explanation. The one hand here designed for reading at
+                                      body sizes: even strokes, big x-height, a real italic.
+       --font-hand-note Caveat        the note mock-ups. A marker scrawl — the most personal of the
+                                      three, and the point of the illustration. */
+  --font-hand-text: "Shantell Sans", "Bradley Hand", "Segoe Print", "Comic Sans MS", cursive;
+  --font-hand-note: "Caveat", "Bradley Hand", "Segoe Print", "Comic Sans MS", cursive;
+
+  /* The three faces in force, all overridable per account from <html> (see useAppFonts).
      Declared as the defaults here so the app is correct before any session resolves, and so the
      landing page — which mounts outside the shell that overrides them — always uses these. */
-  --font-display: var(--font-brand);
+  --font-display: var(--font-hand);
   --font-body: var(--font-sans);
-  /* The text inside a note, which is a separate choice from the interface around it — see FontRole.
-     Defaults to whatever the reading face is, so an account that has only picked one gets both. */
-  --font-note: var(--font-body);
+  /* The text inside a note. Handwritten out of the box: it is the one surface where a hand is the
+     point rather than decoration, and 16px prose is where these faces are comfortable. */
+  --font-note: var(--font-hand);
 
   /* The untinted grounds. Named separately because a space's theme mixes its own colour into
      these — see .space-theme — and duplicating the literals there is how the two would drift. */
@@ -444,6 +465,44 @@ body,
 #root {
   max-width: 100%;
   overflow-x: hidden;
+}
+
+/*
+ * The welcome page, set in the app's hand throughout.
+ *
+ * Not just its headings. Those already followed --font-display, which is why the hero changed and
+ * nothing around it did: the paragraphs, the nav and the pills all inherit --font-body from `body`,
+ * and the landing page mounts *outside* the shell that ever overrides that (see useAppFonts). So the
+ * page was half-converted — a handwritten headline sitting on an interface-grey page.
+ *
+ * A class on the scroll root rather than a change to --font-body, because those are two different
+ * claims. --font-body is the *interface* face, and the landing page is not interface: it is a piece
+ * of writing about a writing app, and it can be set in the hand without any 11px menu label having
+ * to survive it. Signed in, the app keeps Inter chrome exactly as before.
+ *
+ * Two things deliberately opt out, both by naming a family inline, which beats inheritance: the
+ * wordmark (--font-brand, Sansita — a logo that moves with a preference is not a logo) and the nav's
+ * section numbers and scroll percentage (JetBrains Mono — those are figures that have to align, and
+ * a hand has no tabular anything).
+ */
+.landing-hand {
+  /* The explanation face. Headings inside this subtree name --font-display inline, so they keep
+     Kalam and out-specify this by being on the element itself. */
+  font-family: var(--font-hand-text);
+  /* These hands set a little wider than Inter at the same size. A hair of negative tracking holds
+     the hero's line breaks where they were without touching a size in the markup. */
+  letter-spacing: -0.006em;
+}
+
+/* The note mock-ups: the one place on the page that is pretending to *be* a note rather than
+   describing one, so it gets the most handwritten face of the three. Deliberately not the app's own
+   --font-note — this is an illustration on a marketing page, and Caveat sells the idea at two lines
+   in a card where Kalam, the sturdier face a real note wants, only looks like text. */
+.landing-note {
+  font-family: var(--font-hand-note);
+  /* Caveat runs small for its point size; the cards are the one place worth paying that back. */
+  font-size: 1.06em;
+  letter-spacing: 0.004em;
 }
 
 body {

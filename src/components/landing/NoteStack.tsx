@@ -410,7 +410,10 @@ export function NoteStack({ className }: NoteStackProps) {
                 ))}
               </div>
 
-              <div className="mt-3.5 border-t border-[var(--color-border)] pt-3.5 text-[13.5px] leading-relaxed">
+              {/* landing-note: the note's own body, in the most handwritten of the three faces —
+                  see .landing-note. The crumbs and tags above are chrome and stay in the page's
+                  explanation face, exactly as they are chrome in the real app. */}
+              <div className="landing-note mt-3.5 border-t border-[var(--color-border)] pt-3.5 text-[13.5px] leading-relaxed">
                 {card.body}
               </div>
 

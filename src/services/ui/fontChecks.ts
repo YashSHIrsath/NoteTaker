@@ -88,6 +88,22 @@ function checkCatalogue(): void {
     )
   }
 
+  /*
+   * The faces that ship in the document, named here so adding one is a deliberate act.
+   *
+   * `google: null` means "already loaded, do not fetch" — so a face marked null that is NOT in
+   * index.html's font link never loads at all, and renders in the fallback (Comic Sans, for the
+   * hands) for the life of the app with no error anywhere. This list cannot read index.html from
+   * here, so it does the next best thing: it fails the moment the set changes, which is the moment
+   * to go and check the other file.
+   */
+  const PRELOADED = ['inter', 'sansita', 'kalam', 'caveat', 'shantell-sans']
+  const shipped = FONT_OPTIONS.filter((option) => option.google === null).map((option) => option.id)
+  assert(
+    shipped.length === PRELOADED.length && shipped.every((id) => PRELOADED.includes(id)),
+    `the faces marked as already-loaded are [${shipped.join(', ')}] — if that is right, add them to index.html and update PRELOADED here`,
+  )
+
   // The defaults ship in index.html, so they must be the ones that ask for nothing at runtime —
   // otherwise a cold start would render in a fallback until a stylesheet arrived.
   assert(fontFor('body', DEFAULT_BODY_FONT).google === null, 'the default interface face is preloaded')
@@ -214,22 +230,40 @@ function checkStorage(): void {
  * the job. An independent default would leave the notes in Inter and give no clue why.
  */
 function checkNoteFollowsBody(): void {
+  /*
+   * Out of the box: handwritten, without anybody choosing anything. This is the whole point of the
+   * defaults, and the assertion that would catch it silently reverting to Inter.
+   */
   assert(
     readFontChoice('note', undefined).id === DEFAULT_NOTE_FONT,
-    'no account at all lands on the floor',
+    'no account at all is handwritten',
   )
   assert(
     readFontChoice('note', {}).id === DEFAULT_NOTE_FONT,
-    'and so does an account that has chosen nothing',
+    'and so is an account that has chosen nothing',
+  )
+  assert(
+    FONT_OPTIONS.find((option) => option.id === DEFAULT_NOTE_FONT)?.group === 'handwriting',
+    'and the face it lands on is actually a hand',
+  )
+  assert(
+    FONT_OPTIONS.find((option) => option.id === DEFAULT_HEADING_FONT)?.group === 'handwriting',
+    'headings too — the landing page reads this token',
+  )
+  /* The interface is deliberately NOT handwritten: `body` sets 11px menu labels, and this is the
+     check that stops a later "make it all handwritten" from taking them with it. */
+  assert(
+    FONT_OPTIONS.find((option) => option.id === DEFAULT_BODY_FONT)?.group !== 'handwriting',
+    'the interface stays legible at 11px',
   )
 
-  // The case that matters: one choice, both faces.
+  // An explicitly chosen interface face brings the notes along.
   assert(
-    readFontChoice('note', fontUpdate('body', 'kalam')).id === 'kalam',
+    readFontChoice('note', fontUpdate('body', 'lora')).id === 'lora',
     'choosing an interface face sets the note face with it',
   )
   assert(
-    readFontChoice('note', fontUpdate('body', 'lora')).id === 'lora',
+    readFontChoice('note', fontUpdate('body', 'jetbrains-mono')).id === 'jetbrains-mono',
     'whatever that face is',
   )
 

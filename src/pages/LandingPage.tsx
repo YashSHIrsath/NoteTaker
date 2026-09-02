@@ -202,7 +202,8 @@ export function LandingPage() {
        * thing on the page silently did nothing. The hooks are defensive about this now as well, but
        * the honest fix is for the element we hand them to be the one that actually scrolls.
        */
-      className="h-full overflow-y-auto bg-[var(--color-surface)] text-[var(--color-text)]"
+      // landing-hand: the whole page in the app's handwriting, nav and body copy included.
+      className="landing-hand h-full overflow-y-auto bg-[var(--color-surface)] text-[var(--color-text)]"
     >
       <ScrollRootProvider elementRef={scrollRef}>
         <LandingContent />

@@ -278,8 +278,12 @@ export const FONT_OPTIONS: FontOption[] = [
     roles: ['body', 'heading', 'note'],
     group: 'handwriting',
     stack: `"Kalam", ${HAND_FALLBACK}`,
-    // One of only two here with a drawn bold, so headings are set rather than smeared.
-    google: 'Kalam:wght@300;400;700',
+    /* Null, like Inter and Sansita, because this is a default now and ships in index.html — a
+       default face fetched at runtime is a first paint in Comic Sans. It is also one of only two
+       hands here with a drawn bold, which is half of why it got the job: every heading in this app
+       is set at 700 or 800, and the alternative was a smeared 400. The other half is its x-height,
+       which is what lets one face carry a 72px landing headline and a 14.5px card title. */
+    google: null,
   },
   {
     id: 'caveat',
@@ -288,7 +292,8 @@ export const FONT_OPTIONS: FontOption[] = [
     roles: ['body', 'heading', 'note'],
     group: 'handwriting',
     stack: `"Caveat", ${HAND_FALLBACK}`,
-    google: 'Caveat:wght@400;500;600;700',
+    // Ships in index.html: the welcome page sets its text in this, so it cannot arrive late.
+    google: null,
   },
   {
     id: 'patrick-hand',
@@ -357,7 +362,8 @@ export const FONT_OPTIONS: FontOption[] = [
     /* The exception to everything the section note says about synthesised bold: this is a genuine
        variable face, 300 to 800, with a real italic. It is why it is offered for the interface as
        well — a handwriting face that holds up at 11px is a rare thing. */
-    google: 'Shantell+Sans:ital,wght@0,300..800;1,400',
+    // Ships in index.html: the welcome page sets its text in this, so it cannot arrive late.
+    google: null,
   },
   {
     id: 'gloria-hallelujah',
@@ -457,11 +463,21 @@ export const FONT_OPTIONS: FontOption[] = [
 
 const BY_ID = new Map(FONT_OPTIONS.map((option) => [option.id, option]))
 
+/*
+ * What a brand-new account is set in, before anybody chooses anything.
+ *
+ * Two of the three are handwritten, and the split is deliberate rather than timid. Headings and note
+ * text are where a hand *is* the product — a note-taking app whose notes are handwritten says what
+ * it is without a word of onboarding. The interface is not: `body` sets 11px menu labels and
+ * metadata lines, and no hand is comfortable there. So the app reads as handwritten and stays as
+ * legible as it was.
+ *
+ * Every one of these is a starting point, not a fixture — all three are changeable from Settings,
+ * and a stored choice always wins.
+ */
 export const DEFAULT_BODY_FONT = 'inter'
-export const DEFAULT_HEADING_FONT = 'sansita'
-/** Only ever the floor. An account with no note face set follows its *reading* face — see
- *  readFontChoice — so this is what applies when there is no reading face either. */
-export const DEFAULT_NOTE_FONT = 'inter'
+export const DEFAULT_HEADING_FONT = 'kalam'
+export const DEFAULT_NOTE_FONT = 'kalam'
 
 export function fontsFor(role: FontRole): FontOption[] {
   return FONT_OPTIONS.filter((option) => option.roles.includes(role))
@@ -519,16 +535,17 @@ export function readFontChoice(
   const raw = metadata?.[KEYS[role]]
 
   /*
-   * A note face nobody has chosen follows the reading face.
+   * The note face, in three steps.
    *
-   * The alternative — its own fixed default — would mean somebody who sets the whole app to a
-   * handwriting face still finds their notes in Inter, and has to discover a second setting to
-   * finish the job. Following is what "I picked a font" ought to mean, and picking a note face
-   * explicitly is then an override rather than a requirement.
-   *
-   * Safe because every face offered for `body` is also offered for `note` — checked, in fontChecks —
-   * so the reading choice always resolves here. The floor below it is only ever reached by an
-   * account that has no reading face either.
+   *   1. What you chose for notes, if you chose one.
+   *   2. Otherwise the interface face — but only if you actually *picked* one. Somebody who sets the
+   *      app to Lora means their notes too, and should not have to find a second setting to finish
+   *      the job. Safe because every face offered for `body` is also offered for `note` (checked in
+   *      fontChecks), so that choice always resolves here.
+   *   3. Otherwise the handwriting default. This is the out-of-the-box state, and it is why step 2
+   *      tests for a stored value rather than reading the resolved interface face: resolving it
+   *      would hand back Inter — the interface *default* — and quietly beat the hand this step
+   *      exists to apply.
    */
   if (role === 'note') {
     if (typeof raw === 'string') {
@@ -537,8 +554,13 @@ export function readFontChoice(
         return chosen
       }
     }
-    const body = readFontChoice('body', metadata)
-    return body.roles.includes('note') ? body : fontFor('note', DEFAULT_NOTE_FONT)
+    if (typeof metadata?.[BODY_KEY] === 'string') {
+      const body = readFontChoice('body', metadata)
+      if (body.roles.includes('note')) {
+        return body
+      }
+    }
+    return fontFor('note', DEFAULT_NOTE_FONT)
   }
 
   if (typeof raw !== 'string') {
