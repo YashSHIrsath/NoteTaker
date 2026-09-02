@@ -1,13 +1,19 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getSupabaseClient } from '../../lib/supabase'
 import { isSpacePaletteColor } from '../../lib/spaceColor'
+import { toVisibility } from '../../lib/contentPrivacy'
 import type {
+  ContentSharing,
+  ContentVisibility,
+  FolderVisibilityImpact,
   IncomingSpaceInvite,
+  ShareableEntity,
   SpaceActivityAction,
   SpaceActivityEntity,
   SpaceActivityEntry,
   SpaceInvite,
   SpaceMember,
+  SpaceNotificationPrefs,
   SpaceRole,
   SpaceSummary,
 } from '../../types'
@@ -660,5 +666,178 @@ export class SupabaseSpacesDataRepository implements SpacesDataRepository {
     } catch (error) {
       throw toRepositoryError(error, 'Could not transfer the space.')
     }
+  }
+
+  /* ---------------------------------------------------------------- per-item privacy */
+
+  /**
+   * One item's sharing state.
+   *
+   * Read fresh rather than taken from the loaded workspace, because the share sheet is precisely
+   * where a stale answer is expensive: somebody may have changed the audience since this tab last
+   * read the space, and the list of names is the thing being edited.
+   *
+   * A `null` here means "no row came back", which the database returns both for an item that does not
+   * exist and for one this account cannot reach. Those are deliberately the same answer — telling
+   * them apart is how an id becomes a way to test whether something private exists.
+   */
+  async getSharing(
+    entityType: ShareableEntity,
+    entityId: string,
+  ): Promise<ContentSharing | null> {
+    try {
+      const { data, error } = await this.client.rpc('content_sharing', {
+        p_entity_type: entityType,
+        p_entity_id: entityId,
+      })
+      if (error) {
+        throw toRepositoryError(error, 'Could not load who can see this.')
+      }
+      const row = (Array.isArray(data) ? data[0] : data) as SharingRow | undefined
+      return row ? sharingFromRpcRow(row) : null
+    } catch (error) {
+      throw toRepositoryError(error, 'Could not load who can see this.')
+    }
+  }
+
+  /**
+   * Change who can see an item — and, by the same act, who its reminders reach.
+   *
+   * The resolved value is the server's, not an echo of the arguments, and the difference is load
+   * bearing: set_content_visibility drops anybody who is not a member of the space, and turns
+   * 'restricted' with nobody named into 'private'. A caller that kept what it sent would show a
+   * "Selected people" state the database has already decided is "Only me".
+   */
+  async setVisibility(
+    entityType: ShareableEntity,
+    entityId: string,
+    visibility: ContentVisibility,
+    userIds: string[],
+  ): Promise<ContentSharing> {
+    try {
+      const { data, error } = await this.client.rpc('set_content_visibility', {
+        p_entity_type: entityType,
+        p_entity_id: entityId,
+        p_visibility: visibility,
+        // Only meaningful for 'restricted'; sent regardless so the server sees exactly one shape.
+        p_user_ids: userIds,
+      })
+      if (error) {
+        throw toRepositoryError(error, 'Could not change who can see this.')
+      }
+      const row = (Array.isArray(data) ? data[0] : data) as SharingRow | undefined
+      if (!row) {
+        throw new RepositoryError('Could not change who can see this.')
+      }
+      return sharingFromRpcRow({ ...row, entity_type: entityType, entity_id: entityId })
+    } catch (error) {
+      throw toRepositoryError(error, 'Could not change who can see this.')
+    }
+  }
+
+  async folderVisibilityImpact(folderId: string): Promise<FolderVisibilityImpact> {
+    try {
+      const { data, error } = await this.client.rpc('folder_visibility_impact', {
+        p_folder_id: folderId,
+      })
+      if (error) {
+        throw toRepositoryError(error, 'Could not check what is inside this folder.')
+      }
+      const row = (Array.isArray(data) ? data[0] : data) as ImpactRow | undefined
+      return {
+        openFolders: row?.open_folders ?? 0,
+        openTasks: row?.open_tasks ?? 0,
+        keptPrivate: row?.kept_private ?? 0,
+      }
+    } catch (error) {
+      throw toRepositoryError(error, 'Could not check what is inside this folder.')
+    }
+  }
+
+  async getNotificationPrefs(spaceId: string): Promise<SpaceNotificationPrefs> {
+    try {
+      const { data, error } = await this.client.rpc('my_notification_prefs', {
+        p_space_id: spaceId,
+      })
+      if (error) {
+        throw toRepositoryError(error, 'Could not load your notification settings.')
+      }
+      const row = (Array.isArray(data) ? data[0] : data) as PrefsRow | undefined
+      return prefsFromRow(spaceId, row)
+    } catch (error) {
+      throw toRepositoryError(error, 'Could not load your notification settings.')
+    }
+  }
+
+  async setNotificationPrefs(
+    spaceId: string,
+    changes: { reminders?: boolean; dueDates?: boolean; contentUpdates?: boolean },
+  ): Promise<SpaceNotificationPrefs> {
+    try {
+      // null rather than undefined for the switches not being changed: the function reads NULL as
+      // "leave this one alone", and supabase-js drops undefined from the payload entirely, which
+      // would make the argument default apply instead.
+      const { data, error } = await this.client.rpc('set_notification_prefs', {
+        p_space_id: spaceId,
+        p_reminders: changes.reminders ?? null,
+        p_due_dates: changes.dueDates ?? null,
+        p_content_updates: changes.contentUpdates ?? null,
+      })
+      if (error) {
+        throw toRepositoryError(error, 'Could not save your notification settings.')
+      }
+      const row = (Array.isArray(data) ? data[0] : data) as PrefsRow | undefined
+      return prefsFromRow(spaceId, row)
+    } catch (error) {
+      throw toRepositoryError(error, 'Could not save your notification settings.')
+    }
+  }
+}
+
+/* ------------------------------------------------------------------ privacy row shapes */
+
+interface SharingRow {
+  entity_type: string
+  entity_id: string
+  visibility: string | null
+  owner_id: string | null
+  can_manage?: boolean | null
+  shared_with: string[] | null
+}
+
+interface ImpactRow {
+  open_folders: number
+  open_tasks: number
+  kept_private: number
+}
+
+interface PrefsRow {
+  space_id?: string
+  reminders: boolean
+  due_dates: boolean
+  content_updates: boolean
+}
+
+function sharingFromRpcRow(row: SharingRow): ContentSharing {
+  return {
+    entityType: row.entity_type === 'folder' ? 'folder' : 'task',
+    entityId: row.entity_id,
+    visibility: toVisibility(row.visibility),
+    ownerId: row.owner_id,
+    /* set_content_visibility does not return this column — it only ever succeeds for the owner, so
+       by the time a row comes back from it the answer is yes. content_sharing does return it. */
+    canManage: row.can_manage ?? true,
+    sharedWith: row.shared_with ?? [],
+  }
+}
+
+/** Absent means the member has never chosen, which is the defaults — the same ones the database
+ *  falls back to, restated here only for the case where the call returns no row at all. */
+function prefsFromRow(spaceId: string, row: PrefsRow | undefined): SpaceNotificationPrefs {
+  return {
+    spaceId,
+    reminders: row?.reminders ?? true,
+    dueDates: row?.due_dates ?? true,
+    contentUpdates: row?.content_updates ?? false,
   }
 }

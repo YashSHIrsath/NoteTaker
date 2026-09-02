@@ -18,6 +18,7 @@ import { runFolderManagementChecks } from '../../services/folders/folderManageme
 import { runNotesOpsChecks } from '../../services/notes/notesOpsChecks'
 import { runWorkspaceChecks } from '../../services/workspace/workspaceChecks'
 import { runSpacesChecks } from '../../services/spaces/spacesChecks'
+import { runPrivacyChecks } from '../../services/privacy/privacyChecks'
 import { runActivityChecks } from '../../services/spaces/activityChecks'
 import { runAuthFlowChecks } from '../../services/auth/authFlowChecks'
 import { runCalendarChecks } from '../../services/ui/calendarChecks'
@@ -789,6 +790,7 @@ export async function runAllRepositoryChecks(): Promise<void> {
   await runSupabaseRepositoryMockChecks()
   runNotesOpsChecks()
   runWorkspaceChecks()
+  runPrivacyChecks()
   await runSpacesChecks()
   await runActivityChecks()
   runAuthFlowChecks()

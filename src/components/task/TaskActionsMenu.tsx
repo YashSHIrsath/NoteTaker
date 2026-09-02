@@ -3,12 +3,15 @@ import { createPortal } from 'react-dom'
 import {
   CalendarClock,
   FolderInput,
+  Globe,
+  Lock,
   MoreVertical,
   Pin,
   PinOff,
   Star,
   StarOff,
   Trash2,
+  Users,
 } from 'lucide-react'
 import type { Task, TaskListScope } from '../../types'
 import { IconButton } from '../ui/IconButton'
@@ -17,6 +20,9 @@ import { TaskScheduleDialog } from './TaskScheduleDialog'
 import { useFolders } from '../../hooks/useFolders'
 import { useDeleteTask } from '../../hooks/useDeleteTask'
 import { useAnchoredPanel } from '../../hooks/useAnchoredPanel'
+import { useIsSpace } from '../../hooks/useWorkspace'
+import { ShareDialog } from '../sharing/ShareDialog'
+import { VISIBILITY_LABELS, ownVisibility } from '../../lib/contentPrivacy'
 import { cn } from '../../lib/cn'
 
 /**
@@ -104,18 +110,38 @@ export function TaskActionsMenu({
   ink,
   extraItems = [],
 }: TaskActionsMenuProps) {
-  const { toggleTaskImportant, toggleTaskPinned } = useFolders()
+  const { toggleTaskImportant, toggleTaskPinned, sharingIndex } = useFolders()
   const { requestTaskDelete, dialog: deleteDialog } = useDeleteTask()
   const [scheduleOpen, setScheduleOpen] = useState(false)
   const [moveOpen, setMoveOpen] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
+  const isSpace = useIsSpace()
   const menu = useAnchoredPanel<HTMLDivElement>(MENU_WIDTH)
 
   const title = task.title.trim() || 'Untitled'
   const pinnedHere = task.pinnedScopes.includes(scope)
   const iconClass = 'h-3.5 w-3.5 shrink-0'
 
+  /* The note's *own* level, not what it effectively reaches — this row opens the picker, and the
+     picker edits the note's own setting. What it actually reaches, folders above it included, is what
+     the badge on the card says. */
+  const visibility = ownVisibility(sharingIndex, 'task', task.id)
+  const VisibilityIcon =
+    visibility === 'private' ? Lock : visibility === 'restricted' ? Users : Globe
+
   const items: TaskMenuItem[] = [
     ...extraItems,
+    // Only inside a space. Personal notes have one reader, so there is no question to ask.
+    ...(isSpace
+      ? [
+          {
+            key: 'share',
+            label: `Who can see this · ${VISIBILITY_LABELS[visibility]}`,
+            icon: <VisibilityIcon className={iconClass} aria-hidden />,
+            onSelect: () => setShareOpen(true),
+          },
+        ]
+      : []),
     {
       key: 'schedule',
       label: task.noteKind === 'due_task' ? 'Due date & reminders' : 'Add due date or reminder',
@@ -233,6 +259,15 @@ export function TaskActionsMenu({
 
       <TaskScheduleDialog open={scheduleOpen} task={task} onClose={() => setScheduleOpen(false)} />
       <MoveTaskDialog open={moveOpen} taskId={task.id} onClose={() => setMoveOpen(false)} />
+      {shareOpen ? (
+        <ShareDialog
+          open
+          entityType="task"
+          entityId={task.id}
+          entityName={title}
+          onClose={() => setShareOpen(false)}
+        />
+      ) : null}
       {deleteDialog}
     </Fragment>
   )

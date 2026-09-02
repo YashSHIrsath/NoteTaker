@@ -4,6 +4,8 @@ import { StarButton } from '../common/StarButton'
 import { FolderActions } from './FolderActions'
 import { useFolders } from '../../hooks/useFolders'
 import { SortableFolderRow } from './SortableFolderRow'
+import { VisibilityBadge } from '../sharing/VisibilityBadge'
+import { folderChainVisibility, ownVisibility } from '../../lib/contentPrivacy'
 import { categoryVar, type FolderCategory } from '../../lib/folderColor'
 
 export interface FolderItemProps {
@@ -25,7 +27,18 @@ export function FolderItem({
   onClick,
   sortable = true,
 }: FolderItemProps) {
-  const { toggleFolderImportant } = useFolders()
+  const { toggleFolderImportant, folders, sharingIndex } = useFolders()
+
+  /*
+   * What this folder actually reaches, not what it is set to.
+   *
+   * A folder marked Everyone inside a private one reaches exactly its owner, and the badge has to say
+   * so — the alternative is an interface that reports a setting while the system does something else.
+   * `narrowed` is what separates "I chose this" from "the folder above me decided it", which is the
+   * difference between a badge that explains and a badge that confuses.
+   */
+  const own = ownVisibility(sharingIndex, 'folder', folderId)
+  const effective = folderChainVisibility(sharingIndex, folders, folderId)
 
   const content = (
     <>
@@ -47,6 +60,7 @@ export function FolderItem({
           <Folder className="h-3.5 w-3.5" style={{ color: categoryVar(category) }} aria-hidden />
         </span>
         <span className="min-w-0 flex-1 truncate">{name}</span>
+        <VisibilityBadge visibility={effective} narrowedByParent={own !== effective} />
       </button>
       <StarButton
         important={important}

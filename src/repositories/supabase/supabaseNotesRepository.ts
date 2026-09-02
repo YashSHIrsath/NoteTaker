@@ -15,14 +15,18 @@ import {
   folderPatchToRow,
   folderToRow,
   layersByParent,
+  sharingFromRows,
   snapshotFromRows,
   subtaskPatchToRow,
   subtaskToRow,
   taskPatchToRow,
   taskToRow,
-  type FolderRow,
+  type ContentPrivacyColumns,
+  type ContentShareRow,
+  type FolderReadRow,
   type SubtaskRow,
   type TagRow,
+  type TaskReadRow,
   type TaskRow,
   type TaskTagRow,
 } from './mappers'
@@ -44,6 +48,22 @@ const TASK_COLUMNS =
 
 const FOLDER_COLUMNS = 'id,parent_id,name,is_important,sort_order'
 const SUBTASK_COLUMNS = 'id,task_id,parent_subtask_id,title,completed'
+
+/**
+ * The privacy pair, appended only when reading a space.
+ *
+ * Two columns rather than a second query: they live on the folder and task rows the read is already
+ * fetching, so asking for them costs nothing. Only inside a space, because a personal workspace has
+ * one reader and no visibility to speak of — which also means a database that predates the privacy
+ * migration is never asked for a column it does not have on the one path it can still serve.
+ */
+const PRIVACY_COLUMNS = 'visibility,owner_id'
+const FOLDER_PRIVACY_COLUMNS = `${FOLDER_COLUMNS},${PRIVACY_COLUMNS}`
+const TASK_PRIVACY_COLUMNS = `${TASK_COLUMNS},${PRIVACY_COLUMNS}`
+
+/** Every grant in a space, in one read. RLS answers with only the ones whose item this reader can
+ *  already reach, so there is nothing to filter here and no way to use it to probe. */
+const SHARE_COLUMNS = 'entity_type,entity_id,user_id'
 
 /**
  * How many ids go into one `in (...)` filter.
@@ -76,8 +96,26 @@ const _everySelectedColumnExists: Exclude<
   ? true
   : never = true
 
+/** The same guard for the privacy pair, which is selected separately and so would otherwise be the
+ *  one place the two could drift apart again. */
+const _everyPrivacyColumnIsSelected: Exclude<
+  keyof ContentPrivacyColumns,
+  SplitColumns<typeof PRIVACY_COLUMNS>
+> extends never
+  ? true
+  : never = true
+
+const _everyPrivacyColumnExists: Exclude<
+  SplitColumns<typeof PRIVACY_COLUMNS>,
+  keyof ContentPrivacyColumns
+> extends never
+  ? true
+  : never = true
+
 void _everyTaskColumnIsSelected
 void _everySelectedColumnExists
+void _everyPrivacyColumnIsSelected
+void _everyPrivacyColumnExists
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -195,9 +233,9 @@ export class SupabaseNotesDataRepository implements NotesDataRepository {
       const [folderRows, tagsResult] = await Promise.all([this.selectFolders(), this.selectTags()])
       const folderIds = folderRows.map((row) => row.id)
 
-      const taskRows = await this.selectByIds<TaskRow>(
+      const taskRows = await this.selectByIds<TaskReadRow>(
         'tasks',
-        TASK_COLUMNS,
+        this.spaceId === null ? TASK_COLUMNS : TASK_PRIVACY_COLUMNS,
         'folder_id',
         folderIds,
         'Could not load tasks.',
@@ -205,7 +243,10 @@ export class SupabaseNotesDataRepository implements NotesDataRepository {
       )
       const taskIds = taskRows.map((row) => row.id)
 
-      const [subtaskRows, taskTagsResult] = await Promise.all([
+      // The grants ride in this wave rather than the first: they are only wanted for rows that came
+      // back, and by here both sets of ids are known. In a personal workspace it resolves to an empty
+      // array without a request.
+      const [subtaskRows, taskTagsResult, shareRows] = await Promise.all([
         this.selectByIds<SubtaskRow>(
           'subtasks',
           SUBTASK_COLUMNS,
@@ -214,6 +255,7 @@ export class SupabaseNotesDataRepository implements NotesDataRepository {
           'Could not load subtasks.',
         ),
         this.selectTaskTags(taskIds),
+        this.selectShares(),
       ])
 
       const catalogueError = tagsResult.error ?? taskTagsResult.error
@@ -237,6 +279,11 @@ export class SupabaseNotesDataRepository implements NotesDataRepository {
               tagRows: (tagsResult.data ?? []) as TagRow[],
               taskTagRows: taskTagsResult.rows,
             },
+        // Empty for personal notes, which is what "no privacy in play" looks like — see the note on
+        // AppSnapshot.sharing.
+        this.spaceId === null
+          ? []
+          : sharingFromRows(folderRows, taskRows, shareRows, userId),
       )
     } catch (error) {
       throw toRepositoryError(error, 'Could not load notes.')
@@ -251,19 +298,25 @@ export class SupabaseNotesDataRepository implements NotesDataRepository {
    * the migration ran. A space cannot degrade — there is nothing for it to be — so that one says so
    * plainly instead of quietly handing back the account's own notes under a space's address.
    */
-  private async selectFolders(): Promise<FolderRow[]> {
+  private async selectFolders(): Promise<FolderReadRow[]> {
     const spaceId = this.spaceId
-    const scoped = this.client.from('folders').select(FOLDER_COLUMNS)
+    const scoped = this.client
+      .from('folders')
+      .select(spaceId === null ? FOLDER_COLUMNS : FOLDER_PRIVACY_COLUMNS)
     const { data, error } = await (spaceId === null
       ? scoped.is('space_id', null)
       : scoped.eq('space_id', spaceId)
     ).order('sort_order', { ascending: true })
 
     if (!error) {
-      return (data ?? []) as FolderRow[]
+      return (data ?? []) as unknown as FolderReadRow[]
     }
     const missing = missingColumnName(error)
-    if (missing !== 'space_id') {
+    // `visibility` and `owner_id` are only ever asked for inside a space, and a space that cannot
+    // answer for them is in exactly the position a space on a database with no space_id is: there is
+    // nothing to degrade to, so it says so rather than quietly dropping privacy and showing
+    // everything to everyone — which is the one failure mode this whole feature must not have.
+    if (missing !== 'space_id' && missing !== 'visibility' && missing !== 'owner_id') {
       throw toRepositoryError(error, 'Could not load folders.')
     }
     if (spaceId !== null) {
@@ -277,7 +330,29 @@ export class SupabaseNotesDataRepository implements NotesDataRepository {
       .select(FOLDER_COLUMNS)
       .order('sort_order', { ascending: true })
     throwIfError(retry.error, 'Could not load folders.')
-    return (retry.data ?? []) as FolderRow[]
+    return (retry.data ?? []) as unknown as FolderReadRow[]
+  }
+
+  /**
+   * Every explicit grant in this space.
+   *
+   * One query, unfiltered by item, because content_shares carries the space and its RLS policy
+   * already restricts the answer to items this reader can reach. Empty for a personal workspace,
+   * without asking: there is nothing to share with.
+   */
+  private async selectShares(): Promise<ContentShareRow[]> {
+    const spaceId = this.spaceId
+    if (spaceId === null) {
+      return []
+    }
+    const { data, error } = await this.client
+      .from('content_shares')
+      .select(SHARE_COLUMNS)
+      .eq('space_id', spaceId)
+    if (error) {
+      throw toRepositoryError(error, 'Could not load who this space shares things with.')
+    }
+    return (data ?? []) as unknown as ContentShareRow[]
   }
 
   /** The same tolerance for the tag catalogue, which is already allowed to be absent entirely. */

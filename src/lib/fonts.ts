@@ -18,7 +18,38 @@
  * the moment somebody picks it. See useAppFonts.
  */
 
-export type FontRole = 'body' | 'heading'
+/**
+ * The three things a face can be set as.
+ *
+ * `body` is the interface — labels, menus, metadata, every 11px line in the app. `heading` is card
+ * titles and page headings. `note` is the text *inside* a note, and it is separate from `body` for
+ * the reason the other two are separate from each other: the register you want to write in is not
+ * the register you want the chrome around it in. Somebody keeping the UI in Inter and their notes in
+ * a felt-tip hand is the ordinary case, not an exotic one.
+ *
+ * A note face also gets more room than a body face — note text is set at 16px, UI metadata at 11px —
+ * so several hands that are unreadable in a menu are perfectly comfortable in a paragraph, and are
+ * offered for `note` but not for `body`.
+ */
+export type FontRole = 'body' | 'heading' | 'note'
+
+/**
+ * What kind of face it is, for grouping the picker.
+ *
+ * Twenty-nine tiles in one flat grid is a wall — and worse, it hides the actual decision, which is
+ * almost always "I want a handwritten one" or "I want a plain one" before it is ever about a
+ * particular name. The groups make that first choice visible.
+ */
+export type FontGroup = 'sans' | 'serif' | 'handwriting' | 'mono' | 'accessible'
+
+/** The order the groups are offered in, and what each is called on screen. */
+export const FONT_GROUPS: { id: FontGroup; label: string; blurb: string }[] = [
+  { id: 'sans', label: 'Sans-serif', blurb: 'Plain and modern. The safe, legible default.' },
+  { id: 'serif', label: 'Serif', blurb: 'Printed and literary. Reads like a page.' },
+  { id: 'handwriting', label: 'Handwriting', blurb: 'Pen, pencil and marker. Notes that look written.' },
+  { id: 'mono', label: 'Monospace', blurb: 'Every character the same width. Lists and numbers line up.' },
+  { id: 'accessible', label: 'Built for legibility', blurb: 'Drawn so no two characters can be confused.' },
+]
 
 export interface FontOption {
   id: string
@@ -27,6 +58,8 @@ export interface FontOption {
   hint: string
   /** Which lists it appears in. */
   roles: FontRole[]
+  /** Which section of the picker it sits in. */
+  group: FontGroup
   /** The full CSS stack, fallbacks included. */
   stack: string
   /**
@@ -41,6 +74,15 @@ export interface FontOption {
 const SANS_FALLBACK = '"Segoe UI", "Helvetica Neue", system-ui, sans-serif'
 const SERIF_FALLBACK = '"Iowan Old Style", Georgia, "Times New Roman", serif'
 const MONO_FALLBACK = 'ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace'
+/**
+ * Behind a handwriting face, two faces that are actually installed somewhere.
+ *
+ * `cursive` alone would satisfy the "always resolves" rule and land on something wildly different
+ * per platform — Snell Roundhand on a Mac is a formal copperplate script, which is not what any of
+ * these are. Bradley Hand (macOS/iOS) and Segoe Print (Windows) are the closest real hands, and
+ * Comic Sans is on both; only after all three does it give up and take whatever `cursive` means.
+ */
+const HAND_FALLBACK = '"Bradley Hand", "Segoe Print", "Comic Sans MS", cursive'
 
 export const FONT_OPTIONS: FontOption[] = [
   /* ------------------------------------------------------------------ the defaults */
@@ -48,7 +90,8 @@ export const FONT_OPTIONS: FontOption[] = [
     id: 'inter',
     label: 'Inter',
     hint: 'The app’s own face. Proportional, tuned for interfaces, and the most words per line.',
-    roles: ['body'],
+    roles: ['body', 'note'],
+    group: 'sans',
     stack: `"Inter", ${SANS_FALLBACK}`,
     google: null,
   },
@@ -57,6 +100,7 @@ export const FONT_OPTIONS: FontOption[] = [
     label: 'Sansita',
     hint: 'The app’s own headings. High contrast, tight apertures, made for display sizes.',
     roles: ['heading'],
+    group: 'serif',
     stack: `"Sansita", ${SERIF_FALLBACK}`,
     google: null,
   },
@@ -66,7 +110,8 @@ export const FONT_OPTIONS: FontOption[] = [
     id: 'geist',
     label: 'Geist',
     hint: 'Plain, close-set and precise. Neutral enough to disappear at 11px and still hold a title.',
-    roles: ['body', 'heading'],
+    roles: ['body', 'heading', 'note'],
+    group: 'sans',
     stack: `"Geist", ${SANS_FALLBACK}`,
     // 800 as well as the body weights, because this one is offered for both roles and a heading is
     // only ever set heavy. The italic is a real one, not a synthesised slant — checked, because a
@@ -77,7 +122,8 @@ export const FONT_OPTIONS: FontOption[] = [
     id: 'dm-sans',
     label: 'DM Sans',
     hint: 'Low-contrast geometric. Quiet, current, and never in the way of what it is setting.',
-    roles: ['body', 'heading'],
+    roles: ['body', 'heading', 'note'],
+    group: 'sans',
     stack: `"DM Sans", ${SANS_FALLBACK}`,
     google: 'DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400',
   },
@@ -85,7 +131,8 @@ export const FONT_OPTIONS: FontOption[] = [
     id: 'manrope',
     label: 'Manrope',
     hint: 'Semi-condensed and confident. Reads expensive at a heading size and stays legible small.',
-    roles: ['body', 'heading'],
+    roles: ['body', 'heading', 'note'],
+    group: 'sans',
     stack: `"Manrope", ${SANS_FALLBACK}`,
     google: 'Manrope:wght@400;500;600;700;800',
   },
@@ -93,7 +140,8 @@ export const FONT_OPTIONS: FontOption[] = [
     id: 'plex-sans',
     label: 'IBM Plex Sans',
     hint: 'Engineered and slightly formal. Notes read like documentation, in the good sense.',
-    roles: ['body'],
+    roles: ['body', 'note'],
+    group: 'sans',
     stack: `"IBM Plex Sans", ${SANS_FALLBACK}`,
     google: 'IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400',
   },
@@ -101,7 +149,8 @@ export const FONT_OPTIONS: FontOption[] = [
     id: 'work-sans',
     label: 'Work Sans',
     hint: 'Humanist and warm. Softer than Inter without giving up any clarity.',
-    roles: ['body'],
+    roles: ['body', 'note'],
+    group: 'sans',
     stack: `"Work Sans", ${SANS_FALLBACK}`,
     google: 'Work+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400',
   },
@@ -109,7 +158,8 @@ export const FONT_OPTIONS: FontOption[] = [
     id: 'outfit',
     label: 'Outfit',
     hint: 'Perfectly circular geometry. Modern to the point of being architectural.',
-    roles: ['body', 'heading'],
+    roles: ['body', 'heading', 'note'],
+    group: 'sans',
     stack: `"Outfit", ${SANS_FALLBACK}`,
     google: 'Outfit:wght@400;500;600;700;800',
   },
@@ -117,7 +167,8 @@ export const FONT_OPTIONS: FontOption[] = [
     id: 'space-grotesk',
     label: 'Space Grotesk',
     hint: 'Odd, technical, memorable. The most opinionated thing in this list.',
-    roles: ['body', 'heading'],
+    roles: ['body', 'heading', 'note'],
+    group: 'sans',
     stack: `"Space Grotesk", ${SANS_FALLBACK}`,
     google: 'Space+Grotesk:wght@400;500;600;700',
   },
@@ -126,6 +177,7 @@ export const FONT_OPTIONS: FontOption[] = [
     label: 'Sora',
     hint: 'Squared-off and deliberate. Headings that look like a product, not a document.',
     roles: ['heading'],
+    group: 'sans',
     stack: `"Sora", ${SANS_FALLBACK}`,
     google: 'Sora:wght@400;500;600;700;800',
   },
@@ -135,7 +187,8 @@ export const FONT_OPTIONS: FontOption[] = [
     id: 'source-serif',
     label: 'Source Serif 4',
     hint: 'A screen serif built for long reading. The closest this list gets to a printed page.',
-    roles: ['body', 'heading'],
+    roles: ['body', 'heading', 'note'],
+    group: 'serif',
     stack: `"Source Serif 4", ${SERIF_FALLBACK}`,
     google: 'Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400',
   },
@@ -143,7 +196,8 @@ export const FONT_OPTIONS: FontOption[] = [
     id: 'lora',
     label: 'Lora',
     hint: 'Brushed contrast, literary without being fussy. Good for notes you actually write in.',
-    roles: ['body', 'heading'],
+    roles: ['body', 'heading', 'note'],
+    group: 'serif',
     stack: `"Lora", ${SERIF_FALLBACK}`,
     google: 'Lora:ital,wght@0,400;0,500;0,600;0,700;1,400',
   },
@@ -152,6 +206,7 @@ export const FONT_OPTIONS: FontOption[] = [
     label: 'Fraunces',
     hint: 'Wobbly, old-style, unmistakably crafted. Expensive-looking at a heading size.',
     roles: ['heading'],
+    group: 'serif',
     stack: `"Fraunces", ${SERIF_FALLBACK}`,
     google: 'Fraunces:ital,opsz,wght@0,9..144,600;0,9..144,700;0,9..144,900;1,9..144,700',
   },
@@ -160,6 +215,7 @@ export const FONT_OPTIONS: FontOption[] = [
     label: 'Playfair Display',
     hint: 'High-contrast and editorial. A magazine masthead, if that is the register you want.',
     roles: ['heading'],
+    group: 'serif',
     stack: `"Playfair Display", ${SERIF_FALLBACK}`,
     google: 'Playfair+Display:ital,wght@0,600;0,700;0,800;0,900;1,700',
   },
@@ -168,6 +224,7 @@ export const FONT_OPTIONS: FontOption[] = [
     label: 'DM Serif Display',
     hint: 'Tight, glossy, sure of itself. Only ever a heading — it has no small sizes.',
     roles: ['heading'],
+    group: 'serif',
     stack: `"DM Serif Display", ${SERIF_FALLBACK}`,
     google: 'DM+Serif+Display:ital@0;1',
   },
@@ -176,6 +233,7 @@ export const FONT_OPTIONS: FontOption[] = [
     label: 'Instrument Serif',
     hint: 'Narrow and understated. Fits a long title in a short space without shouting.',
     roles: ['heading'],
+    group: 'serif',
     stack: `"Instrument Serif", ${SERIF_FALLBACK}`,
     google: 'Instrument+Serif:ital@0;1',
   },
@@ -185,7 +243,8 @@ export const FONT_OPTIONS: FontOption[] = [
     id: 'jetbrains-mono',
     label: 'JetBrains Mono',
     hint: 'Every character the same width. Lists and numbers line up, and 1, l and I never look alike.',
-    roles: ['body'],
+    roles: ['body', 'note'],
+    group: 'mono',
     stack: `"JetBrains Mono", ${MONO_FALLBACK}`,
     google: 'JetBrains+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400',
   },
@@ -193,9 +252,195 @@ export const FONT_OPTIONS: FontOption[] = [
     id: 'plex-mono',
     label: 'IBM Plex Mono',
     hint: 'A softer monospace with real serifs on the i and l. Warmer than JetBrains for prose.',
-    roles: ['body'],
+    roles: ['body', 'note'],
+    group: 'mono',
     stack: `"IBM Plex Mono", ${MONO_FALLBACK}`,
     google: 'IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400',
+  },
+
+  /* ------------------------------------------------------------------ handwriting
+   *
+   * A note-taking app is the one place these belong, and the reason they are worth having is the
+   * reason they need care: they carry a register nothing else in this list can, and most of them are
+   * drawn at exactly one weight.
+   *
+   * That last part matters more than it sounds. Every heading in this app is set at 700 or 800, so a
+   * face that only ships 400 is *synthesised* bold by the browser — the outline smeared sideways.
+   * On a chunky felt-tip that passes; on a thin pencil hand it turns to mud. Which is why Kalam and
+   * Caveat, the two with real bold cuts, are the ones offered without reservation, and why the two
+   * faintest hands are offered as headings only: at 11px, in a menu, they stop being legible before
+   * they stop being pretty.
+   */
+  {
+    id: 'kalam',
+    label: 'Kalam',
+    hint: 'A felt-tip hand with real weight behind it. The most readable of these by some distance.',
+    roles: ['body', 'heading', 'note'],
+    group: 'handwriting',
+    stack: `"Kalam", ${HAND_FALLBACK}`,
+    // One of only two here with a drawn bold, so headings are set rather than smeared.
+    google: 'Kalam:wght@300;400;700',
+  },
+  {
+    id: 'caveat',
+    label: 'Caveat',
+    hint: 'A quick marker-pen scrawl. Casual and slanted, and still easy to read at speed.',
+    roles: ['body', 'heading', 'note'],
+    group: 'handwriting',
+    stack: `"Caveat", ${HAND_FALLBACK}`,
+    google: 'Caveat:wght@400;500;600;700',
+  },
+  {
+    id: 'patrick-hand',
+    label: 'Patrick Hand',
+    hint: 'Neat, upright ballpoint. Like a note left on the kitchen table.',
+    roles: ['body', 'heading', 'note'],
+    group: 'handwriting',
+    stack: `"Patrick Hand", ${HAND_FALLBACK}`,
+    google: 'Patrick+Hand',
+  },
+  {
+    id: 'handlee',
+    label: 'Handlee',
+    hint: 'An unhurried rounded hand. Friendly without tipping over into cute.',
+    roles: ['body', 'heading', 'note'],
+    group: 'handwriting',
+    stack: `"Handlee", ${HAND_FALLBACK}`,
+    google: 'Handlee',
+  },
+  {
+    id: 'architects-daughter',
+    label: 'Architects Daughter',
+    hint: 'Wide, deliberate draughtsman’s printing. Every letter looks drawn on purpose.',
+    roles: ['body', 'heading', 'note'],
+    group: 'handwriting',
+    stack: `"Architects Daughter", ${HAND_FALLBACK}`,
+    google: 'Architects+Daughter',
+  },
+  {
+    id: 'indie-flower',
+    label: 'Indie Flower',
+    hint: 'Round, bubbly and cheerful. The most informal thing in this list.',
+    roles: ['body', 'heading', 'note'],
+    group: 'handwriting',
+    stack: `"Indie Flower", ${HAND_FALLBACK}`,
+    google: 'Indie+Flower',
+  },
+  {
+    id: 'shadows-into-light',
+    label: 'Shadows Into Light',
+    hint: 'Thin, airy pencil. Lovely at a title size; too faint for small print.',
+    // Heading only, and that is the whole judgement: its strokes are a hairline, and a hairline set
+    // at 11px in a menu is a face you squint at.
+    roles: ['heading', 'note'],
+    group: 'handwriting',
+    stack: `"Shadows Into Light", ${HAND_FALLBACK}`,
+    google: 'Shadows+Into+Light',
+  },
+  {
+    id: 'nothing-you-could-do',
+    label: 'Nothing You Could Do',
+    hint: 'A hurried, steeply slanted scribble. Charming as a title, hard work as a paragraph.',
+    roles: ['heading', 'note'],
+    group: 'handwriting',
+    stack: `"Nothing You Could Do", ${HAND_FALLBACK}`,
+    google: 'Nothing+You+Could+Do',
+  },
+
+  {
+    id: 'shantell-sans',
+    label: 'Shantell Sans',
+    hint: 'A drawn hand with a full range of weights. The one here that works everywhere, including a menu.',
+    roles: ['body', 'heading', 'note'],
+    group: 'handwriting',
+    stack: `"Shantell Sans", ${HAND_FALLBACK}`,
+    /* The exception to everything the section note says about synthesised bold: this is a genuine
+       variable face, 300 to 800, with a real italic. It is why it is offered for the interface as
+       well — a handwriting face that holds up at 11px is a rare thing. */
+    google: 'Shantell+Sans:ital,wght@0,300..800;1,400',
+  },
+  {
+    id: 'gloria-hallelujah',
+    label: 'Gloria Hallelujah',
+    hint: 'The archetypal friendly note. Loose, rounded, and the easiest of these to read at speed.',
+    roles: ['body', 'heading', 'note'],
+    group: 'handwriting',
+    stack: `"Gloria Hallelujah", ${HAND_FALLBACK}`,
+    google: 'Gloria+Hallelujah',
+  },
+  {
+    id: 'covered-by-your-grace',
+    label: 'Covered By Your Grace',
+    hint: 'Neat slanted note-taking, the way somebody writes when they mean to read it back.',
+    roles: ['body', 'heading', 'note'],
+    group: 'handwriting',
+    stack: `"Covered By Your Grace", ${HAND_FALLBACK}`,
+    google: 'Covered+By+Your+Grace',
+  },
+  {
+    id: 'dancing-script',
+    label: 'Dancing Script',
+    hint: 'Joined-up cursive with real bold cuts. Elegant without being a wedding invitation.',
+    roles: ['heading', 'note'],
+    group: 'handwriting',
+    stack: `"Dancing Script", ${HAND_FALLBACK}`,
+    google: 'Dancing+Script:wght@400;500;600;700',
+  },
+  {
+    id: 'amatic-sc',
+    label: 'Amatic SC',
+    hint: 'Tall, narrow capitals. Fits a long title in a short space and looks hand-lettered doing it.',
+    roles: ['heading', 'note'],
+    group: 'handwriting',
+    stack: `"Amatic SC", ${HAND_FALLBACK}`,
+    google: 'Amatic+SC:wght@400;700',
+  },
+  {
+    id: 'just-another-hand',
+    label: 'Just Another Hand',
+    hint: 'Very tall and very condensed. A note scribbled in the margin, and the narrowest face here.',
+    roles: ['heading', 'note'],
+    group: 'handwriting',
+    stack: `"Just Another Hand", ${HAND_FALLBACK}`,
+    google: 'Just+Another+Hand',
+  },
+  {
+    id: 'reenie-beanie',
+    label: 'Reenie Beanie',
+    hint: 'A loose ballpoint scrawl. Casual to the point of being scruffy, in the good way.',
+    roles: ['heading', 'note'],
+    group: 'handwriting',
+    stack: `"Reenie Beanie", ${HAND_FALLBACK}`,
+    google: 'Reenie+Beanie',
+  },
+  {
+    id: 'sacramento',
+    label: 'Sacramento',
+    hint: 'A fine single-stroke script. The most refined thing in this list, and the most delicate.',
+    roles: ['heading', 'note'],
+    group: 'handwriting',
+    stack: `"Sacramento", ${HAND_FALLBACK}`,
+    google: 'Sacramento',
+  },
+  {
+    id: 'permanent-marker',
+    label: 'Permanent Marker',
+    hint: 'Thick, opaque marker pen. The only one of these with any weight to shout with.',
+    // Heading only: it is drawn at one very heavy weight, and a paragraph of it is a paragraph of
+    // shouting. As a title it is the best thing here.
+    roles: ['heading'],
+    group: 'handwriting',
+    stack: `"Permanent Marker", ${HAND_FALLBACK}`,
+    google: 'Permanent+Marker',
+  },
+  {
+    id: 'homemade-apple',
+    label: 'Homemade Apple',
+    hint: 'Real joined-up pen cursive. Lovely on a title; genuinely slow to read in quantity.',
+    roles: ['heading'],
+    group: 'handwriting',
+    stack: `"Homemade Apple", ${HAND_FALLBACK}`,
+    google: 'Homemade+Apple',
   },
 
   /* ------------------------------------------------------------------ accessibility */
@@ -203,7 +448,8 @@ export const FONT_OPTIONS: FontOption[] = [
     id: 'atkinson',
     label: 'Atkinson Hyperlegible',
     hint: 'Drawn so that no two characters can be confused. The most legible face here, by design.',
-    roles: ['body', 'heading'],
+    roles: ['body', 'heading', 'note'],
+    group: 'accessible',
     stack: `"Atkinson Hyperlegible", ${SANS_FALLBACK}`,
     google: 'Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400',
   },
@@ -213,9 +459,24 @@ const BY_ID = new Map(FONT_OPTIONS.map((option) => [option.id, option]))
 
 export const DEFAULT_BODY_FONT = 'inter'
 export const DEFAULT_HEADING_FONT = 'sansita'
+/** Only ever the floor. An account with no note face set follows its *reading* face — see
+ *  readFontChoice — so this is what applies when there is no reading face either. */
+export const DEFAULT_NOTE_FONT = 'inter'
 
 export function fontsFor(role: FontRole): FontOption[] {
   return FONT_OPTIONS.filter((option) => option.roles.includes(role))
+}
+
+/** The same list, split into the sections the picker draws. Empty groups are dropped, so a role that
+ *  has no monospace face simply has no monospace heading. */
+export function groupedFontsFor(
+  role: FontRole,
+): { id: FontGroup; label: string; blurb: string; options: FontOption[] }[] {
+  const available = fontsFor(role)
+  return FONT_GROUPS.map((group) => ({
+    ...group,
+    options: available.filter((option) => option.group === group.id),
+  })).filter((group) => group.options.length > 0)
 }
 
 /** A face by id, or the default for that role. Never null: an id from a hand-edited preference or an
@@ -225,11 +486,24 @@ export function fontFor(role: FontRole, id: string | undefined): FontOption {
   if (option && option.roles.includes(role)) {
     return option
   }
-  return BY_ID.get(role === 'body' ? DEFAULT_BODY_FONT : DEFAULT_HEADING_FONT)!
+  return BY_ID.get(DEFAULTS[role])!
+}
+
+const DEFAULTS: Record<FontRole, string> = {
+  body: DEFAULT_BODY_FONT,
+  heading: DEFAULT_HEADING_FONT,
+  note: DEFAULT_NOTE_FONT,
 }
 
 const BODY_KEY = 'body_font'
 const HEADING_KEY = 'heading_font'
+const NOTE_KEY = 'note_font'
+
+const KEYS: Record<FontRole, string> = {
+  body: BODY_KEY,
+  heading: HEADING_KEY,
+  note: NOTE_KEY,
+}
 
 /**
  * The stored ids.
@@ -242,7 +516,31 @@ export function readFontChoice(
   role: FontRole,
   metadata: Record<string, unknown> | undefined,
 ): FontOption {
-  const raw = metadata?.[role === 'body' ? BODY_KEY : HEADING_KEY]
+  const raw = metadata?.[KEYS[role]]
+
+  /*
+   * A note face nobody has chosen follows the reading face.
+   *
+   * The alternative — its own fixed default — would mean somebody who sets the whole app to a
+   * handwriting face still finds their notes in Inter, and has to discover a second setting to
+   * finish the job. Following is what "I picked a font" ought to mean, and picking a note face
+   * explicitly is then an override rather than a requirement.
+   *
+   * Safe because every face offered for `body` is also offered for `note` — checked, in fontChecks —
+   * so the reading choice always resolves here. The floor below it is only ever reached by an
+   * account that has no reading face either.
+   */
+  if (role === 'note') {
+    if (typeof raw === 'string') {
+      const chosen = BY_ID.get(raw)
+      if (chosen?.roles.includes('note')) {
+        return chosen
+      }
+    }
+    const body = readFontChoice('body', metadata)
+    return body.roles.includes('note') ? body : fontFor('note', DEFAULT_NOTE_FONT)
+  }
+
   if (typeof raw !== 'string') {
     return fontFor(role, undefined)
   }
@@ -256,5 +554,5 @@ export function readFontChoice(
 }
 
 export function fontUpdate(role: FontRole, id: string): Record<string, string> {
-  return { [role === 'body' ? BODY_KEY : HEADING_KEY]: id }
+  return { [KEYS[role]]: id }
 }

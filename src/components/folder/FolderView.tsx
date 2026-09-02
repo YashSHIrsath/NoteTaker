@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Folder, FolderTree, Kanban, LayoutList, Pin, Plus } from 'lucide-react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import type { Folder as FolderRecord, Task } from '../../types'
+import type { ContentVisibility, Folder as FolderRecord, Task } from '../../types'
 import { Button } from '../ui/Button'
 import { IconButton } from '../ui/IconButton'
 import { FolderBreadcrumb } from './FolderBreadcrumb'
@@ -43,7 +43,7 @@ export interface FolderViewProps {
   path: FolderRecord[]
   childFolders: FolderRecord[]
   tasks: Task[]
-  onCreateFolder: (name: string) => void | Promise<unknown>
+  onCreateFolder: (name: string, visibility?: ContentVisibility) => void | Promise<unknown>
   onCreateTask: (title: string) => Promise<Task>
 }
 

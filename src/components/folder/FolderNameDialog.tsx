@@ -1,8 +1,11 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
-import { Folder, X } from 'lucide-react'
+import { Folder, Globe, Lock, Users, X } from 'lucide-react'
+import type { ContentVisibility } from '../../types'
 import { Button } from '../ui/Button'
 import { IconButton } from '../ui/IconButton'
 import { useDialogFocus } from '../../hooks/useDialogFocus'
+import { VISIBILITY_LABELS, VISIBILITY_LEVELS } from '../../lib/contentPrivacy'
+import { cn } from '../../lib/cn'
 
 export interface FolderNameDialogProps {
   open: boolean
@@ -10,9 +13,19 @@ export interface FolderNameDialogProps {
   confirmLabel?: string
   busyLabel?: string
   initialName?: string
+  /**
+   * Offers the three visibility levels alongside the name.
+   *
+   * Only passed when creating inside a space. Not shown when renaming — the level of an existing
+   * folder is changed from its own menu, where the full share sheet lives and where the list of
+   * people belongs; a rename dialog is not the place to discover that the audience changed.
+   */
+  withVisibility?: boolean
   onClose: () => void
-  onSubmit: (name: string) => void | Promise<unknown>
+  onSubmit: (name: string, visibility?: ContentVisibility) => void | Promise<unknown>
 }
+
+const VISIBILITY_ICONS = { private: Lock, restricted: Users, space: Globe } as const
 
 export function FolderNameDialog({
   open,
@@ -20,10 +33,12 @@ export function FolderNameDialog({
   confirmLabel = 'Save',
   busyLabel = 'Saving…',
   initialName = '',
+  withVisibility = false,
   onClose,
   onSubmit,
 }: FolderNameDialogProps) {
   const [name, setName] = useState(initialName)
+  const [visibility, setVisibility] = useState<ContentVisibility>('space')
   const [submitting, setSubmitting] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const titleId = useId()
@@ -32,6 +47,7 @@ export function FolderNameDialog({
   useEffect(() => {
     if (open) {
       setName(initialName)
+      setVisibility('space')
       setSubmitting(false)
     }
   }, [initialName, open])
@@ -64,7 +80,13 @@ export function FolderNameDialog({
       return
     }
     setSubmitting(true)
-    void Promise.resolve(onSubmit(trimmed))
+    /*
+     * "Selected people" is not offered here, and that is deliberate rather than an omission. Choosing
+     * names needs the member list, which needs room this dialog does not have — and a folder created
+     * as Everyone or Only me can be narrowed from its own menu a second later, where the share sheet
+     * has the space to show who is being chosen and what they will also start receiving.
+     */
+    void Promise.resolve(onSubmit(trimmed, withVisibility ? visibility : undefined))
       .then(() => {
         onClose()
       })
@@ -120,6 +142,49 @@ export function FolderNameDialog({
             className="mt-2 w-full rounded-full border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-4 py-2.5 text-sm text-[var(--color-text)] outline-none transition-colors focus:border-[var(--color-accent)] focus:bg-[var(--color-surface)] focus:ring-2 focus:ring-[var(--color-accent)]/20"
             autoComplete="off"
           />
+          {withVisibility ? (
+            <div className="mt-4">
+              <p className="text-sm font-medium text-[var(--color-text-muted)]">Who can see it</p>
+              <div
+                role="radiogroup"
+                aria-label="Who can see this folder"
+                className="mt-2 grid grid-cols-2 gap-2"
+              >
+                {VISIBILITY_LEVELS.filter((level) => level !== 'restricted').map((level) => {
+                  const Icon = VISIBILITY_ICONS[level]
+                  const active = visibility === level
+                  return (
+                    <button
+                      key={level}
+                      type="button"
+                      role="radio"
+                      aria-checked={active}
+                      disabled={submitting}
+                      onClick={() => setVisibility(level)}
+                      className={cn(
+                        'flex items-center gap-2 rounded-xl border px-3 py-2 text-left text-[13px] transition-colors',
+                        active
+                          ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-text)]'
+                          : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:bg-[var(--color-hover)]',
+                      )}
+                    >
+                      <Icon
+                        className="h-3.5 w-3.5 shrink-0"
+                        style={{ color: active ? 'var(--color-accent)' : undefined }}
+                        aria-hidden
+                      />
+                      <span className="min-w-0 truncate">{VISIBILITY_LABELS[level]}</span>
+                    </button>
+                  )
+                })}
+              </div>
+              <p className="mt-2 text-[12px] leading-snug text-[var(--color-text-muted)]">
+                {visibility === 'private'
+                  ? 'Nobody else will see this folder, or anything you put in it.'
+                  : 'Everyone in this space will see it. You can share individual notes more narrowly.'}
+              </p>
+            </div>
+          ) : null}
           <div className="mt-5 flex justify-end gap-2">
             <Button variant="subtle" size="sm" onClick={onClose} disabled={submitting}>
               Cancel

@@ -1,0 +1,272 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sansita:wght@700;800&display=swap">
+  <style>
+    body { margin: 0; font-family: 'Inter', 'Segoe UI', system-ui, sans-serif; }
+    a { color: #4f46e5; } a:hover { color: #4338ca; }
+    .nav { display:flex; align-items:center; gap:11px; height:38px; padding:0 12px; border-radius:11px; font-size:13.5px; font-weight:500; }
+    .fold { display:flex; align-items:center; gap:9px; height:31px; padding:0 12px 0 34px; font-size:12.5px; }
+    .spine { display:flex; align-items:center; gap:10px; height:46px; padding:0 12px; border-radius:15px; cursor:pointer; }
+    .mono { font-variant-numeric: tabular-nums; }
+  </style>
+</helmet>
+
+<div style="padding: 36px 32px 34px; background:#eceef3; min-height:100%; box-sizing:border-box;">
+
+  <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;">
+    <span style="display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:999px;background:#14161a;color:#fff;font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;">01</span>
+    <h1 style="margin:0;font-family:'Sansita',Georgia,serif;font-size:30px;font-weight:800;letter-spacing:-0.015em;color:#14161a;">The Stack</h1>
+  </div>
+  <p style="margin:10px 0 0;max-width:900px;font-size:14px;line-height:1.55;color:#3a3f49;text-wrap:pretty;">
+    The sidebar becomes the wordmark. Every workspace is a card in a pile &mdash; yours at the top, always &mdash; and the one you are in is <em>pulled out and opened</em>, its navigation living inside it. The others stay visible as coloured spines you can reach at any time.
+  </p>
+  <p style="margin:8px 0 0;max-width:900px;font-size:12.5px;line-height:1.55;color:#6b7180;">
+    <strong style="font-weight:600;color:#14161a;">The structural change:</strong> there is no Spaces row any more, and no switcher dropdown. The stack <em>is</em> the list of workspaces, so switching is one click on something already on screen instead of two clicks into a menu. Which workspace you are in is a shape, not a label.
+  </p>
+
+  <div style="display:flex;gap:40px;margin-top:30px;align-items:flex-start;flex-wrap:wrap;">
+
+    <!-- ==================================================== PERSONAL -->
+    <div style="display:flex;flex-direction:column;gap:11px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-family:'Sansita',Georgia,serif;font-size:13px;font-weight:800;color:#14161a;">Personal</span>
+        <span style="height:1px;width:120px;background:#c9cdd6;"></span>
+      </div>
+
+      <div style="width:284px;height:624px;background:#f6f7fa;border:1px solid #dcdfe6;border-radius:20px;padding:12px;box-sizing:border-box;display:flex;flex-direction:column;gap:7px;box-shadow:0 1px 2px rgba(20,22,26,0.05),0 14px 40px rgba(20,22,26,0.10);">
+
+        <!-- ---------- YOUR CARD, OPEN ---------- -->
+        <div style="border-radius:16px;background:#ffffff;border:1px solid #dfe1ea;box-shadow:0 10px 26px rgba(79,70,229,0.13),0 2px 5px rgba(20,22,26,0.05);overflow:hidden;display:flex;flex-direction:column;flex:1;">
+
+          <!-- the card head: colour block + name -->
+          <div style="padding:14px 14px 12px;background:#eef1ff;border-bottom:1px solid #dfe1f5;display:flex;align-items:center;gap:11px;">
+            <span style="display:inline-flex;align-items:flex-end;gap:2.5px;height:26px;padding:0 1px;" aria-hidden="true">
+              <span style="width:3.5px;height:16px;border-radius:2px;background:#4f46e5;"></span>
+              <span style="width:3.5px;height:26px;border-radius:2px;background:#4f46e5;"></span>
+              <span style="width:3.5px;height:10px;border-radius:2px;background:#4f46e5;"></span>
+              <span style="width:3.5px;height:21px;border-radius:2px;background:#4f46e5;"></span>
+              <span style="width:3.5px;height:13px;border-radius:2px;background:#4f46e5;"></span>
+            </span>
+            <div style="flex:1;min-width:0;">
+              <div style="font-family:'Sansita',Georgia,serif;font-size:17px;font-weight:800;letter-spacing:-0.012em;color:#14161a;line-height:1.15;">My notes</div>
+              <div style="font-size:11px;color:#4f46e5;font-weight:600;margin-top:2px;">Only you</div>
+            </div>
+            <span style="display:inline-flex;align-items:center;justify-content:center;width:27px;height:27px;border-radius:9px;background:#ffffff;border:1px solid #dfe1f5;color:#6b7180;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="m16 15-3-3 3-3"/></svg>
+            </span>
+          </div>
+
+          <!-- nav lives INSIDE the open card -->
+          <div style="padding:9px 8px;display:flex;flex-direction:column;gap:2px;flex:1;">
+            <div class="nav" style="color:#6b7180;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12h-8"/><path d="M21 6H8"/><path d="M21 18h-8"/><path d="M3 6v4c0 1.1.9 2 2 2h3"/><path d="M3 10v6c0 1.1.9 2 2 2h3"/></svg>
+              <span style="flex:1;">Tree</span>
+            </div>
+
+            <div class="nav" style="background:#4f46e5;color:#ffffff;font-weight:600;box-shadow:0 3px 10px rgba(79,70,229,0.30);">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
+              <span style="flex:1;">Notes</span>
+              <span class="mono" style="font-size:11.5px;opacity:0.75;">12</span>
+            </div>
+
+            <div style="margin:2px 0 4px;">
+              <div class="fold" style="color:#434852;"><span style="width:7px;height:7px;border-radius:2px;background:#4f46e5;"></span><span style="flex:1;">Job hunt</span><span class="mono" style="font-size:11px;color:#9aa0ad;">8</span></div>
+              <div class="fold" style="color:#434852;"><span style="width:7px;height:7px;border-radius:2px;background:#12857a;"></span><span style="flex:1;">Resum&eacute;</span><span class="mono" style="font-size:11px;color:#9aa0ad;">3</span></div>
+              <div class="fold" style="color:#434852;"><span style="width:7px;height:7px;border-radius:2px;background:#b45309;"></span><span style="flex:1;">Reading list</span><span class="mono" style="font-size:11px;color:#9aa0ad;">21</span></div>
+              <div class="fold" style="color:#9aa0ad;"><span style="width:7px;height:7px;border-radius:2px;border:1px dashed #c3c8d2;"></span><span style="flex:1;">New folder</span></div>
+            </div>
+
+            <div class="nav" style="color:#6b7180;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg>
+              <span style="flex:1;">Tasks</span><span class="mono" style="font-size:11.5px;color:#9aa0ad;">4</span>
+            </div>
+            <div class="nav" style="color:#6b7180;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+              <span style="flex:1;">Starred</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ---------- THE REST OF THE PILE ---------- -->
+        <div class="spine" style="background:#e3f5f2;border:1px solid #cfe6e2;">
+          <span style="width:5px;height:22px;border-radius:3px;background:#12857a;"></span>
+          <span style="flex:1;min-width:0;font-size:13px;font-weight:600;color:#0d5f57;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Q3 Launch</span>
+          <span style="display:flex;">
+            <span style="display:inline-flex;align-items:center;justify-content:center;width:19px;height:19px;border-radius:50%;background:#4f46e5;color:#fff;font-size:9px;font-weight:700;box-shadow:0 0 0 1.5px #e3f5f2;">Y</span>
+            <span style="display:inline-flex;align-items:center;justify-content:center;width:19px;height:19px;border-radius:50%;background:#b45309;color:#fff;font-size:9px;font-weight:700;margin-left:-6px;box-shadow:0 0 0 1.5px #e3f5f2;">R</span>
+            <span style="display:inline-flex;align-items:center;justify-content:center;width:19px;height:19px;border-radius:50%;background:#ffffff;color:#0d5f57;font-size:8.5px;font-weight:700;margin-left:-6px;box-shadow:0 0 0 1.5px #e3f5f2;">+3</span>
+          </span>
+        </div>
+
+        <div class="spine" style="background:#fbf0e2;border:1px solid #ecdcc4;">
+          <span style="width:5px;height:22px;border-radius:3px;background:#b45309;"></span>
+          <span style="flex:1;min-width:0;font-size:13px;font-weight:600;color:#8a3f07;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Design crit</span>
+          <span style="display:inline-flex;align-items:center;justify-content:center;min-width:17px;height:17px;padding:0 5px;border-radius:999px;background:#b45309;color:#fff;font-size:10px;font-weight:700;">2</span>
+        </div>
+
+        <div class="spine" style="border:1px dashed #c9cdd6;color:#8a8fa0;">
+          <span style="width:5px;height:22px;"></span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+          <span style="flex:1;font-size:12.5px;font-weight:500;">New space</span>
+        </div>
+
+        <!-- you -->
+        <div style="display:flex;align-items:center;gap:9px;padding:7px 4px 2px;margin-top:1px;">
+          <span style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:#4f46e5;color:#fff;font-size:11px;font-weight:700;">Y</span>
+          <span style="flex:1;font-size:12px;font-weight:500;color:#434852;">Yash Shirsath</span>
+          <span style="display:inline-flex;color:#9aa0ad;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================================================== SHARED SPACE -->
+    <div style="display:flex;flex-direction:column;gap:11px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-family:'Sansita',Georgia,serif;font-size:13px;font-weight:800;color:#14161a;">Inside a space</span>
+        <span style="height:1px;width:100px;background:#c9cdd6;"></span>
+      </div>
+
+      <div style="width:284px;height:624px;background:#eff5f4;border:1px solid #d3e3e0;border-radius:20px;padding:12px;box-sizing:border-box;display:flex;flex-direction:column;gap:7px;box-shadow:0 1px 2px rgba(20,22,26,0.05),0 14px 40px rgba(13,95,87,0.14);">
+
+        <!-- your card, now a spine -->
+        <div class="spine" style="background:#eef1ff;border:1px solid #dfe1f5;">
+          <span style="width:5px;height:22px;border-radius:3px;background:#4f46e5;"></span>
+          <span style="flex:1;min-width:0;font-size:13px;font-weight:600;color:#372f9e;">My notes</span>
+          <span style="font-size:11px;color:#6b7180;" class="mono">12</span>
+        </div>
+
+        <!-- ---------- THE SPACE, OPEN ---------- -->
+        <div style="border-radius:16px;background:#ffffff;border:1px solid #cfe0dd;box-shadow:0 10px 26px rgba(18,133,122,0.16),0 2px 5px rgba(20,22,26,0.05);overflow:hidden;display:flex;flex-direction:column;flex:1;">
+
+          <div style="padding:14px 14px 12px;background:#e3f5f2;border-bottom:1px solid #cfe6e2;">
+            <div style="display:flex;align-items:center;gap:11px;">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:11px;background:#12857a;color:#fff;flex-shrink:0;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              </span>
+              <div style="flex:1;min-width:0;">
+                <div style="font-family:'Sansita',Georgia,serif;font-size:17px;font-weight:800;letter-spacing:-0.012em;color:#14161a;line-height:1.15;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Q3 Launch</div>
+                <div style="font-size:11px;color:#0d5f57;font-weight:600;margin-top:2px;">5 people &middot; you can edit</div>
+              </div>
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:27px;height:27px;border-radius:9px;background:#ffffff;border:1px solid #cfe6e2;color:#6b7180;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="m16 15-3-3 3-3"/></svg>
+              </span>
+            </div>
+
+            <div style="display:flex;align-items:center;gap:7px;margin-top:11px;">
+              <div style="display:flex;">
+                <span style="display:inline-flex;align-items:center;justify-content:center;width:23px;height:23px;border-radius:50%;background:#4f46e5;color:#fff;font-size:10px;font-weight:700;box-shadow:0 0 0 2px #e3f5f2;">Y</span>
+                <span style="display:inline-flex;align-items:center;justify-content:center;width:23px;height:23px;border-radius:50%;background:#b45309;color:#fff;font-size:10px;font-weight:700;margin-left:-7px;box-shadow:0 0 0 2px #e3f5f2;">R</span>
+                <span style="display:inline-flex;align-items:center;justify-content:center;width:23px;height:23px;border-radius:50%;background:#7c3aed;color:#fff;font-size:10px;font-weight:700;margin-left:-7px;box-shadow:0 0 0 2px #e3f5f2;">A</span>
+                <span style="display:inline-flex;align-items:center;justify-content:center;width:23px;height:23px;border-radius:50%;background:#ffffff;color:#0d5f57;font-size:9.5px;font-weight:700;margin-left:-7px;box-shadow:0 0 0 2px #e3f5f2;">+2</span>
+              </div>
+              <span style="flex:1;"></span>
+              <span style="display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 9px;border-radius:999px;background:#12857a;color:#fff;font-size:11px;font-weight:600;">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Invite
+              </span>
+            </div>
+          </div>
+
+          <div style="padding:9px 8px;display:flex;flex-direction:column;gap:2px;flex:1;">
+            <div class="nav" style="color:#6b7180;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12h-8"/><path d="M21 6H8"/><path d="M21 18h-8"/><path d="M3 6v4c0 1.1.9 2 2 2h3"/><path d="M3 10v6c0 1.1.9 2 2 2h3"/></svg>
+              <span style="flex:1;">Tree</span>
+            </div>
+
+            <div class="nav" style="background:#12857a;color:#ffffff;font-weight:600;box-shadow:0 3px 10px rgba(18,133,122,0.30);">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
+              <span style="flex:1;">Notes</span>
+              <span class="mono" style="font-size:11.5px;opacity:0.75;">9</span>
+            </div>
+
+            <div style="margin:2px 0 4px;">
+              <div class="fold" style="color:#434852;"><span style="width:7px;height:7px;border-radius:2px;background:#4f46e5;"></span><span style="flex:1;">Launch plan</span></div>
+              <div class="fold" style="color:#434852;"><span style="width:7px;height:7px;border-radius:2px;background:#12857a;"></span><span style="flex:1;">Pricing</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9aa0ad" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+              <div class="fold" style="color:#434852;"><span style="width:7px;height:7px;border-radius:2px;background:#b45309;"></span><span style="flex:1;">My drafts</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9aa0ad" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
+            </div>
+
+            <div class="nav" style="color:#6b7180;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg>
+              <span style="flex:1;">Tasks</span><span class="mono" style="font-size:11.5px;color:#9aa0ad;">7</span>
+            </div>
+            <div class="nav" style="color:#6b7180;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+              <span style="flex:1;">Starred</span>
+            </div>
+            <div class="nav" style="color:#6b7180;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+              <span style="flex:1;">Activity</span><span style="width:6px;height:6px;border-radius:50%;background:#12857a;"></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="spine" style="background:#fbf0e2;border:1px solid #ecdcc4;">
+          <span style="width:5px;height:22px;border-radius:3px;background:#b45309;"></span>
+          <span style="flex:1;min-width:0;font-size:13px;font-weight:600;color:#8a3f07;">Design crit</span>
+          <span style="display:inline-flex;align-items:center;justify-content:center;min-width:17px;height:17px;padding:0 5px;border-radius:999px;background:#b45309;color:#fff;font-size:10px;font-weight:700;">2</span>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:9px;padding:7px 4px 2px;margin-top:1px;">
+          <span style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:#4f46e5;color:#fff;font-size:11px;font-weight:700;">Y</span>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:12px;font-weight:500;color:#434852;">Yash Shirsath</div>
+            <div style="font-size:10px;color:#0d5f57;font-weight:600;">editor in Q3 Launch</div>
+          </div>
+          <span style="display:inline-flex;color:#9aa0ad;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================================================== COLLAPSED + MOTION -->
+    <div style="display:flex;flex-direction:column;gap:11px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-family:'Sansita',Georgia,serif;font-size:13px;font-weight:800;color:#14161a;">Collapsed</span>
+        <span style="height:1px;width:60px;background:#c9cdd6;"></span>
+      </div>
+
+      <div style="width:76px;height:624px;background:#eff5f4;border:1px solid #d3e3e0;border-radius:20px;padding:10px;box-sizing:border-box;display:flex;flex-direction:column;gap:7px;align-items:center;box-shadow:0 1px 2px rgba(20,22,26,0.05),0 14px 40px rgba(13,95,87,0.12);">
+        <span style="display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:13px;background:#eef1ff;color:#4f46e5;font-size:13px;font-weight:700;">Y</span>
+        <div style="width:40px;border-radius:14px;background:#fff;border:1px solid #cfe0dd;box-shadow:0 8px 20px rgba(18,133,122,0.16);display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 0;flex:1;">
+          <span style="display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:10px;background:#12857a;color:#fff;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          </span>
+          <span style="width:20px;height:1px;background:#e6e8ec;margin:3px 0;"></span>
+          <span style="display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:10px;color:#9aa0ad;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12h-8"/><path d="M21 6H8"/><path d="M21 18h-8"/><path d="M3 6v4c0 1.1.9 2 2 2h3"/><path d="M3 10v6c0 1.1.9 2 2 2h3"/></svg></span>
+          <span style="display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:10px;background:#e3f5f2;color:#0d5f57;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg></span>
+          <span style="display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:10px;color:#9aa0ad;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/></svg></span>
+          <span style="display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:10px;color:#9aa0ad;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg></span>
+        </div>
+        <span style="display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:13px;background:#fbf0e2;color:#8a3f07;font-size:13px;font-weight:700;">D</span>
+        <span style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:#4f46e5;color:#fff;font-size:11px;font-weight:700;margin-top:2px;">Y</span>
+      </div>
+      <p style="margin:0;max-width:140px;font-size:11.5px;line-height:1.5;color:#6b7180;">The pile survives the collapse: still a stack, still one click to switch.</p>
+    </div>
+
+  </div>
+
+  <!-- ---------------------------------------------------------------- the move -->
+  <div style="margin-top:30px;display:flex;gap:14px;flex-wrap:wrap;max-width:1180px;">
+    <div style="flex:1;min-width:230px;padding:14px 16px;border-radius:14px;background:#ffffff;border:1px solid #dcdfe6;">
+      <div style="font-family:'Sansita',Georgia,serif;font-size:14px;font-weight:800;color:#14161a;">One click, not three</div>
+      <div style="margin-top:6px;font-size:12.5px;line-height:1.55;color:#434852;">Every workspace is on screen at all times. Switching never opens a menu, and there is no Spaces page to visit first.</div>
+    </div>
+    <div style="flex:1;min-width:230px;padding:14px 16px;border-radius:14px;background:#ffffff;border:1px solid #dcdfe6;">
+      <div style="font-family:'Sansita',Georgia,serif;font-size:14px;font-weight:800;color:#14161a;">Where you are is a shape</div>
+      <div style="margin-top:6px;font-size:12.5px;line-height:1.55;color:#434852;">The open card is the only card with white ground and a lifted shadow. You can tell at a glance, from across the room, without reading a word.</div>
+    </div>
+    <div style="flex:1;min-width:230px;padding:14px 16px;border-radius:14px;background:#ffffff;border:1px solid #dcdfe6;">
+      <div style="font-family:'Sansita',Georgia,serif;font-size:14px;font-weight:800;color:#14161a;">It is the logo</div>
+      <div style="margin-top:6px;font-size:12.5px;line-height:1.55;color:#434852;">Five stacked bars, on every screen, doing a job. The brand stops being a mark in a corner and becomes the way the app is organised.</div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

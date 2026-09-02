@@ -1,5 +1,8 @@
 import type {
   Attachment,
+  ContentSharing,
+  ContentVisibility,
+  FolderVisibilityImpact,
   IncomingSpaceInvite,
   Reminder,
   ReminderDraft,
@@ -8,8 +11,10 @@ import type {
   SpaceActivityEntry,
   SpaceInvite,
   SpaceMember,
+  SpaceNotificationPrefs,
   SpaceRole,
   SpaceSummary,
+  ShareableEntity,
   TaskEvent,
 } from '../types'
 import type { AppSnapshot, UiState } from '../services/storage'
@@ -151,6 +156,54 @@ export interface SpacesDataRepository {
   notifyAnswered(args: { inviteId?: string; token?: string }): Promise<boolean>
   /** One item's own history — the note in front of you rather than the whole space. */
   listEntityHistory(entityType: SpaceActivityEntity, entityId: string): Promise<SpaceActivityEntry[]>
+
+  /* ---------------------------------------------------------------- per-item privacy
+   *
+   * Sharing lives here rather than on the notes repository for the same reason membership does: it
+   * is not content, it is who may reach content. Folding it into the op queue would also be wrong in
+   * a way that matters — an op batch is fire-and-forget and rolls back locally on failure, and
+   * "share this with Rahul" is a discrete act with an answer ("only the owner can change this") that
+   * has to reach the person who asked.
+   */
+
+  /**
+   * One item's sharing state, read fresh.
+   *
+   * Resolves to null for an item the caller cannot reach — the database returns no row rather than
+   * refusing, which is what stops this being a way to test ids for existence. The share sheet reads
+   * this on open rather than trusting the loaded snapshot, because somebody else may have changed
+   * the audience since the workspace was read.
+   */
+  getSharing(entityType: ShareableEntity, entityId: string): Promise<ContentSharing | null>
+
+  /**
+   * Sets who can see an item, and with it who its reminders reach.
+   *
+   * `userIds` is only consulted for 'restricted', and the server has the final say on all of it: it
+   * drops anybody who is not a member of the item's space, never removes the owner, and turns
+   * 'restricted' with nobody left into 'private' rather than storing a sharing state that means
+   * nothing. So the resolved value is the truth, and it is what the caller should keep — not the
+   * arguments it sent.
+   */
+  setVisibility(
+    entityType: ShareableEntity,
+    entityId: string,
+    visibility: ContentVisibility,
+    userIds: string[],
+  ): Promise<ContentSharing>
+
+  /** What opening a folder up would actually reveal, asked before the change so the dialog can say
+   *  so. Counts only — see FolderVisibilityImpact. */
+  folderVisibilityImpact(folderId: string): Promise<FolderVisibilityImpact>
+
+  /** Which classes of message this account wants from one space. Always resolves — a member who has
+   *  never chosen gets the defaults rather than nothing. */
+  getNotificationPrefs(spaceId: string): Promise<SpaceNotificationPrefs>
+  /** Omitted switches are left as they are, so one toggle does not have to send the others. */
+  setNotificationPrefs(
+    spaceId: string,
+    changes: { reminders?: boolean; dueDates?: boolean; contentUpdates?: boolean },
+  ): Promise<SpaceNotificationPrefs>
 }
 
 export interface AppRepositories {

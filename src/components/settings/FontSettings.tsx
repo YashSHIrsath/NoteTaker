@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Check, Type } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
-import { fontsFor, readFontChoice, type FontOption, type FontRole } from '../../lib/fonts'
+import { groupedFontsFor, readFontChoice, type FontOption, type FontRole } from '../../lib/fonts'
 import { Button } from '../ui/Button'
 import { Notice } from '../ui/Notice'
 import { PickerDialog } from '../ui/PickerDialog'
@@ -18,18 +18,21 @@ import { cn } from '../../lib/cn'
  * face would show a screen the app will never render, and the honest comparison is against the other
  * half as it currently stands.
  */
-function Sample({ role, option, other }: { role: FontRole; option: FontOption; other: FontOption }) {
-  const headingStack = role === 'heading' ? option.stack : other.stack
-  const bodyStack = role === 'body' ? option.stack : other.stack
+function Sample({ stacks }: { stacks: Record<FontRole, string> }) {
   return (
-    <span className="block" style={{ fontFamily: bodyStack }}>
+    <span className="block" style={{ fontFamily: stacks.body }}>
       <span
         className="block text-[15.5px] font-extrabold tracking-tight text-[var(--color-text)]"
-        style={{ fontFamily: headingStack }}
+        style={{ fontFamily: stacks.heading }}
       >
         Interview prep
       </span>
-      <span className="mt-1 block text-[12.5px] leading-relaxed text-[var(--color-text)]">
+      {/* The one line that is actually note *content*, so it carries the note face rather than the
+        * interface one — which is the whole distinction this sample now has to be able to show. */}
+      <span
+        className="mt-1 block text-[12.5px] leading-relaxed text-[var(--color-text)]"
+        style={{ fontFamily: stacks.note }}
+      >
         Three questions to have ready before Friday, and the sync design to walk through.
       </span>
       <span className="mt-1.5 block text-[11px] text-[var(--color-text-muted)]">
@@ -54,7 +57,14 @@ function FontChoices({
   const { user, updateProfile } = useAuth()
   const metadata = user?.user_metadata as Record<string, unknown> | undefined
   const current = readFontChoice(role, metadata)
-  const other = readFontChoice(role === 'body' ? 'heading' : 'body', metadata)
+  /* Every role as it currently stands. Each tile then swaps in just the one being previewed, so the
+     sample is always this account's real screen with a single face changed — never a mock-up of a
+     combination the app would not render. */
+  const inForce: Record<FontRole, string> = {
+    body: readFontChoice('body', metadata).stack,
+    heading: readFontChoice('heading', metadata).stack,
+    note: readFontChoice('note', metadata).stack,
+  }
   const [saving, setSaving] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -86,70 +96,93 @@ function FontChoices({
         {blurb}
       </p>
 
-      {/* Three across from `sm`: inside the dialog the width is the dialog's, not the page's
-        * remaining column, so the tiles are not competing with a sidebar for room. */}
-      <div className="mt-3 grid gap-2 sm:grid-cols-2 md:grid-cols-3">
-        {fontsFor(role).map((option) => {
-          const active = option.id === current.id
-          return (
-            <button
-              key={option.id}
-              type="button"
-              aria-pressed={active}
-              disabled={saving !== null}
-              onClick={() => choose(option)}
-              className={cn(
-                'anim-press rounded-2xl border p-3 text-left transition-colors disabled:opacity-60',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/25',
-                active
-                  ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)]/40'
-                  : 'border-[var(--color-border)] hover:bg-[var(--color-hover)]',
-              )}
-            >
-              <span className="flex items-center gap-2">
-                <span
-                  className={cn(
-                    'inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border',
-                    active
-                      ? 'border-[var(--color-accent)] bg-[var(--color-accent)] text-white'
-                      : 'border-[var(--color-border-strong)]',
-                  )}
-                  aria-hidden
-                >
-                  {active ? <Check className="h-2.5 w-2.5" /> : null}
-                </span>
-                {/* The name, set in itself — which is the fastest possible preview and the reason a
-                  * font list is worth looking at rather than reading. */}
-                <span
-                  className="min-w-0 flex-1 truncate text-[13px] font-bold text-[var(--color-text)]"
-                  style={{ fontFamily: option.stack }}
-                >
-                  {option.label}
-                </span>
-                {saving === option.id ? (
-                  <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-[var(--color-text-muted)]">
-                    Saving
-                  </span>
-                ) : active ? (
-                  <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-[var(--color-accent)]">
-                    In use
-                  </span>
-                ) : null}
-              </span>
+      {/*
+        * Grouped, because the first decision is almost never a name.
+        *
+        * Thirty-odd tiles in one flat grid is a wall, and it buries the question people actually
+        * arrive with — "is there a handwritten one?" — under an alphabet of families they have no
+        * opinion about. The headings answer that before any tile is read.
+        *
+        * Three across from `sm`: inside the dialog the width is the dialog's, not the page's
+        * remaining column, so the tiles are not competing with a sidebar for room.
+        */}
+      {groupedFontsFor(role).map((group) => (
+        <section key={group.id} className="mt-4">
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            <h4 className="text-[12px] font-bold uppercase tracking-wide text-[var(--color-text)]">
+              {group.label}
+            </h4>
+            <span className="text-[11px] text-[var(--color-text-muted)]">{group.blurb}</span>
+            <span className="ml-auto shrink-0 text-[11px] tabular-nums text-[var(--color-text-muted)]">
+              {group.options.length}
+            </span>
+          </div>
 
-              <span className="mt-2 block text-[11px] leading-relaxed text-[var(--color-text-muted)]">
-                {option.hint}
-              </span>
+          <div className="mt-2 grid gap-2 sm:grid-cols-2 md:grid-cols-3">
+            {group.options.map((option) => {
 
-              {/* On a real surface rather than on the tile, so every option is compared against the
-                * same ground the app will actually put it on. */}
-              <span className="mt-2.5 block rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-2.5">
-                <Sample role={role} option={option} other={other} />
-              </span>
-            </button>
-          )
-        })}
-      </div>
+            const active = option.id === current.id
+            return (
+              <button
+                key={option.id}
+                type="button"
+                aria-pressed={active}
+                disabled={saving !== null}
+                onClick={() => choose(option)}
+                className={cn(
+                  'anim-press rounded-2xl border p-3 text-left transition-colors disabled:opacity-60',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/25',
+                  active
+                    ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)]/40'
+                    : 'border-[var(--color-border)] hover:bg-[var(--color-hover)]',
+                )}
+              >
+                <span className="flex items-center gap-2">
+                  <span
+                    className={cn(
+                      'inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border',
+                      active
+                        ? 'border-[var(--color-accent)] bg-[var(--color-accent)] text-white'
+                        : 'border-[var(--color-border-strong)]',
+                    )}
+                    aria-hidden
+                  >
+                    {active ? <Check className="h-2.5 w-2.5" /> : null}
+                  </span>
+                  {/* The name, set in itself — which is the fastest possible preview and the reason a
+                    * font list is worth looking at rather than reading. */}
+                  <span
+                    className="min-w-0 flex-1 truncate text-[13px] font-bold text-[var(--color-text)]"
+                    style={{ fontFamily: option.stack }}
+                  >
+                    {option.label}
+                  </span>
+                  {saving === option.id ? (
+                    <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-[var(--color-text-muted)]">
+                      Saving
+                    </span>
+                  ) : active ? (
+                    <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-[var(--color-accent)]">
+                      In use
+                    </span>
+                  ) : null}
+                </span>
+
+                <span className="mt-2 block text-[11px] leading-relaxed text-[var(--color-text-muted)]">
+                  {option.hint}
+                </span>
+
+                {/* On a real surface rather than on the tile, so every option is compared against the
+                  * same ground the app will actually put it on. */}
+                <span className="mt-2.5 block rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-2.5">
+                  <Sample stacks={{ ...inForce, [role]: option.stack }} />
+                </span>
+                </button>
+              )
+            })}
+          </div>
+        </section>
+      ))}
 
       {error ? (
         <div className="mt-3">
@@ -160,9 +193,27 @@ function FontChoices({
   )
 }
 
-const ROLE_TABS: { role: FontRole; label: string }[] = [
-  { role: 'body', label: 'Reading' },
-  { role: 'heading', label: 'Headings' },
+const ROLE_TABS: { role: FontRole; label: string; title: string; blurb: string }[] = [
+  {
+    role: 'body',
+    label: 'Interface',
+    title: 'Interface font',
+    blurb: 'Labels, menus, metadata — everything around a note rather than in it.',
+  },
+  {
+    role: 'note',
+    label: 'Notes',
+    title: 'Note font',
+    blurb:
+      'The text inside your notes. Follows the interface font until you pick one here, so a handwritten note is one tap away.',
+  },
+  {
+    role: 'heading',
+    label: 'Headings',
+    title: 'Heading font',
+    blurb:
+      'Card titles, page headings and the Tree’s numbers. The Mindstack wordmark keeps its own.',
+  },
 ]
 
 /** One line naming a face, set in itself. What the card shows instead of the grid. */
@@ -216,18 +267,20 @@ export function FontSettings() {
    * same glance.
    */
   const [role, setRole] = useState<FontRole>('body')
+  const activeTab = ROLE_TABS.find((tab) => tab.role === role) ?? ROLE_TABS[0]!
 
   return (
     <>
       <div className="mt-4">
         <p className="text-[12px] leading-relaxed text-[var(--color-text-muted)]">
-          The faces your notes and headings are set in. The Mindstack wordmark keeps its own either
-          way.
+          The faces the app, your notes and its headings are set in. The Mindstack wordmark keeps
+          its own either way.
         </p>
 
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3.5 py-3">
           <div className="flex min-w-0 flex-col gap-1">
-            <CurrentFace label="Reading" option={readFontChoice('body', metadata)} />
+            <CurrentFace label="Interface" option={readFontChoice('body', metadata)} />
+            <CurrentFace label="Notes" option={readFontChoice('note', metadata)} />
             <CurrentFace label="Headings" option={readFontChoice('heading', metadata)} />
           </div>
           <Button variant="subtle" size="sm" onClick={() => setOpen(true)}>
@@ -294,12 +347,8 @@ export function FontSettings() {
 
         <FontChoices
           role={role}
-          title={role === 'body' ? 'Reading font' : 'Heading font'}
-          blurb={
-            role === 'body'
-              ? 'Note text, labels and menus.'
-              : 'Card titles, page headings and the Tree’s numbers. The Mindstack wordmark keeps its own.'
-          }
+          title={activeTab.title}
+          blurb={activeTab.blurb}
         />
       </PickerDialog>
     </>

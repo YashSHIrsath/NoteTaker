@@ -34,7 +34,7 @@ export function FolderViewPage() {
       // dropping it closed the dialog on a write that was about to be rejected and rolled back —
       // the folder appeared, vanished a moment later, and the only trace was an unhandled
       // rejection in the console.
-      onCreateFolder={(name) => createFolder(name, folder.id)}
+      onCreateFolder={(name, visibility) => createFolder(name, folder.id, visibility)}
       onCreateTask={(title) => createTask(title, folder.id)}
     />
   )

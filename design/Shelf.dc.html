@@ -1,0 +1,201 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sansita:wght@700;800&display=swap">
+  <style>
+    body { margin: 0; font-family: 'Inter', 'Segoe UI', system-ui, sans-serif; }
+    a { color: #4f46e5; } a:hover { color: #4338ca; }
+    /* A tab: text runs bottom-to-top, the way a spine on a shelf does. */
+    .tab {
+      writing-mode: vertical-rl; transform: rotate(180deg);
+      display:flex; align-items:center; justify-content:center; gap:9px;
+      width:42px; border-radius:14px 0 0 14px;
+      font-size:12.5px; font-weight:600; letter-spacing:0.01em;
+      padding:16px 0; cursor:pointer;
+    }
+    .nav { display:flex; align-items:center; gap:11px; height:38px; padding:0 12px; border-radius:10px; font-size:13.5px; font-weight:500; }
+    .fold { display:flex; align-items:center; gap:9px; height:31px; padding:0 12px 0 34px; font-size:12.5px; color:#434852; }
+  </style>
+</helmet>
+
+<div style="padding: 36px 32px 34px; background:#eceef3; min-height:100%; box-sizing:border-box;">
+
+  <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;">
+    <span style="display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:999px;background:#14161a;color:#fff;font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;">03</span>
+    <h1 style="margin:0;font-family:'Sansita',Georgia,serif;font-size:30px;font-weight:800;letter-spacing:-0.015em;color:#14161a;">The Shelf</h1>
+  </div>
+  <p style="margin:10px 0 0;max-width:900px;font-size:14px;line-height:1.55;color:#3a3f49;text-wrap:pretty;">
+    Workspaces become tabs down the outer edge, like files standing in a drawer &mdash; names running up the spine, each in its own colour. The tab you are on <em>joins</em> the panel: the seam between them disappears, so the open workspace and its contents are visibly one object and every other one is visibly behind it.
+  </p>
+  <p style="margin:8px 0 0;max-width:900px;font-size:12.5px;line-height:1.55;color:#6b7180;">
+    <strong style="font-weight:600;color:#14161a;">The structural change:</strong> switching moves to the screen edge &mdash; the easiest target a pointer can hit, since you cannot overshoot it. The panel then carries nothing but the current workspace, so it needs no header telling you where you are; the joined tab already said it.
+  </p>
+
+  <div style="display:flex;gap:44px;margin-top:30px;align-items:flex-start;flex-wrap:wrap;">
+
+    <!-- ==================================================== PERSONAL -->
+    <div style="display:flex;flex-direction:column;gap:11px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-family:'Sansita',Georgia,serif;font-size:13px;font-weight:800;color:#14161a;">Personal</span>
+        <span style="height:1px;width:130px;background:#c9cdd6;"></span>
+      </div>
+
+      <div style="display:flex;height:610px;filter:drop-shadow(0 14px 34px rgba(20,22,26,0.13));">
+
+        <!-- the drawer of tabs -->
+        <div style="display:flex;flex-direction:column;gap:6px;padding-top:22px;">
+          <!-- active: same white as the panel, and it reaches across the seam -->
+          <div class="tab" style="background:#ffffff;color:#372f9e;margin-right:-9px;padding-right:9px;z-index:2;box-shadow:-2px 0 0 #4f46e5 inset;">
+            <span style="display:inline-flex;align-items:flex-end;gap:2px;height:15px;transform:rotate(90deg);" aria-hidden="true">
+              <span style="width:2.5px;height:9px;border-radius:1.5px;background:#4f46e5;"></span>
+              <span style="width:2.5px;height:15px;border-radius:1.5px;background:#4f46e5;"></span>
+              <span style="width:2.5px;height:6px;border-radius:1.5px;background:#4f46e5;"></span>
+              <span style="width:2.5px;height:12px;border-radius:1.5px;background:#4f46e5;"></span>
+            </span>
+            My notes
+          </div>
+          <div class="tab" style="background:#cfe6e2;color:#0d5f57;">Q3 Launch</div>
+          <div class="tab" style="background:#ecdcc4;color:#8a3f07;">Design crit</div>
+          <div class="tab" style="background:#dcdfe6;color:#6b7180;height:42px;padding:0;justify-content:center;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transform:rotate(90deg);"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+          </div>
+        </div>
+
+        <!-- the open file -->
+        <div style="width:258px;background:#ffffff;border-radius:16px;display:flex;flex-direction:column;overflow:hidden;">
+          <div style="height:5px;background:#4f46e5;"></div>
+
+          <div style="padding:17px 16px 13px;">
+            <div style="font-family:'Sansita',Georgia,serif;font-size:20px;font-weight:800;letter-spacing:-0.015em;color:#14161a;line-height:1.1;">My notes</div>
+            <div style="font-size:11.5px;color:#6b7180;margin-top:4px;">Only you &middot; 12 folders</div>
+          </div>
+
+          <div style="height:1px;background:#eceef3;margin:0 16px;"></div>
+
+          <div style="padding:11px 9px;display:flex;flex-direction:column;gap:2px;flex:1;">
+            <div class="nav" style="color:#6b7180;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12h-8"/><path d="M21 6H8"/><path d="M21 18h-8"/><path d="M3 6v4c0 1.1.9 2 2 2h3"/><path d="M3 10v6c0 1.1.9 2 2 2h3"/></svg><span style="flex:1;">Tree</span></div>
+            <div class="nav" style="background:#eef1ff;color:#372f9e;font-weight:600;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg><span style="flex:1;">Notes</span></div>
+            <div style="margin:2px 0 4px;">
+              <div class="fold"><span style="width:7px;height:7px;border-radius:2px;background:#4f46e5;"></span><span style="flex:1;">Job hunt</span></div>
+              <div class="fold"><span style="width:7px;height:7px;border-radius:2px;background:#12857a;"></span><span style="flex:1;">Resum&eacute;</span></div>
+              <div class="fold"><span style="width:7px;height:7px;border-radius:2px;background:#b45309;"></span><span style="flex:1;">Reading list</span></div>
+            </div>
+            <div class="nav" style="color:#6b7180;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg><span style="flex:1;">Tasks</span></div>
+            <div class="nav" style="color:#6b7180;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg><span style="flex:1;">Starred</span></div>
+          </div>
+
+          <div style="border-top:1px solid #eceef3;padding:11px 16px;display:flex;align-items:center;gap:9px;">
+            <span style="display:inline-flex;align-items:center;justify-content:center;width:25px;height:25px;border-radius:50%;background:#4f46e5;color:#fff;font-size:10.5px;font-weight:700;">Y</span>
+            <span style="flex:1;font-size:12px;font-weight:500;color:#434852;">Yash Shirsath</span>
+            <span style="color:#b6bbc6;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================================================== SHARED SPACE -->
+    <div style="display:flex;flex-direction:column;gap:11px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-family:'Sansita',Georgia,serif;font-size:13px;font-weight:800;color:#14161a;">Inside a space</span>
+        <span style="height:1px;width:110px;background:#c9cdd6;"></span>
+      </div>
+
+      <div style="display:flex;height:610px;filter:drop-shadow(0 14px 34px rgba(13,95,87,0.16));">
+
+        <div style="display:flex;flex-direction:column;gap:6px;padding-top:22px;">
+          <div class="tab" style="background:#dfe1f5;color:#372f9e;">My notes</div>
+          <!-- the space's tab is the one that has come forward -->
+          <div class="tab" style="background:#ffffff;color:#0d5f57;margin-right:-9px;padding-right:9px;z-index:2;box-shadow:-2px 0 0 #12857a inset;">
+            <span style="display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border-radius:5px;background:#12857a;color:#fff;transform:rotate(90deg);" aria-hidden="true">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></svg>
+            </span>
+            Q3 Launch
+          </div>
+          <div class="tab" style="background:#ecdcc4;color:#8a3f07;">
+            Design crit
+            <span style="display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;background:#b45309;color:#fff;font-size:9px;font-weight:700;transform:rotate(90deg);">2</span>
+          </div>
+          <div class="tab" style="background:#dcdfe6;color:#6b7180;height:42px;padding:0;justify-content:center;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transform:rotate(90deg);"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+          </div>
+        </div>
+
+        <div style="width:258px;background:#ffffff;border-radius:16px;display:flex;flex-direction:column;overflow:hidden;">
+          <div style="height:5px;background:#12857a;"></div>
+
+          <div style="padding:17px 16px 13px;">
+            <div style="display:flex;align-items:flex-start;gap:9px;">
+              <div style="flex:1;min-width:0;">
+                <div style="font-family:'Sansita',Georgia,serif;font-size:20px;font-weight:800;letter-spacing:-0.015em;color:#14161a;line-height:1.1;">Q3 Launch</div>
+                <div style="font-size:11.5px;color:#0d5f57;margin-top:4px;font-weight:600;">5 people &middot; you can edit</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:7px;margin-top:11px;">
+              <div style="display:flex;">
+                <span style="display:inline-flex;align-items:center;justify-content:center;width:23px;height:23px;border-radius:50%;background:#4f46e5;color:#fff;font-size:10px;font-weight:700;box-shadow:0 0 0 2px #fff;">Y</span>
+                <span style="display:inline-flex;align-items:center;justify-content:center;width:23px;height:23px;border-radius:50%;background:#b45309;color:#fff;font-size:10px;font-weight:700;margin-left:-7px;box-shadow:0 0 0 2px #fff;">R</span>
+                <span style="display:inline-flex;align-items:center;justify-content:center;width:23px;height:23px;border-radius:50%;background:#7c3aed;color:#fff;font-size:10px;font-weight:700;margin-left:-7px;box-shadow:0 0 0 2px #fff;">A</span>
+                <span style="display:inline-flex;align-items:center;justify-content:center;width:23px;height:23px;border-radius:50%;background:#f3f4f7;color:#6b7180;font-size:9.5px;font-weight:700;margin-left:-7px;box-shadow:0 0 0 2px #fff;">+2</span>
+              </div>
+              <span style="flex:1;"></span>
+              <span style="display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 9px;border-radius:8px;background:#e3f5f2;color:#0d5f57;font-size:11px;font-weight:600;">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Invite
+              </span>
+            </div>
+          </div>
+
+          <div style="height:1px;background:#eceef3;margin:0 16px;"></div>
+
+          <div style="padding:11px 9px;display:flex;flex-direction:column;gap:2px;flex:1;">
+            <div class="nav" style="color:#6b7180;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12h-8"/><path d="M21 6H8"/><path d="M21 18h-8"/><path d="M3 6v4c0 1.1.9 2 2 2h3"/><path d="M3 10v6c0 1.1.9 2 2 2h3"/></svg><span style="flex:1;">Tree</span></div>
+            <div class="nav" style="background:#e3f5f2;color:#0d5f57;font-weight:600;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg><span style="flex:1;">Notes</span></div>
+            <div style="margin:2px 0 4px;">
+              <div class="fold"><span style="width:7px;height:7px;border-radius:2px;background:#4f46e5;"></span><span style="flex:1;">Launch plan</span></div>
+              <div class="fold"><span style="width:7px;height:7px;border-radius:2px;background:#12857a;"></span><span style="flex:1;">Pricing</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9aa0ad" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+              <div class="fold"><span style="width:7px;height:7px;border-radius:2px;background:#b45309;"></span><span style="flex:1;">My drafts</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9aa0ad" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
+            </div>
+            <div class="nav" style="color:#6b7180;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg><span style="flex:1;">Tasks</span></div>
+            <div class="nav" style="color:#6b7180;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg><span style="flex:1;">Starred</span></div>
+            <div class="nav" style="color:#6b7180;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span style="flex:1;">People</span><span style="font-size:11.5px;color:#b6bbc6;font-variant-numeric:tabular-nums;">5</span></div>
+            <div class="nav" style="color:#6b7180;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg><span style="flex:1;">Activity</span><span style="width:6px;height:6px;border-radius:50%;background:#12857a;"></span></div>
+          </div>
+
+          <div style="border-top:1px solid #eceef3;padding:11px 16px;display:flex;align-items:center;gap:9px;">
+            <span style="display:inline-flex;align-items:center;justify-content:center;width:25px;height:25px;border-radius:50%;background:#4f46e5;color:#fff;font-size:10.5px;font-weight:700;">Y</span>
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:12px;font-weight:500;color:#434852;">Yash Shirsath</div>
+              <div style="font-size:10px;color:#0d5f57;font-weight:600;">editor here</div>
+            </div>
+            <span style="color:#b6bbc6;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================================================== notes -->
+    <div style="width:240px;display:flex;flex-direction:column;gap:14px;">
+      <div style="padding:15px 17px;border-radius:14px;background:#14161a;">
+        <div style="font-family:'Sansita',Georgia,serif;font-size:14px;font-weight:800;color:#fff;">The joined seam</div>
+        <div style="margin-top:7px;font-size:12.5px;line-height:1.55;color:#c9cdd6;">The active tab is the same white as the panel and overlaps it by 9px, so there is no line between them. That one detail is what makes it read as a file pulled forward rather than a button that happens to be lit.</div>
+      </div>
+      <div style="padding:15px 17px;border-radius:14px;background:#ffffff;border:1px solid #dcdfe6;">
+        <div style="font-family:'Sansita',Georgia,serif;font-size:14px;font-weight:800;color:#14161a;">Fitts&rsquo;s law, for free</div>
+        <div style="margin-top:7px;font-size:12.5px;line-height:1.55;color:#434852;">Tabs sit against the window edge, so the pointer cannot overshoot them &mdash; you can throw the mouse left and land every time. The same trick the Mac menu bar uses.</div>
+      </div>
+      <div style="padding:15px 17px;border-radius:14px;background:#ffffff;border:1px solid #dcdfe6;">
+        <div style="font-family:'Sansita',Georgia,serif;font-size:14px;font-weight:800;color:#14161a;">The risk</div>
+        <div style="margin-top:7px;font-size:12.5px;line-height:1.55;color:#434852;">Sideways names are slower to read, and the drawer only holds five or six before it needs scrolling. Best if you keep a handful of spaces; wrong if you keep twenty.</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

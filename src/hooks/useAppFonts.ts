@@ -39,11 +39,12 @@ function ensureFont(option: FontOption): void {
  * --font-brand is untouched by any of this. The wordmark is set in it precisely so that a preference
  * cannot reach it.
  */
-export function useAppFonts(): { body: FontOption; heading: FontOption } {
+export function useAppFonts(): { body: FontOption; heading: FontOption; note: FontOption } {
   const { user } = useAuth()
   const metadata = user?.user_metadata as Record<string, unknown> | undefined
   const body = readFontChoice('body', metadata)
   const heading = readFontChoice('heading', metadata)
+  const note = readFontChoice('note', metadata)
 
   useEffect(() => {
     ensureFont(body)
@@ -74,5 +75,21 @@ export function useAppFonts(): { body: FontOption; heading: FontOption } {
     }
   }, [heading])
 
-  return { body, heading }
+  /*
+   * The note face, which is usually the reading face and does not have to be.
+   *
+   * Set unconditionally rather than only when it differs: --font-note falls back to --font-body in
+   * the stylesheet, and leaving it unset would work right up until somebody picked a note face and
+   * then cleared it. One property, always written, always removed.
+   */
+  useEffect(() => {
+    ensureFont(note)
+    const root = document.documentElement
+    root.style.setProperty('--font-note', note.stack)
+    return () => {
+      root.style.removeProperty('--font-note')
+    }
+  }, [note])
+
+  return { body, heading, note }
 }

@@ -1,10 +1,11 @@
 import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type FormEvent } from 'react'
-import { ClipboardList, Folder as FolderIcon, FolderPlus, X } from 'lucide-react'
-import type { FolderNode, Task } from '../../types'
+import { ClipboardList, Folder as FolderIcon, FolderPlus, Globe, Lock, X } from 'lucide-react'
+import type { ContentVisibility, FolderNode, Task } from '../../types'
 import { Button } from '../ui/Button'
 import { IconButton } from '../ui/IconButton'
 import { useFolders } from '../../hooks/useFolders'
 import { useDialogFocus } from '../../hooks/useDialogFocus'
+import { useIsSpace } from '../../hooks/useWorkspace'
 import { cn } from '../../lib/cn'
 import '../tree/folder-tree.css'
 
@@ -105,6 +106,8 @@ export function NewTaskDialog({ open, onClose, onCreated }: NewTaskDialogProps) 
   // was no way to create a top-level folder from here. Now the destination is explicit.
   const [newFolderAtRoot, setNewFolderAtRoot] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [visibility, setVisibility] = useState<ContentVisibility>('space')
+  const isSpace = useIsSpace()
   const [creatingFolder, setCreatingFolder] = useState(false)
   const titleRef = useRef<HTMLInputElement>(null)
   const newFolderRef = useRef<HTMLInputElement>(null)
@@ -195,7 +198,10 @@ export function NewTaskDialog({ open, onClose, onCreated }: NewTaskDialogProps) 
       return
     }
     setSubmitting(true)
-    void createTask(title.trim() || 'New note', folderId)
+    /* Only me or Everyone. Narrowing to named people needs the member list and a sentence about what
+       they will also start receiving — that belongs in the share sheet, one tap away from the new
+       note's own menu, not squeezed under a folder picker. */
+    void createTask(title.trim() || 'New note', folderId, isSpace ? visibility : undefined)
       .then((task) => {
         onCreated(task)
         onClose()
@@ -331,6 +337,47 @@ export function NewTaskDialog({ open, onClose, onCreated }: NewTaskDialogProps) 
               <PickerBranch nodes={forest} selectedId={folderId} onSelect={setFolderId} depth={0} />
             </div>
           )}
+
+          {isSpace ? (
+            <div className="mt-4">
+              <p className="text-sm font-medium text-[var(--color-text-muted)]">Who can see it</p>
+              <div
+                role="radiogroup"
+                aria-label="Who can see this note"
+                className="mt-2 grid grid-cols-2 gap-2"
+              >
+                {([
+                  ['space', 'Everyone', Globe],
+                  ['private', 'Only me', Lock],
+                ] as const).map(([level, label, Icon]) => {
+                  const active = visibility === level
+                  return (
+                    <button
+                      key={level}
+                      type="button"
+                      role="radio"
+                      aria-checked={active}
+                      disabled={submitting}
+                      onClick={() => setVisibility(level)}
+                      className={cn(
+                        'flex items-center gap-2 rounded-xl border px-3 py-2 text-left text-[13px] transition-colors',
+                        active
+                          ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-text)]'
+                          : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:bg-[var(--color-hover)]',
+                      )}
+                    >
+                      <Icon
+                        className="h-3.5 w-3.5 shrink-0"
+                        style={{ color: active ? 'var(--color-accent)' : undefined }}
+                        aria-hidden
+                      />
+                      <span className="min-w-0 truncate">{label}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          ) : null}
 
           <div className="mt-5 flex justify-end gap-2">
             <Button variant="subtle" size="sm" onClick={onClose} disabled={submitting}>

@@ -1,0 +1,24 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "x": 0, "y": 0, "w": 1240, "h": 1010, "title": "01 — The Stack" },
+    { "file": "Ledger.dc.html", "x": 1360, "y": 0, "w": 1000, "h": 1010, "title": "02 — The Ledger" },
+    { "file": "Shelf.dc.html", "x": 0, "y": 1150, "w": 1080, "h": 1000, "title": "03 — The Shelf" }
+  ],
+  "annotations": [
+    {
+      "id": "brief-2",
+      "x": 0,
+      "y": -172,
+      "w": 700,
+      "text": "Second pass — structure, not styling.\n\nThe first four were all the same object: a vertical list of nav rows with a header on top. These three are three different objects.\n\nEach kills something the current sidebar has: the Stack kills the Spaces row and the switcher dropdown, the Ledger kills icons as the primary key, the Shelf kills the panel header. All three keep every destination one click away."
+    },
+    {
+      "id": "pick",
+      "x": 1360,
+      "y": -172,
+      "w": 560,
+      "text": "Still real tokens throughout — #4f46e5 indigo, #12857a teal, #b45309 amber, Inter + Sansita.\n\nMix and match is fine: the Stack's pile with the Ledger's numbered index is a coherent thing, and so is the Shelf's edge tabs with the Stack's open card."
+    }
+  ],
+  "launch": { "view": "canvas" }
+}

@@ -18,11 +18,15 @@ import {
 } from '../lib/folders'
 import type {
   Attachment,
+  ContentSharing,
+  ContentVisibility,
   Folder,
   FolderNode,
+  FolderVisibilityImpact,
   NoteKind,
   Reminder,
   ReminderDraft,
+  ShareableEntity,
   Subtask,
   Tag,
   Task,
@@ -31,6 +35,7 @@ import type {
   TaskGridScope,
   TaskListScope,
 } from '../types'
+import { buildSharingIndex, type SharingIndex } from '../lib/contentPrivacy'
 import { getTaskById, getTasksByFolder, nextTaskSortOrder, reorderSiblingTasks as applyTaskReorder } from '../lib/tasks'
 import { getSubtasksByTask } from '../lib/subtasks'
 import {
@@ -60,6 +65,7 @@ import {
 import {
   getAttachmentRepository,
   getNotesRepository,
+  getSpacesRepository,
   getRemindersRepository,
   RepositoryError,
   type MaybePromise,
@@ -89,7 +95,13 @@ interface FolderContextValue {
   getChildFolders: (parentId: string | null) => Folder[]
   getPath: (id: string) => Folder[]
   getForest: () => FolderNode[]
-  createFolder: (name: string, parentId: string | null) => Promise<Folder>
+  /** `visibility` is only meaningful inside a space, and only at creation — it rides along on the
+   *  create so a folder meant to be private is never briefly visible. See Folder.visibility. */
+  createFolder: (
+    name: string,
+    parentId: string | null,
+    visibility?: ContentVisibility,
+  ) => Promise<Folder>
   renameFolder: (folderId: string, name: string) => Promise<void>
   deleteFolder: (folderId: string) => Promise<{
     parentId: string | null
@@ -104,7 +116,7 @@ interface FolderContextValue {
   toggleFolderImportant: (folderId: string) => void
   getTask: (id: string) => Task | undefined
   getTasksInFolder: (folderId: string) => Task[]
-  createTask: (title: string, folderId: string) => Promise<Task>
+  createTask: (title: string, folderId: string, visibility?: ContentVisibility) => Promise<Task>
   reorderSiblingTasks: (
     draggedId: string,
     targetId: string,
@@ -177,6 +189,32 @@ interface FolderContextValue {
   /** Set when a reminder write fails, so the dialog can say so instead of silently no-opping. */
   reminderError: string | null
   updateTaskTags: (taskId: string, tags: string[]) => void
+  /**
+   * Who can see each folder and note here, by id.
+   *
+   * Empty outside a space. Only ever used to draw the badge and to open the share sheet on the right
+   * state — access itself was settled by RLS before any of this reached the browser, which is why
+   * nothing in this app filters a list by it.
+   */
+  sharingIndex: SharingIndex
+  /**
+   * Change who can see one item, and with it who receives its reminders.
+   *
+   * Resolves to the state the *server* settled on, which is not always what was asked for: naming
+   * nobody under "Selected people" comes back as "Only me", and anybody who has since left the space
+   * is dropped. The dialog shows what comes back rather than what it sent.
+   */
+  setContentVisibility: (
+    entityType: ShareableEntity,
+    entityId: string,
+    visibility: ContentVisibility,
+    userIds: string[],
+  ) => Promise<ContentSharing>
+  /** One item's sharing state, read fresh from the server — the share sheet opens on this rather
+   *  than on the snapshot, which may be up to a poll out of date on exactly the field being edited. */
+  readSharing: (entityType: ShareableEntity, entityId: string) => Promise<ContentSharing | null>
+  /** What opening a folder up would reveal, in counts, asked before the change is made. */
+  readFolderVisibilityImpact: (folderId: string) => Promise<FolderVisibilityImpact>
   /** Every tag this account has, name-sorted — what the tag picker offers instead of retyping. */
   tags: Tag[]
   /** Removes a tag from the catalogue and from every task that carries it. */
@@ -258,8 +296,19 @@ function notesFingerprint(snapshot: {
   tasks: Task[]
   subtasks: Subtask[]
   tags: Tag[]
+  sharing?: ContentSharing[]
 }): string {
-  return JSON.stringify([snapshot.folders, snapshot.tasks, snapshot.subtasks, snapshot.tags])
+  return JSON.stringify([
+    snapshot.folders,
+    snapshot.tasks,
+    snapshot.subtasks,
+    snapshot.tags,
+    // Sharing is part of what a poll is looking for, and it is the only part that can change
+    // without any of the four above changing with it: somebody narrowing a note from Everyone to a
+    // few named people leaves every row exactly as it was for anyone still holding access, and the
+    // badge would otherwise keep saying Everyone until the page was reloaded.
+    snapshot.sharing ?? [],
+  ])
 }
 
 /**
@@ -306,6 +355,8 @@ export function FolderProvider({ children }: { children: ReactNode }) {
   const notesRepository = getNotesRepository(workspace)
   const attachmentRepository = getAttachmentRepository()
   const remindersRepository = getRemindersRepository()
+  // Sharing is a membership question, not a document one — see SpacesDataRepository's note on why.
+  const spacesRepository = getSpacesRepository()
   const deletionService = useMemo(
     () => new NotesDeletionService(notesRepository, attachmentRepository),
     [attachmentRepository, notesRepository],
@@ -316,6 +367,14 @@ export function FolderProvider({ children }: { children: ReactNode }) {
   const [reminderError, setReminderError] = useState<string | null>(null)
   const [subtasks, setSubtasks] = useState<Subtask[]>([])
   const [tags, setTags] = useState<Tag[]>([])
+  /**
+   * Who can see each folder and note here.
+   *
+   * Empty in a personal workspace, and empty is exactly right there: one reader, nothing to decide.
+   * Never consulted to decide whether to render a row — every row in `folders` and `tasks` has
+   * already been through RLS on the way here — only to draw the badge and fill the share sheet.
+   */
+  const [sharing, setSharing] = useState<ContentSharing[]>([])
   const [uiState, setUiState] = useState<UiState>(EMPTY_UI_STATE)
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [expandedAttachmentIds, setExpandedAttachmentIds] = useState<string[]>([])
@@ -332,6 +391,7 @@ export function FolderProvider({ children }: { children: ReactNode }) {
   const tasksRef = useRef(tasks)
   const subtasksRef = useRef(subtasks)
   const tagsRef = useRef(tags)
+  const sharingRef = useRef(sharing)
   const uiStateRef = useRef(uiState)
   const userIdRef = useRef(userId)
   const lastConfirmedRef = useRef(snapshotFromParts([], [], [], [], EMPTY_UI_STATE))
@@ -361,11 +421,18 @@ export function FolderProvider({ children }: { children: ReactNode }) {
   tasksRef.current = tasks
   subtasksRef.current = subtasks
   tagsRef.current = tags
+  sharingRef.current = sharing
   uiStateRef.current = uiState
   userIdRef.current = userId
 
   const applyNotes = useCallback(
-    (next: { folders: Folder[]; tasks: Task[]; subtasks: Subtask[]; tags?: Tag[] }) => {
+    (next: {
+      folders: Folder[]
+      tasks: Task[]
+      subtasks: Subtask[]
+      tags?: Tag[]
+      sharing?: ContentSharing[]
+    }) => {
       foldersRef.current = next.folders
       tasksRef.current = next.tasks
       subtasksRef.current = next.subtasks
@@ -377,6 +444,12 @@ export function FolderProvider({ children }: { children: ReactNode }) {
       if (next.tags) {
         tagsRef.current = next.tags
         setTags(next.tags)
+      }
+      // Optional for the same reason, and for one more: only a full read carries sharing at all, so
+      // an ordinary edit passing nothing here must leave what is known alone rather than clear it.
+      if (next.sharing) {
+        sharingRef.current = next.sharing
+        setSharing(next.sharing)
       }
     },
     [],
@@ -642,6 +715,7 @@ export function FolderProvider({ children }: { children: ReactNode }) {
           tasks: tasksRef.current,
           subtasks: subtasksRef.current,
           tags: tagsRef.current,
+          sharing: sharingRef.current,
         })
         if (current === notesFingerprint(loaded)) {
           return
@@ -916,8 +990,38 @@ export function FolderProvider({ children }: { children: ReactNode }) {
 
   const getForest = useCallback(() => buildFolderForest(folders), [folders])
 
+  /**
+   * Records locally what the server is about to make true for a freshly created item.
+   *
+   * Without this the badge on a brand-new private folder would not appear until the next poll, so a
+   * folder created as "Only me" would sit there for up to twenty seconds looking like everything
+   * else — which is precisely the moment somebody wants to see that it worked. The creator is the
+   * owner by construction (owner_id is stamped from the session), so nothing here is a guess.
+   */
+  const noteLocalSharing = useCallback(
+    (entityType: ShareableEntity, entityId: string, visibility: ContentVisibility) => {
+      const viewerId = userIdRef.current
+      if (!viewerId) {
+        return
+      }
+      const next = [
+        ...sharingRef.current.filter(
+          (entry) => !(entry.entityType === entityType && entry.entityId === entityId),
+        ),
+        { entityType, entityId, visibility, ownerId: viewerId, canManage: true, sharedWith: [] },
+      ]
+      sharingRef.current = next
+      setSharing(next)
+    },
+    [],
+  )
+
   const createFolder = useCallback(
-    async (name: string, parentId: string | null): Promise<Folder> => {
+    async (
+      name: string,
+      parentId: string | null,
+      visibility?: ContentVisibility,
+    ): Promise<Folder> => {
       if (!beginExclusiveAction(actionLocksRef.current, 'create-folder')) {
         throw new RepositoryError('Please wait for the current folder to be created.')
       }
@@ -927,6 +1031,9 @@ export function FolderProvider({ children }: { children: ReactNode }) {
         parentId,
         isImportant: false,
         sortOrder: nextFolderSortOrder(foldersRef.current, parentId),
+        // Undefined for personal notes and for the ordinary case, where the server's own default
+        // ('space') is already the answer — see Folder.visibility.
+        ...(visibility && visibility !== 'space' ? { visibility } : {}),
       }
       try {
         applyNotes({
@@ -935,6 +1042,9 @@ export function FolderProvider({ children }: { children: ReactNode }) {
           subtasks: subtasksRef.current,
         })
         enqueue([{ entity: 'folder', action: 'create', row: folder }], WRITE_INTENT.folderCreated)
+        if (visibility && visibility !== 'space') {
+          noteLocalSharing('folder', folder.id, visibility)
+        }
         if (parentId) {
           setUiState((current) => ({
             ...current,
@@ -947,7 +1057,7 @@ export function FolderProvider({ children }: { children: ReactNode }) {
         endExclusiveAction(actionLocksRef.current, 'create-folder')
       }
     },
-    [applyNotes, enqueue, persistNotes],
+    [applyNotes, enqueue, noteLocalSharing, persistNotes],
   )
 
   const renameFolder = useCallback(
@@ -1057,7 +1167,7 @@ export function FolderProvider({ children }: { children: ReactNode }) {
   )
 
   const createTask = useCallback(
-    async (title: string, folderId: string): Promise<Task> => {
+    async (title: string, folderId: string, visibility?: ContentVisibility): Promise<Task> => {
       if (!beginExclusiveAction(actionLocksRef.current, 'create-task')) {
         throw new RepositoryError('Please wait for the current task to be created.')
       }
@@ -1076,6 +1186,7 @@ export function FolderProvider({ children }: { children: ReactNode }) {
         color: null,
         gridLayouts: null,
         sortOrder: nextTaskSortOrder(tasksRef.current, folderId),
+        ...(visibility && visibility !== 'space' ? { visibility } : {}),
       }
       try {
         applyNotes({
@@ -1084,6 +1195,9 @@ export function FolderProvider({ children }: { children: ReactNode }) {
           subtasks: subtasksRef.current,
         })
         enqueue([{ entity: 'task', action: 'create', row: task }], WRITE_INTENT.taskCreated)
+        if (visibility && visibility !== 'space') {
+          noteLocalSharing('task', task.id, visibility)
+        }
         setUiState((current) => ({
           ...current,
           expandedTaskIds: addId(current.expandedTaskIds, task.id),
@@ -1094,7 +1208,7 @@ export function FolderProvider({ children }: { children: ReactNode }) {
         endExclusiveAction(actionLocksRef.current, 'create-task')
       }
     },
-    [applyNotes, enqueue, persistNotes],
+    [applyNotes, enqueue, noteLocalSharing, persistNotes],
   )
 
   const reorderSiblingTasks = useCallback(
@@ -1579,6 +1693,87 @@ export function FolderProvider({ children }: { children: ReactNode }) {
     [applyNotes, enqueue, persistNotes],
   )
 
+  /**
+   * The sharing state, indexed for the components that draw it.
+   *
+   * Rebuilt only when the array changes, which after a full read is once — the badge on every folder
+   * row and every card reads through this, so a fresh Map per render would be a real cost on a large
+   * space rather than a theoretical one.
+   */
+  const sharingIndex = useMemo(() => buildSharingIndex(sharing), [sharing])
+
+  /**
+   * Change who can see an item.
+   *
+   * Written straight through rather than queued as an op, and the reason is the same one that keeps
+   * membership off the op queue: the queue is optimistic and coalescing, and "share this with Rahul"
+   * has a real answer that has to reach the person who asked ("only the person who created this can
+   * change who sees it"). It is also not a change to the *document* — nothing about the note itself
+   * moves — so there is nothing for the op log to record and nothing to roll back.
+   *
+   * The resolved value is folded into local state rather than triggering a re-read: the server has
+   * just told us exactly what the new state is, and a full workspace read to learn something already
+   * in hand would make the dialog sit there for a round trip it does not need.
+   */
+  const setContentVisibility = useCallback(
+    async (
+      entityType: ShareableEntity,
+      entityId: string,
+      visibility: ContentVisibility,
+      userIds: string[],
+    ): Promise<ContentSharing> => {
+      if (!spacesRepository) {
+        throw new RepositoryError('Sharing needs a connection.')
+      }
+      const resolved = await spacesRepository.setVisibility(
+        entityType,
+        entityId,
+        visibility,
+        userIds,
+      )
+      const next = [
+        ...sharingRef.current.filter(
+          (entry) => !(entry.entityType === entityType && entry.entityId === entityId),
+        ),
+        resolved,
+      ]
+      sharingRef.current = next
+      setSharing(next)
+      /*
+       * Narrowing an item can put it out of *your* reach too — not through this rule, since the owner
+       * always keeps access, but through the folder above it, which is the case that matters for a
+       * folder: making a parent private hides children whose own level is wider, and those children
+       * are still sitting in local state looking visible. A re-read is the honest way to find out
+       * what is still there, and it costs one request on a deliberate, infrequent action.
+       */
+      if (entityType === 'folder') {
+        void refreshNotes()
+      }
+      return resolved
+    },
+    [refreshNotes, spacesRepository],
+  )
+
+  const readSharing = useCallback(
+    async (entityType: ShareableEntity, entityId: string): Promise<ContentSharing | null> => {
+      if (!spacesRepository) {
+        return null
+      }
+      return await spacesRepository.getSharing(entityType, entityId)
+    },
+    [spacesRepository],
+  )
+
+  const readFolderVisibilityImpact = useCallback(
+    async (folderId: string): Promise<FolderVisibilityImpact> => {
+      if (!spacesRepository) {
+        return { openFolders: 0, openTasks: 0, keptPrivate: 0 }
+      }
+      return await spacesRepository.folderVisibilityImpact(folderId)
+    },
+    [spacesRepository],
+  )
+
   const updateTaskTags = useCallback(
     (taskId: string, names: string[]) => {
       // Deduped against the catalogue's own casing, so picking "Job" and typing "job" into the
@@ -1974,6 +2169,10 @@ export function FolderProvider({ children }: { children: ReactNode }) {
       refreshNotes,
       reminderError,
       updateTaskTags,
+      sharingIndex,
+      setContentVisibility,
+      readSharing,
+      readFolderVisibilityImpact,
       tags,
       deleteTag,
       updateTaskColor,
@@ -2041,6 +2240,10 @@ export function FolderProvider({ children }: { children: ReactNode }) {
       refreshNotes,
       reminderError,
       updateTaskTags,
+      sharingIndex,
+      setContentVisibility,
+      readSharing,
+      readFolderVisibilityImpact,
       tags,
       deleteTag,
       updateTaskColor,

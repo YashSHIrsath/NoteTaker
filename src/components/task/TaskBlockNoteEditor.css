@@ -1,3 +1,23 @@
+/* The note's own face.
+ *
+ * BlockNote's bundled stylesheet sets `font-family: Inter, ...` directly on `.bn-default-styles`,
+ * which is why the text inside a note stayed sans however the app's fonts were set: an inherited
+ * value from `body` never reaches a rule that names a family outright. This is the same class with a
+ * `.task-blocknote` ancestor in front of it, so it out-specifies the library rule (0,2,0 against
+ * 0,1,0) rather than relying on which stylesheet happens to load last.
+ *
+ * Both the live editor and the read-only card previews carry `.task-blocknote`, so one rule covers
+ * the note you are writing and the same note on its card.
+ *
+ * Code is deliberately left alone: `.bn-inline-content code` is more specific and keeps its
+ * monospace, which is the entire point of a code span and has nothing to do with a reading
+ * preference. */
+.task-blocknote .bn-default-styles,
+.task-blocknote .bn-editor,
+.task-blocknote .bn-static-content {
+  font-family: var(--font-note, var(--font-body));
+}
+
 /* BlockNote draws a vertical guide line down the left edge of nested list items via a
    border on this pseudo-element (the actual rule lives in @blocknote/react's own bundled
    CSS — `.bn-block-group .bn-block:not(:has(.bn-toggle-wrapper)) .bn-block-group

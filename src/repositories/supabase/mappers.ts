@@ -2,7 +2,9 @@ import { NOTES_STORAGE_VERSION } from '../../services/storage/types'
 import type {
   Attachment,
   AttachmentType,
+  ContentSharing,
   Folder,
+  ShareableEntity,
   Subtask,
   NoteKind,
   TaskListScope,
@@ -11,6 +13,7 @@ import type {
   TaskGridLayouts,
   TaskGridPlacement,
 } from '../../types'
+import { toVisibility } from '../../lib/contentPrivacy'
 import { isTaskColor } from '../../lib/taskColor'
 import { GRID_SCOPES } from '../../lib/taskGrid'
 import type { FolderPatch, SubtaskPatch, TaskPatch } from '../../services/notes/ops'
@@ -73,6 +76,81 @@ export function folderFromRow(row: FolderRow): Folder {
     isImportant: row.is_important,
     sortOrder: row.sort_order,
   }
+}
+
+/**
+ * The two privacy columns, kept off the row types above rather than added to them.
+ *
+ * FolderRow and TaskRow are what gets *written* on the personal path — folderToRow and taskToRow
+ * return them — and neither of these columns is ever written from the client: owner_id is stamped
+ * from the session and visibility is frozen except through set_content_visibility(). Folding them
+ * into the write shapes would mean sending two values the server discards, and would make it look as
+ * though the client had a say.
+ *
+ * They are only read, and only inside a space. A personal workspace has one reader, so there is
+ * nothing for a visibility to mean — which is also why a database that predates this migration never
+ * has these columns asked for on the path it can still serve.
+ */
+export interface ContentPrivacyColumns {
+  visibility: string | null
+  owner_id: string | null
+}
+
+export type FolderReadRow = FolderRow & ContentPrivacyColumns
+export type TaskReadRow = TaskRow & ContentPrivacyColumns
+
+/** One row of the grant table, as it comes back. Its RLS policy means the reader only ever receives
+ *  rows for items they can already reach, so nothing here needs filtering. */
+export interface ContentShareRow {
+  entity_type: string
+  entity_id: string
+  user_id: string
+}
+
+/**
+ * The sharing state of everything in the loaded workspace, assembled from the three sources it
+ * arrives in: the folders' own columns, the tasks' own columns, and the grant rows.
+ *
+ * `canManage` is decided here rather than asked of the server, and this is the one place in the app
+ * where a permission is computed client-side — so it is worth being exact about what it is for. It
+ * decides whether to *offer* the share sheet. Every path it guards is enforced again in
+ * set_content_visibility(), which refuses anybody but the owner, so the worst a wrong answer here can
+ * do is show a control that then declines. It is never the thing keeping anyone out.
+ */
+export function sharingFromRows(
+  folderRows: FolderReadRow[],
+  taskRows: TaskReadRow[],
+  shareRows: ContentShareRow[],
+  viewerId: string,
+): ContentSharing[] {
+  const grants = new Map<string, string[]>()
+  for (const row of shareRows) {
+    const key = `${row.entity_type}:${row.entity_id}`
+    const existing = grants.get(key)
+    if (existing) {
+      existing.push(row.user_id)
+    } else {
+      grants.set(key, [row.user_id])
+    }
+  }
+
+  const entry = (
+    entityType: ShareableEntity,
+    id: string,
+    row: ContentPrivacyColumns,
+  ): ContentSharing => ({
+    entityType,
+    entityId: id,
+    visibility: toVisibility(row.visibility),
+    ownerId: row.owner_id,
+    canManage: row.owner_id !== null && row.owner_id === viewerId,
+    sharedWith: grants.get(`${entityType}:${id}`) ?? [],
+  })
+
+  return [
+    ...folderRows.map((row) => entry('folder', row.id, row)),
+    ...taskRows.map((row) => entry('task', row.id, row)),
+  ]
 }
 
 /**
@@ -387,6 +465,9 @@ export function snapshotFromRows(
   subtaskRows: SubtaskRow[],
   uiState: UiState,
   catalogue: { tagRows: TagRow[]; taskTagRows: TaskTagRow[] } | null,
+  /** Who can see what, for a space. Empty — and omitted by every caller outside one — for personal
+   *  notes, where there is nobody else to see anything. */
+  sharing: ContentSharing[] = [],
 ): AppSnapshot {
   const tasks = taskRows.map(taskFromRow)
 
@@ -397,6 +478,7 @@ export function snapshotFromRows(
       tasks,
       subtasks: subtaskRows.map(subtaskFromRow),
       tags: [],
+      sharing,
       uiState,
     }
   }
@@ -439,6 +521,7 @@ export function snapshotFromRows(
     // would find no catalogue entry for it, write no link, and quietly drop it. Freshly minted ids
     // are settled by that save; nothing points at a tag by id, so a temporary one costs nothing.
     tags: completeCatalogue(catalogue.tagRows.map(tagFromRow), tasks),
+    sharing,
     uiState,
   }
 }

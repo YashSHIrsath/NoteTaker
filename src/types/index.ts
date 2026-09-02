@@ -5,6 +5,21 @@ export interface Folder {
   parentId: string | null
   isImportant: boolean
   sortOrder: number
+  /**
+   * How far this folder should reach, chosen while creating it. See ContentVisibility.
+   *
+   * A creation hint and nothing more: set once, on the way in, and never populated on the way back
+   * out. Where an existing item stands is read from the sharing index (see SharingIndex), which is
+   * the one source of truth for it — a field that was both written here and filled in on read would
+   * be a second one, and the two would eventually disagree.
+   *
+   * It exists so that "new private folder" is a single atomic write. Creating the folder and then
+   * changing its visibility would work, but it would leave a window — one request wide, and long
+   * enough for another member's poll — in which a folder meant to be private was visible to the whole
+   * space. Undefined means Everyone, which is the column's own default and the state of every folder
+   * that existed before this feature.
+   */
+  visibility?: ContentVisibility
 }
 
 export interface FolderNode extends Folder {
@@ -155,6 +170,9 @@ export interface Task {
    * folder's color in a folder and a stable scattered color in the flat lists.
    */
   color: TaskColor | null
+  /** How far this note should reach, chosen while creating it. A write-only creation hint, exactly
+   *  as on Folder — see the note there for why it is not filled in on read. */
+  visibility?: ContentVisibility
 }
 
 /** The named task palette; each name carries proper light and dark values (see the --task-*
@@ -403,6 +421,78 @@ export interface SpaceMember {
   email: string
   fullName: string | null
   avatarUrl: string | null
+}
+
+/* ------------------------------------------------------------------ per-item privacy
+ *
+ * How far an item reaches inside the space that holds it. Three levels, and the names are the
+ * database's own (see the content_privacy migration) rather than the ones on screen: 🔒 Only me,
+ * 👥 Selected people and 🌐 Everyone are what a person picks, and lib/contentPrivacy.ts is where the
+ * two vocabularies meet.
+ *
+ * Only ever advisory here. Every one of these values is enforced by RLS on the way out of the
+ * database, so the app is showing a decision that has already been made rather than making one —
+ * which is why nothing in this app decides who may read a row.
+ */
+export type ContentVisibility = 'private' | 'restricted' | 'space'
+
+/** The two kinds of thing that can carry a visibility of their own. */
+export type ShareableEntity = 'folder' | 'task'
+
+/**
+ * What one item's sharing looks like, as the person looking at it is allowed to know.
+ *
+ * `sharedWith` is only ever populated for an item the reader can reach — content_shares has its own
+ * RLS policy saying exactly that — so an empty list means "nobody, or none of your business", and the
+ * UI never has to tell those apart.
+ */
+export interface ContentSharing {
+  entityType: ShareableEntity
+  entityId: string
+  visibility: ContentVisibility
+  /** Who made it. Keeps access no matter what happens to `sharedWith` — see the migration's note on
+   *  why the owner is deliberately not a row in the share table. */
+  ownerId: string | null
+  /** Whether the signed-in account may change any of this. The owner, and nobody else. */
+  canManage: boolean
+  /** Ids of the space members this item is explicitly shared with. Meaningful only when
+   *  `visibility` is 'restricted'; empty at the other two levels, where it is also cleared in the
+   *  database so no grant ever sits behind a level that ignores it. */
+  sharedWith: string[]
+}
+
+/**
+ * What widening a folder's visibility would actually reveal.
+ *
+ * Read before the change, so the dialog can say "12 notes inside will become visible" instead of
+ * finding out afterwards. Counts and not titles, deliberately: it exists to inform the owner, and a
+ * list of names would be a second way to read things.
+ */
+export interface FolderVisibilityImpact {
+  /** Folders below this one carrying no restriction of their own — they reach exactly as far as it
+   *  does, so they move with it. */
+  openFolders: number
+  openTasks: number
+  /** Items below this one that will stay exactly as private as they are, whatever happens here.
+   *  The reassuring half of the sentence. */
+  keptPrivate: number
+}
+
+/**
+ * Which classes of message somebody wants from one space.
+ *
+ * Never a way to receive more than access allows: the database checks access first and consults
+ * these second, so turning everything on cannot surface an item you cannot see. Only ever a way to
+ * receive less.
+ */
+export interface SpaceNotificationPrefs {
+  spaceId: string
+  /** Reminders somebody set on a note. On by default. */
+  reminders: boolean
+  /** A deadline arriving, and a task being completed. On by default. */
+  dueDates: boolean
+  /** Somebody edited something. Off by default — the class that becomes a firehose. */
+  contentUpdates: boolean
 }
 
 export type SpaceInviteStatus = 'pending' | 'accepted' | 'declined' | 'revoked'

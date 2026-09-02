@@ -17,6 +17,7 @@ import {
 import { ROLE_LABELS, roleCanManageMembers } from '../../lib/spaceRoles'
 import { SPACE_COLORS, spaceSwatch } from '../../lib/spaceColor'
 import { SpaceAvatar } from './SpaceAvatar'
+import { SpaceNotificationSettings } from './SpaceNotificationSettings'
 import { uploadSpaceImage } from '../../services/profile/spaceImageUpload'
 import { useSpaces } from '../../hooks/useSpaces'
 import { cn } from '../../lib/cn'
@@ -427,6 +428,10 @@ export function SpaceSettingsPanel({
           </ul>
         </div>
       ) : null}
+
+      {/* Yours alone, unlike everything above it — which is why it sits below the membership list
+        *  rather than among the space's own settings. */}
+      <SpaceNotificationSettings spaceId={space.id} />
 
       {/* Leaving is deleting your own membership — the same policy that lets an admin remove
         *  somebody else, which is why the owner cannot do it without handing the space over. */}

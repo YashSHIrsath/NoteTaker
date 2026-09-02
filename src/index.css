@@ -19,6 +19,9 @@
      landing page — which mounts outside the shell that overrides them — always uses these. */
   --font-display: var(--font-brand);
   --font-body: var(--font-sans);
+  /* The text inside a note, which is a separate choice from the interface around it — see FontRole.
+     Defaults to whatever the reading face is, so an account that has only picked one gets both. */
+  --font-note: var(--font-body);
 
   /* The untinted grounds. Named separately because a space's theme mixes its own colour into
      these — see .space-theme — and duplicating the literals there is how the two would drift. */

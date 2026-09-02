@@ -1,0 +1,204 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sansita:wght@700;800&display=swap">
+  <style>
+    body { margin: 0; font-family: 'Inter', 'Segoe UI', system-ui, sans-serif; }
+    a { color: #4f46e5; } a:hover { color: #4338ca; }
+    .idx { display:flex; align-items:baseline; gap:12px; padding:11px 0 10px; border-bottom:1px solid #e6e8ec; }
+    .num { font-size:10px; font-weight:700; letter-spacing:0.1em; color:#b6bbc6; font-variant-numeric:tabular-nums; width:17px; flex-shrink:0; }
+    .ent { font-size:14.5px; font-weight:500; letter-spacing:-0.012em; color:#3a3f49; flex:1; }
+    .ct  { font-size:11px; font-weight:600; color:#b6bbc6; font-variant-numeric:tabular-nums; }
+    .sub { display:flex; align-items:baseline; gap:8px; padding:6px 0 5px 29px; }
+    .dots { flex:1; border-bottom:1px dotted #d3d7de; transform:translateY(-3px); }
+    .kick { font-size:9.5px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#9aa0ad; }
+  </style>
+</helmet>
+
+<div style="padding: 36px 32px 34px; background:#eceef3; min-height:100%; box-sizing:border-box;">
+
+  <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;">
+    <span style="display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:999px;background:#14161a;color:#fff;font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;">02</span>
+    <h1 style="margin:0;font-family:'Sansita',Georgia,serif;font-size:30px;font-weight:800;letter-spacing:-0.015em;color:#14161a;">The Ledger</h1>
+  </div>
+  <p style="margin:10px 0 0;max-width:900px;font-size:14px;line-height:1.55;color:#3a3f49;text-wrap:pretty;">
+    Throw out the pills, the boxes, the tinted fills &mdash; every piece of chrome an app puts around a list &mdash; and set the sidebar the way a magazine sets its contents page. Rules, numbers, a masthead and nothing else. The workspace name is the largest thing on the screen and does the identifying by itself.
+  </p>
+  <p style="margin:8px 0 0;max-width:900px;font-size:12.5px;line-height:1.55;color:#6b7180;">
+    <strong style="font-weight:600;color:#14161a;">The structural change:</strong> icons stop being the primary key &mdash; numbers and hierarchy are. That makes the whole column scannable in one pass instead of being read row by row, and it is the only one of the three that stays perfectly legible when somebody sets the app in a handwriting face.
+  </p>
+
+  <div style="display:flex;gap:40px;margin-top:30px;align-items:flex-start;flex-wrap:wrap;">
+
+    <!-- ==================================================== PERSONAL -->
+    <div style="display:flex;flex-direction:column;gap:11px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-family:'Sansita',Georgia,serif;font-size:13px;font-weight:800;color:#14161a;">Personal</span>
+        <span style="height:1px;width:130px;background:#c9cdd6;"></span>
+      </div>
+
+      <div style="width:288px;height:620px;background:#fdfdfe;border:1px solid #dcdfe6;border-right-width:0;border-radius:4px 0 0 4px;padding:26px 22px 20px;box-sizing:border-box;display:flex;flex-direction:column;box-shadow:0 1px 2px rgba(20,22,26,0.04),0 14px 40px rgba(20,22,26,0.09);">
+
+        <div class="kick">Mindstack</div>
+
+        <!-- masthead -->
+        <div style="margin-top:14px;">
+          <div style="font-family:'Sansita',Georgia,serif;font-size:29px;line-height:1.05;font-weight:800;letter-spacing:-0.022em;color:#14161a;">My<br>notes</div>
+          <div style="height:4px;background:#4f46e5;margin-top:12px;border-radius:2px;"></div>
+          <div style="display:flex;align-items:baseline;justify-content:space-between;margin-top:8px;">
+            <span style="font-size:11.5px;color:#6b7180;">Only you</span>
+            <span style="font-size:11.5px;color:#b6bbc6;font-variant-numeric:tabular-nums;">12 folders</span>
+          </div>
+        </div>
+
+        <!-- index -->
+        <div style="margin-top:22px;flex:1;">
+          <div class="kick" style="padding-bottom:7px;border-bottom:1.5px solid #14161a;">Index</div>
+
+          <div class="idx"><span class="num">01</span><span class="ent">Tree</span></div>
+
+          <div class="idx" style="border-bottom-color:#14161a;">
+            <span class="num" style="color:#4f46e5;">02</span>
+            <span class="ent" style="font-weight:700;color:#14161a;">Notes</span>
+            <span class="ct" style="color:#4f46e5;">12</span>
+          </div>
+          <div style="padding-bottom:4px;">
+            <div class="sub"><span style="font-size:12.5px;color:#434852;">Job hunt</span><span class="dots"></span><span class="ct">8</span></div>
+            <div class="sub"><span style="font-size:12.5px;color:#434852;">Resum&eacute;</span><span class="dots"></span><span class="ct">3</span></div>
+            <div class="sub"><span style="font-size:12.5px;color:#434852;">Reading list</span><span class="dots"></span><span class="ct">21</span></div>
+            <div class="sub"><span style="font-size:12.5px;color:#b6bbc6;">New folder</span><span class="dots"></span><span class="ct">&plus;</span></div>
+          </div>
+
+          <div class="idx"><span class="num">03</span><span class="ent">Tasks</span><span class="ct">4</span></div>
+          <div class="idx"><span class="num">04</span><span class="ent">Starred</span></div>
+        </div>
+
+        <!-- other desks -->
+        <div style="margin-top:14px;">
+          <div class="kick" style="padding-bottom:7px;border-bottom:1.5px solid #14161a;">Elsewhere</div>
+          <div style="display:flex;align-items:center;gap:10px;padding:9px 0 8px;border-bottom:1px solid #e6e8ec;">
+            <span style="width:9px;height:9px;background:#12857a;border-radius:2px;flex-shrink:0;"></span>
+            <span style="flex:1;font-size:13px;font-weight:500;color:#3a3f49;">Q3 Launch</span>
+            <span class="ct">5</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;padding:9px 0 8px;border-bottom:1px solid #e6e8ec;">
+            <span style="width:9px;height:9px;background:#b45309;border-radius:2px;flex-shrink:0;"></span>
+            <span style="flex:1;font-size:13px;font-weight:500;color:#3a3f49;">Design crit</span>
+            <span style="display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;padding:0 4px;border-radius:3px;background:#b45309;color:#fff;font-size:9.5px;font-weight:700;">2</span>
+          </div>
+        </div>
+
+        <div style="margin-top:14px;display:flex;align-items:baseline;justify-content:space-between;">
+          <span style="font-size:11.5px;font-weight:600;color:#3a3f49;">Yash Shirsath</span>
+          <span class="kick" style="color:#b6bbc6;">Sign out</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================================================== SHARED SPACE -->
+    <div style="display:flex;flex-direction:column;gap:11px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-family:'Sansita',Georgia,serif;font-size:13px;font-weight:800;color:#14161a;">Inside a space</span>
+        <span style="height:1px;width:110px;background:#c9cdd6;"></span>
+      </div>
+
+      <div style="width:288px;height:620px;background:#fdfdfe;border:1px solid #dcdfe6;border-right-width:0;border-radius:4px 0 0 4px;padding:26px 22px 20px;box-sizing:border-box;display:flex;flex-direction:column;box-shadow:0 1px 2px rgba(20,22,26,0.04),0 14px 40px rgba(13,95,87,0.13);">
+
+        <div class="kick" style="display:flex;align-items:center;gap:6px;">
+          <span style="width:7px;height:7px;background:#12857a;border-radius:2px;"></span>
+          Shared space
+        </div>
+
+        <div style="margin-top:14px;">
+          <div style="font-family:'Sansita',Georgia,serif;font-size:29px;line-height:1.05;font-weight:800;letter-spacing:-0.022em;color:#14161a;">Q3<br>Launch</div>
+          <div style="height:4px;background:#12857a;margin-top:12px;border-radius:2px;"></div>
+
+          <!-- the byline: this is what a space has and personal does not -->
+          <div style="display:flex;align-items:center;gap:7px;margin-top:9px;">
+            <span style="display:flex;">
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:21px;height:21px;border-radius:50%;background:#4f46e5;color:#fff;font-size:9.5px;font-weight:700;box-shadow:0 0 0 1.5px #fdfdfe;">Y</span>
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:21px;height:21px;border-radius:50%;background:#b45309;color:#fff;font-size:9.5px;font-weight:700;margin-left:-6px;box-shadow:0 0 0 1.5px #fdfdfe;">R</span>
+              <span style="display:inline-flex;align-items:center;justify-content:center;width:21px;height:21px;border-radius:50%;background:#7c3aed;color:#fff;font-size:9.5px;font-weight:700;margin-left:-6px;box-shadow:0 0 0 1.5px #fdfdfe;">A</span>
+            </span>
+            <span style="flex:1;font-size:11.5px;color:#6b7180;line-height:1.35;">Yash, Rahul, Aditi <span style="color:#b6bbc6;">+2</span></span>
+          </div>
+          <div style="font-size:11px;color:#0d5f57;font-weight:600;margin-top:6px;">You can edit here</div>
+        </div>
+
+        <div style="margin-top:20px;flex:1;">
+          <div class="kick" style="padding-bottom:7px;border-bottom:1.5px solid #14161a;">Index</div>
+
+          <div class="idx"><span class="num">01</span><span class="ent">Tree</span></div>
+
+          <div class="idx" style="border-bottom-color:#14161a;">
+            <span class="num" style="color:#12857a;">02</span>
+            <span class="ent" style="font-weight:700;color:#14161a;">Notes</span>
+            <span class="ct" style="color:#12857a;">9</span>
+          </div>
+          <div style="padding-bottom:4px;">
+            <div class="sub"><span style="font-size:12.5px;color:#434852;">Launch plan</span><span class="dots"></span><span class="ct">&#9679;</span></div>
+            <div class="sub"><span style="font-size:12.5px;color:#434852;">Pricing</span><span class="dots"></span><span class="ct" style="letter-spacing:-1px;">&#9679;&#9679;</span></div>
+            <div class="sub"><span style="font-size:12.5px;color:#434852;">My drafts</span><span class="dots"></span><span class="ct" style="color:#3a3f49;">&#9679;</span></div>
+          </div>
+
+          <div class="idx"><span class="num">03</span><span class="ent">Tasks</span><span class="ct">7</span></div>
+          <div class="idx"><span class="num">04</span><span class="ent">Starred</span></div>
+          <div class="idx"><span class="num">05</span><span class="ent">People</span><span class="ct">5</span></div>
+          <div class="idx"><span class="num">06</span><span class="ent">Activity</span><span class="ct" style="color:#12857a;">&bull;</span></div>
+        </div>
+
+        <div style="margin-top:12px;">
+          <div class="kick" style="padding-bottom:7px;border-bottom:1.5px solid #14161a;">Elsewhere</div>
+          <div style="display:flex;align-items:center;gap:10px;padding:9px 0 8px;border-bottom:1px solid #e6e8ec;">
+            <span style="width:9px;height:9px;background:#4f46e5;border-radius:2px;flex-shrink:0;"></span>
+            <span style="flex:1;font-size:13px;font-weight:500;color:#3a3f49;">My notes</span>
+            <span class="ct">12</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;padding:9px 0 8px;border-bottom:1px solid #e6e8ec;">
+            <span style="width:9px;height:9px;background:#b45309;border-radius:2px;flex-shrink:0;"></span>
+            <span style="flex:1;font-size:13px;font-weight:500;color:#3a3f49;">Design crit</span>
+            <span style="display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;padding:0 4px;border-radius:3px;background:#b45309;color:#fff;font-size:9.5px;font-weight:700;">2</span>
+          </div>
+        </div>
+
+        <div style="margin-top:12px;display:flex;align-items:baseline;justify-content:space-between;">
+          <span style="font-size:11.5px;font-weight:600;color:#3a3f49;">Yash <span style="font-weight:400;color:#6b7180;">&middot; editor</span></span>
+          <span class="kick" style="color:#b6bbc6;">Leave</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================================================== legend -->
+    <div style="width:250px;display:flex;flex-direction:column;gap:14px;">
+      <div style="padding:15px 17px;border-radius:14px;background:#ffffff;border:1px solid #dcdfe6;">
+        <div style="font-family:'Sansita',Georgia,serif;font-size:14px;font-weight:800;color:#14161a;">Reach, as marks</div>
+        <div style="margin-top:8px;display:flex;flex-direction:column;gap:7px;">
+          <div style="display:flex;align-items:baseline;gap:9px;"><span style="font-size:11px;color:#b6bbc6;width:16px;">&#9679;</span><span style="font-size:12px;color:#434852;line-height:1.4;">Everyone in the space</span></div>
+          <div style="display:flex;align-items:baseline;gap:9px;"><span style="font-size:11px;color:#b6bbc6;width:16px;letter-spacing:-1px;">&#9679;&#9679;</span><span style="font-size:12px;color:#434852;line-height:1.4;">A few named people</span></div>
+          <div style="display:flex;align-items:baseline;gap:9px;"><span style="font-size:11px;color:#3a3f49;width:16px;">&#9679;</span><span style="font-size:12px;color:#434852;line-height:1.4;">Only you &mdash; solid, darker</span></div>
+        </div>
+        <div style="margin-top:10px;font-size:11.5px;line-height:1.5;color:#6b7180;">No lock glyphs. In a page set entirely in rules and dots, a third weight of dot is enough to carry it.</div>
+      </div>
+
+      <div style="padding:15px 17px;border-radius:14px;background:#14161a;">
+        <div style="font-family:'Sansita',Georgia,serif;font-size:14px;font-weight:800;color:#fff;">Why it navigates well</div>
+        <div style="margin-top:7px;font-size:12.5px;line-height:1.55;color:#c9cdd6;">Numbers give every destination a fixed address. After a week you stop reading the words and go straight to 03 &mdash; which no icon list can offer, because icons have no order you can memorise.</div>
+      </div>
+
+      <div style="padding:15px 17px;border-radius:14px;background:#ffffff;border:1px solid #dcdfe6;">
+        <div style="font-family:'Sansita',Georgia,serif;font-size:14px;font-weight:800;color:#14161a;">The risk</div>
+        <div style="margin-top:7px;font-size:12.5px;line-height:1.55;color:#434852;">It is the coldest of the three. A shared space full of people ends up looking like a balance sheet, and the byline is the only warmth in it.</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

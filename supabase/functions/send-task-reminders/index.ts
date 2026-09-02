@@ -25,6 +25,24 @@
 //   mark_reminder_sent, next to the clock and the stored timezone, so "every second Monday" is
 //   answered the same way whether it was this function, a trigger, or a hand-run query that asked.
 //   This function's whole job is: read the queue, write an email, report the send.
+//
+// What changed when items gained per-item privacy:
+//
+//   A message used to go to one person, found by joining to the folder and taking its creator. It now
+//   goes to the item's *audience*: everybody who can currently reach it, which for a note shared with
+//   two people is three messages and for a private one is a single message to its owner. The list is
+//   `recipients` on each queue row, computed by public.notification_recipients when the queue is
+//   read — so it reflects the sharing state at the moment of sending rather than whenever the
+//   reminder was configured.
+//
+//   Nothing here decides who gets mail. Every address arrives from the database and is re-approved
+//   by public.notification_allowed in the instant before its message is written. That is deliberate:
+//   the requirement is that a malicious or mistaken sender cannot add a recipient, so the sender is
+//   built so that it has no way to. Its only power over the list is to drop names from it.
+//
+//   It also fixes a real bug. The old join took `f.user_id`, the folder's creator — right in a
+//   personal workspace, wrong in a shared one, where a reminder somebody set on a shared note was
+//   emailed to whoever happened to have made the folder instead of to them.
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { SMTPClient } from 'https://deno.land/x/denomailer@1.6.0/mod.ts'
 
@@ -41,6 +59,20 @@ type ReminderKind = 'one_time' | 'recurring' | 'relative'
 
 type Lifecycle = 'note' | 'upcoming' | 'completed_on_time' | 'overdue' | 'completed_late'
 
+/**
+ * One person the database says may currently be told about an item.
+ *
+ * Computed by public.notification_recipients at the moment the queue is read: the item's audience
+ * under its present visibility, minus anyone whose preferences turn this class of message off. The
+ * list is never stored, and this function never adds to it — see the note above sendTo.
+ */
+interface Recipient {
+  userId: string
+  email: string
+  timezone: string | null
+  name: string | null
+}
+
 interface TaskEmailRow {
   task_id: string
   reason: 'completed' | 'due_passed'
@@ -49,8 +81,10 @@ interface TaskEmailRow {
   completed_at: string | null
   folder_id: string
   user_id: string
+  space_id: string | null
   lifecycle: Lifecycle
   has_reminders: boolean
+  recipients: Recipient[]
 }
 
 interface DueReminderRow {
@@ -67,6 +101,8 @@ interface DueReminderRow {
   folder_id: string
   note_kind: string
   user_id: string
+  space_id: string | null
+  recipients: Recipient[]
 }
 
 // The function's own runtime has no notion of the user's timezone (it defaults to UTC), so
@@ -398,7 +434,7 @@ Deno.serve(async (req) => {
   const { data: dueRows, error } = await supabase
     .from('due_reminders')
     .select(
-      'id,task_id,kind,message,timezone,next_run_at,offset_minutes,offset_direction,title,due_at,folder_id,note_kind,user_id',
+      'id,task_id,kind,message,timezone,next_run_at,offset_minutes,offset_direction,title,due_at,folder_id,note_kind,user_id,space_id,recipients',
     )
     .lte('next_run_at', new Date().toISOString())
     .order('next_run_at', { ascending: true })
@@ -414,7 +450,9 @@ Deno.serve(async (req) => {
   // connection is opened so a run with nothing to do never opens one.
   const { data: taskRows, error: taskError } = await supabase
     .from('pending_task_emails')
-    .select('task_id,reason,title,due_at,completed_at,folder_id,user_id,lifecycle,has_reminders')
+    .select(
+      'task_id,reason,title,due_at,completed_at,folder_id,user_id,space_id,lifecycle,has_reminders,recipients',
+    )
     .limit(100)
 
   if (taskError) {
@@ -467,79 +505,118 @@ Deno.serve(async (req) => {
     return client
   }
 
-  interface UserInfo {
-    email: string | null
-    timezone: string | undefined
-  }
-
-  const userCache = new Map<string, UserInfo>()
-  const getUserInfo = async (userId: string): Promise<UserInfo> => {
-    const cached = userCache.get(userId)
-    if (cached) {
-      return cached
-    }
-    const { data, error: userError } = await supabase.auth.admin.getUserById(userId)
-    const metadata = (data?.user?.user_metadata ?? {}) as { timezone?: string }
-    const info: UserInfo = {
-      email: !userError ? data.user?.email ?? null : null,
-      timezone: typeof metadata.timezone === 'string' ? metadata.timezone : undefined,
-    }
-    userCache.set(userId, info)
-    return info
-  }
-
   let sent = 0
   const failures: string[] = []
+  /** Messages not sent because the recipient no longer had access by the time we got to them. */
+  let denied = 0
+
+  /**
+   * The last thing between a computed recipient and an actual email.
+   *
+   * The queue view already filtered by access and preference, so this looks redundant — and it is
+   * not, for one reason: the view is read once at the top of a run that then spends however long it
+   * takes to talk to an SMTP server, one message at a time. Access can be withdrawn during that
+   * window. Asking again immediately before each send is what makes "authorization is checked at
+   * the exact moment the notification executes" literally true instead of nearly true.
+   *
+   * It is also the only place a recipient list is ever *narrowed* and never widened. Nothing in this
+   * file can add an address: every candidate comes from the database, and each one has to be
+   * re-approved by the database before anything leaves. A compromised or mistaken sender can fail to
+   * deliver, but it cannot deliver somewhere it should not.
+   */
+  const allowed = async (
+    recipient: Recipient,
+    taskId: string,
+    kind: 'reminders' | 'due_dates',
+  ): Promise<boolean> => {
+    const { data, error: checkError } = await supabase.rpc('notification_allowed', {
+      p_user_id: recipient.userId,
+      p_entity_type: 'task',
+      p_entity_id: taskId,
+      p_class: kind,
+    })
+    if (checkError) {
+      // Cannot confirm the recipient still has access, so do not send. A missed notification is
+      // recoverable on the next sweep; a notification to somebody who lost access is not.
+      failures.push(`${taskId}: could not verify access for a recipient (${checkError.message})`)
+      return false
+    }
+    return data === true
+  }
 
   for (const reminder of rows) {
-    const { email, timezone: accountZone } = await getUserInfo(reminder.user_id)
-    if (!email) {
-      failures.push(`${reminder.id}: no owner email`)
-      continue
+    const recipients = reminder.recipients ?? []
+    const taskLink = APP_URL ? `${APP_URL.replace(/\/$/, '')}/task/${reminder.task_id}` : null
+    let delivered = 0
+    let attempted = 0
+
+    for (const recipient of recipients) {
+      if (!recipient.email) {
+        continue
+      }
+      if (!(await allowed(recipient, reminder.task_id, 'reminders'))) {
+        denied += 1
+        continue
+      }
+      attempted += 1
+
+      // The reminder's own zone is the one the schedule was written in; the recipient's account zone
+      // is the fallback for reminders created before zones were stored per row. Resolved per person
+      // now that a reminder can reach several: a deadline should read in the reader's own clock.
+      const zone = reminder.timezone ?? recipient.timezone ?? undefined
+      // A deadline is only worth printing when the note actually has one — a repeating reminder on
+      // a plain note has nothing to show here.
+      const dueLabel =
+        reminder.note_kind === 'due_task' && reminder.due_at
+          ? formatDue(reminder.due_at, zone)
+          : null
+      const body = reminderMessage(reminder, dueLabel)
+
+      try {
+        await smtp().send({
+          from: mailFrom,
+          to: recipient.email,
+          subject: `Reminder: ${reminder.title}`,
+          content: buildReminderEmailText({ body, metaLabel: 'Due', metaValue: dueLabel, taskLink }),
+          html: buildReminderEmailHtml({
+            title: reminder.title,
+            body,
+            eyebrow: 'Reminder',
+            metaLabel: 'Due',
+            metaValue: dueLabel,
+            taskLink,
+            // The reminder, the moment it fired and who it went to: no two of these messages carry
+            // the same markup, which is what stops Gmail folding them into one another.
+            traceId: `${reminder.id}:${reminder.next_run_at}:${recipient.userId}`,
+          }),
+        })
+        delivered += 1
+      } catch (sendError) {
+        failures.push(
+          `${reminder.id} -> ${recipient.email}: ${
+            sendError instanceof Error ? sendError.message : String(sendError)
+          }`,
+        )
+      }
     }
 
-    // The reminder's own zone is the one the schedule was written in; the account's is the
-    // fallback for reminders created before zones were stored per row.
-    const zone = reminder.timezone ?? accountZone
-    // A deadline is only worth printing when the note actually has one — a repeating reminder on
-    // a plain note has nothing to show here.
-    const dueLabel =
-      reminder.note_kind === 'due_task' && reminder.due_at ? formatDue(reminder.due_at, zone) : null
-    const taskLink = APP_URL ? `${APP_URL.replace(/\/$/, '')}/task/${reminder.task_id}` : null
-    const body = reminderMessage(reminder, dueLabel)
-
-    try {
-      await smtp().send({
-        from: mailFrom,
-        to: email,
-        subject: `Reminder: ${reminder.title}`,
-        content: buildReminderEmailText({ body, metaLabel: 'Due', metaValue: dueLabel, taskLink }),
-        html: buildReminderEmailHtml({
-          title: reminder.title,
-          body,
-          eyebrow: 'Reminder',
-          metaLabel: 'Due',
-          metaValue: dueLabel,
-          taskLink,
-          // The reminder and the moment it fired: two sends of the same reminder still differ.
-          traceId: `${reminder.id}:${reminder.next_run_at}`,
-        }),
-      })
-      // Records the send and computes the next occurrence in one statement. A failure here means
-      // the mail went out but the reminder is still armed, so it is reported rather than
-      // swallowed — a repeat is the visible symptom.
+    /*
+     * Re-arm once, for the reminder rather than per message.
+     *
+     * Marked when at least one message went out, and also when there was nobody to tell — a reminder
+     * on a note whose audience has emptied is finished, and leaving it armed would have it examined
+     * every minute forever. Not marked when there were recipients and every send failed: that is a
+     * transient mail problem, and the next sweep should try again.
+     */
+    if (delivered > 0 || attempted === 0) {
       const { error: markError } = await supabase.rpc('mark_reminder_sent', {
         p_reminder_id: reminder.id,
       })
       if (markError) {
         failures.push(`${reminder.id}: sent but failed to re-arm (${markError.message})`)
       } else {
-        sent += 1
+        sent += delivered
       }
-    } catch (sendError) {
-      failures.push(
-        `${reminder.id}: ${sendError instanceof Error ? sendError.message : String(sendError)}`,
-      )
     }
   }
 
@@ -554,60 +631,81 @@ Deno.serve(async (req) => {
   let taskSkipped = 0
 
   for (const row of taskEmails) {
-    const { email, timezone } = await getUserInfo(row.user_id)
-    const dueLabel = row.due_at ? formatDue(row.due_at, timezone) : null
-    const completedLabel = row.completed_at ? formatDue(row.completed_at, timezone) : null
-    const content = taskEmailContent(row, dueLabel, completedLabel)
+    const recipients = row.recipients ?? []
+    const taskLink = APP_URL ? `${APP_URL.replace(/\/$/, '')}/task/${row.task_id}` : null
+    let delivered = 0
+    let attempted = 0
 
-    if (!email || !content) {
+    for (const recipient of recipients) {
+      if (!recipient.email) {
+        continue
+      }
+      if (!(await allowed(recipient, row.task_id, 'due_dates'))) {
+        denied += 1
+        continue
+      }
+
+      // Per recipient, so a shared deadline reads in each reader's own clock.
+      const zone = recipient.timezone ?? undefined
+      const dueLabel = row.due_at ? formatDue(row.due_at, zone) : null
+      const completedLabel = row.completed_at ? formatDue(row.completed_at, zone) : null
+      const content = taskEmailContent(row, dueLabel, completedLabel)
+      if (!content) {
+        // Nothing worth saying to anybody — the decision does not depend on who is reading, so the
+        // whole row is finished. Marked below by attempted staying at zero.
+        break
+      }
+      attempted += 1
+
+      try {
+        await smtp().send({
+          from: mailFrom,
+          to: recipient.email,
+          subject: `${content.eyebrow}: ${row.title}`,
+          content: buildReminderEmailText({
+            body: content.body,
+            metaLabel: content.metaLabel,
+            metaValue: content.metaValue,
+            taskLink,
+          }),
+          html: buildReminderEmailHtml({
+            title: row.title,
+            body: content.body,
+            eyebrow: content.eyebrow,
+            metaLabel: content.metaLabel,
+            metaValue: content.metaValue,
+            taskLink,
+            traceId: `${row.task_id}:${row.reason}:${row.completed_at ?? row.due_at ?? ''}:${recipient.userId}`,
+          }),
+        })
+        delivered += 1
+      } catch (sendError) {
+        failures.push(
+          `${row.task_id} (${row.reason}) -> ${recipient.email}: ${
+            sendError instanceof Error ? sendError.message : String(sendError)
+          }`,
+        )
+      }
+    }
+
+    /*
+     * Every row is marked handled, including the ones with nothing to say — a deadline passing on an
+     * unfinished task is already covered by its reminders, and leaving it unmarked would mean
+     * re-examining it every minute forever. The one case that is *not* marked is the same as for
+     * reminders: there were people to tell and the mail server refused every one of them.
+     */
+    if (delivered > 0 || attempted === 0) {
       const { error: markError } = await supabase.rpc('mark_task_email_sent', {
         p_task_id: row.task_id,
         p_reason: row.reason,
       })
       if (markError) {
-        failures.push(`${row.task_id} (${row.reason}): ${markError.message}`)
+        failures.push(`${row.task_id} (${row.reason}): failed to mark (${markError.message})`)
+      } else if (delivered > 0) {
+        taskSent += delivered
       } else {
         taskSkipped += 1
       }
-      continue
-    }
-
-    const taskLink = APP_URL ? `${APP_URL.replace(/\/$/, '')}/task/${row.task_id}` : null
-
-    try {
-      await smtp().send({
-        from: mailFrom,
-        to: email,
-        subject: `${content.eyebrow}: ${row.title}`,
-        content: buildReminderEmailText({
-          body: content.body,
-          metaLabel: content.metaLabel,
-          metaValue: content.metaValue,
-          taskLink,
-        }),
-        html: buildReminderEmailHtml({
-          title: row.title,
-          body: content.body,
-          eyebrow: content.eyebrow,
-          metaLabel: content.metaLabel,
-          metaValue: content.metaValue,
-          taskLink,
-          traceId: `${row.task_id}:${row.reason}:${row.completed_at ?? row.due_at ?? ''}`,
-        }),
-      })
-      const { error: markError } = await supabase.rpc('mark_task_email_sent', {
-        p_task_id: row.task_id,
-        p_reason: row.reason,
-      })
-      if (markError) {
-        failures.push(`${row.task_id} (${row.reason}): sent but failed to mark (${markError.message})`)
-      } else {
-        taskSent += 1
-      }
-    } catch (sendError) {
-      failures.push(
-        `${row.task_id} (${row.reason}): ${sendError instanceof Error ? sendError.message : String(sendError)}`,
-      )
     }
   }
 
@@ -626,6 +724,10 @@ Deno.serve(async (req) => {
       checked: rows.length + taskEmails.length,
       sent: sent + taskSent,
       skipped: taskSkipped,
+      // Recipients the queue offered and the pre-send check refused. Reported rather than silent:
+      // a number that is always zero is a check nobody would notice had stopped working, and a
+      // number that climbs is how a revocation is seen to have taken effect.
+      denied,
       failures,
     }),
     { status: 200, headers: { 'Content-Type': 'application/json' } },

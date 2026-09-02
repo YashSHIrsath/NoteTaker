@@ -99,7 +99,7 @@ export function MyNotesPage() {
       <CreateFolderDialog
         open={createOpen}
         onClose={() => setCreateOpen(false)}
-        onCreate={(name) => createFolder(name, null)}
+        onCreate={(name, visibility) => createFolder(name, null, visibility)}
       />
     </div>
   )

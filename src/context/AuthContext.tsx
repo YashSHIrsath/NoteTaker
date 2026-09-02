@@ -31,7 +31,7 @@ export interface ProfileUpdate {
   /** The bottom bar's tab order. Also decides which side a page slides in from. */
   navOrder?: NavId[]
   /** Which page a cold start opens on. */
-  /** A font id from lib/fonts, for one of the two roles. */
+  /** A font id from lib/fonts, for one of the three roles (interface, notes, headings). */
   font?: { role: FontRole; id: string }
   defaultPage?: SidebarNavId
   /** Which workspace that choice is for. Absent or null means the personal one. */

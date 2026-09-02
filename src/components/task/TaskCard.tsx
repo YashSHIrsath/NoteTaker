@@ -20,6 +20,8 @@ import { TaskTagsPill } from './TaskTagsPill'
 import { TaskStatusBadge, ReminderCountPill } from './TaskStatusBadge'
 import { TaskCountdown } from './TaskCountdown'
 import { TaskActionsMenu } from './TaskActionsMenu'
+import { VisibilityBadge } from '../sharing/VisibilityBadge'
+import { effectiveTaskVisibility, ownVisibility } from '../../lib/contentPrivacy'
 
 /** Chips that fit a card's width; the rest become a "+N" counter rather than being clipped. */
 const ATTACHMENT_CHIP_LIMIT = 2
@@ -50,6 +52,8 @@ export function TaskCard({
     getTask,
     getRemindersForTask,
     getAttachmentsForTask,
+    folders,
+    sharingIndex,
   } = useFolders()
   const { toggleCompleted, dialog: reopenDialog } = useTaskCompletion()
   const [isOverflowing, setIsOverflowing] = useState(false)
@@ -210,6 +214,17 @@ export function TaskCard({
             >
               {title}
             </h3>
+            {/* How far this note actually reaches, its folder chain included — see the note in
+              *  FolderItem. Nothing for the common case: a badge on every card would say nothing. */}
+            {task ? (
+              <VisibilityBadge
+                visibility={effectiveTaskVisibility(sharingIndex, folders, task.id, task.folderId)}
+                narrowedByParent={
+                  ownVisibility(sharingIndex, 'task', task.id) !==
+                  effectiveTaskVisibility(sharingIndex, folders, task.id, task.folderId)
+                }
+              />
+            ) : null}
             {pinned ? (
               <Pin
                 className="h-3.5 w-3.5 shrink-0 fill-current text-[var(--color-accent)]"

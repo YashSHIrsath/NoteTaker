@@ -1,10 +1,13 @@
 import {
   DEFAULT_BODY_FONT,
   DEFAULT_HEADING_FONT,
+  DEFAULT_NOTE_FONT,
+  FONT_GROUPS,
   FONT_OPTIONS,
   fontFor,
   fontUpdate,
   fontsFor,
+  groupedFontsFor,
   readFontChoice,
 } from '../../lib/fonts'
 
@@ -33,8 +36,11 @@ function checkCatalogue(): void {
     // the moment the request to Google Fonts does.
     assert(option.stack.includes('"'), `${option.id} names its family in quotes`)
     assert(option.stack.includes(','), `${option.id} has a fallback behind it`)
+    // Tested at the *end* of the stack rather than anywhere in it, which is what the message has
+    // always claimed and what actually matters: a generic in the middle is not a last resort.
+    // `cursive` joined the list with the handwriting faces — see HAND_FALLBACK.
     assert(
-      /serif|sans-serif|monospace/.test(option.stack),
+      /(?:^|,)\s*(?:serif|sans-serif|monospace|cursive|system-ui)\s*$/.test(option.stack),
       `${option.id} ends in a generic family, so it always resolves to something`,
     )
     if (option.google) {
@@ -44,21 +50,87 @@ function checkCatalogue(): void {
         option.google.startsWith(option.label.replace(/ /g, '+').split(':')[0]!.slice(0, 4)),
         `${option.id}'s request names the family in its label`,
       )
+      /*
+       * The family requested is the family the stack asks for, exactly.
+       *
+       * The check above compares the request to the *label*, which is a different mistake. This one
+       * catches the expensive typo: a stack naming "Indie Flower" while the request fetches
+       * "Indy+Flower" downloads a face nothing references and renders the app in Comic Sans, with a
+       * 200 from Google and no error anywhere.
+       */
+      const family = option.google.split(':')[0]!.replace(/\+/g, ' ')
+      assert(
+        option.stack.startsWith(`"${family}"`),
+        `${option.id} requests the same family its stack leads with (${family})`,
+      )
     }
   }
 
   const body = fontsFor('body')
   const heading = fontsFor('heading')
-  assert(body.length >= 10, `at least ten reading faces (${body.length})`)
+  const note = fontsFor('note')
+  assert(body.length >= 10, `at least ten interface faces (${body.length})`)
   assert(heading.length >= 10, `at least ten heading faces (${heading.length})`)
+  assert(note.length >= 10, `at least ten note faces (${note.length})`)
 
-  // The two defaults ship in index.html, so they must be the two that ask for nothing at runtime —
+  /*
+   * Every interface face is also offered for notes, and this is load-bearing rather than tidy.
+   *
+   * An account with no note face set follows its interface face (see readFontChoice). If some face
+   * were offered for `body` and not for `note`, choosing it would silently drop the note text back to
+   * the floor default — the app in one face and the notes in another, with nothing on screen
+   * explaining why.
+   */
+  for (const option of body) {
+    assert(
+      option.roles.includes('note'),
+      `${option.id} is offered for the interface, so it must be offered for notes — the note face falls back to it`,
+    )
+  }
+
+  // The defaults ship in index.html, so they must be the ones that ask for nothing at runtime —
   // otherwise a cold start would render in a fallback until a stylesheet arrived.
-  assert(fontFor('body', DEFAULT_BODY_FONT).google === null, 'the default reading face is preloaded')
+  assert(fontFor('body', DEFAULT_BODY_FONT).google === null, 'the default interface face is preloaded')
   assert(
     fontFor('heading', DEFAULT_HEADING_FONT).google === null,
     'and so is the default heading face',
   )
+  assert(fontFor('note', DEFAULT_NOTE_FONT).google === null, 'and so is the note floor')
+}
+
+/**
+ * The grouping the picker draws.
+ *
+ * Every face lands in exactly one section, and no face is stranded outside one — a tile that belongs
+ * to no group simply would not render, which is a font that exists in the catalogue and cannot be
+ * chosen from the UI.
+ */
+function checkGrouping(): void {
+  const known = new Set(FONT_GROUPS.map((group) => group.id))
+  for (const option of FONT_OPTIONS) {
+    assert(known.has(option.group), `${option.id} is in a group the picker knows about`)
+  }
+
+  for (const role of ['body', 'heading', 'note'] as const) {
+    const flat = fontsFor(role)
+    const grouped = groupedFontsFor(role).flatMap((group) => group.options)
+    assert(
+      grouped.length === flat.length,
+      `every ${role} face appears in exactly one group (${grouped.length} of ${flat.length})`,
+    )
+    assert(
+      new Set(grouped.map((option) => option.id)).size === grouped.length,
+      `no ${role} face is listed in two groups`,
+    )
+    for (const group of groupedFontsFor(role)) {
+      assert(group.options.length > 0, `the ${group.id} section is not drawn empty for ${role}`)
+    }
+  }
+
+  // Handwriting is the reason the grouping exists, so it is worth asserting there is a real set of
+  // them rather than a section with two entries in it.
+  const hands = FONT_OPTIONS.filter((option) => option.group === 'handwriting')
+  assert(hands.length >= 12, `a real handwriting section (${hands.length})`)
 }
 
 /**
@@ -134,8 +206,59 @@ function checkStorage(): void {
   )
 }
 
+/**
+ * The note face, which follows the interface face until it is set.
+ *
+ * This is the behaviour the whole third role turns on: somebody who sets the app to a handwriting
+ * face expects their notes to be handwritten, and should not have to find a second setting to finish
+ * the job. An independent default would leave the notes in Inter and give no clue why.
+ */
+function checkNoteFollowsBody(): void {
+  assert(
+    readFontChoice('note', undefined).id === DEFAULT_NOTE_FONT,
+    'no account at all lands on the floor',
+  )
+  assert(
+    readFontChoice('note', {}).id === DEFAULT_NOTE_FONT,
+    'and so does an account that has chosen nothing',
+  )
+
+  // The case that matters: one choice, both faces.
+  assert(
+    readFontChoice('note', fontUpdate('body', 'kalam')).id === 'kalam',
+    'choosing an interface face sets the note face with it',
+  )
+  assert(
+    readFontChoice('note', fontUpdate('body', 'lora')).id === 'lora',
+    'whatever that face is',
+  )
+
+  // And an explicit note choice overrides it, in both directions.
+  const both = { ...fontUpdate('body', 'inter'), ...fontUpdate('note', 'caveat') }
+  assert(readFontChoice('note', both).id === 'caveat', 'an explicit note face wins')
+  assert(readFontChoice('body', both).id === 'inter', 'and does not disturb the interface face')
+
+  /*
+   * A note face that is not offered for notes falls back to the interface face rather than to the
+   * floor. Reachable from a hand-edited preference, and from a build where a face was withdrawn from
+   * the note list — in which case following the interface is much closer to what the account asked
+   * for than resetting to Inter.
+   */
+  const stale = { ...fontUpdate('body', 'lora'), note_font: 'permanent-marker' }
+  assert(
+    readFontChoice('note', stale).id === 'lora',
+    'a note id that is no longer offered for notes follows the interface face',
+  )
+  assert(
+    readFontChoice('note', { ...fontUpdate('body', 'lora'), note_font: 'not-a-font' }).id === 'lora',
+    'and so does an id that never existed',
+  )
+}
+
 export function runFontChecks(): void {
   checkCatalogue()
+  checkGrouping()
   checkResolution()
   checkStorage()
+  checkNoteFollowsBody()
 }
