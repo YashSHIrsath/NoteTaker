@@ -14,6 +14,16 @@ export interface SortableRowProps {
    *  dense, always-on lists (the sidebar) where a permanent column of grip dots is noise; leave it
    *  off where the row is the primary place reordering is done and the affordance should be visible. */
   revealHandleOnHover?: boolean
+  /**
+   * Keeps the hidden grip's width in the layout instead of collapsing it away.
+   *
+   * Only meaningful alongside `revealHandleOnHover`. Without it the grip grows from nothing to
+   * 20px as the pointer arrives and everything in the row slides sideways to make room — on a
+   * full-width row that is the loudest movement on the page, and it happens every time the pointer
+   * crosses the list on its way somewhere else. Reserving the space costs an empty gutter at rest
+   * and buys a row that holds still. Dense lists that cannot spare the width leave it off.
+   */
+  reserveHandleSpace?: boolean
   dragLabel: string
   onReorder: (draggedId: string, targetId: string, position: DropPosition) => void
   children: ReactNode
@@ -44,6 +54,7 @@ export function SortableRow({
   compact = false,
   className,
   revealHandleOnHover = false,
+  reserveHandleSpace = false,
   dragLabel,
   onReorder,
   children,
@@ -137,7 +148,16 @@ export function SortableRow({
             'active:cursor-grabbing',
             compact ? 'h-6' : 'h-7',
             revealHandleOnHover
-              ? 'w-0 overflow-hidden opacity-0 group-hover:w-5 group-focus-within:w-5 group-hover:opacity-100 group-focus-within:opacity-100 group-hover:shadow-[0_0_0_1px_rgba(0,0,0,0.04)] group-focus-within:shadow-[0_0_0_1px_rgba(0,0,0,0.04)] focus-visible:opacity-100'
+              ? [
+                  'overflow-hidden opacity-0',
+                  'group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100',
+                  // Fading into space that was already there, or growing into space that was not.
+                  reserveHandleSpace
+                    ? compact
+                      ? 'w-5'
+                      : 'w-6'
+                    : 'w-0 group-hover:w-5 group-focus-within:w-5',
+                ].join(' ')
               : compact
                 ? 'w-5'
                 : 'w-6',

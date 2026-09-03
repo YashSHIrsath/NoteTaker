@@ -13,6 +13,8 @@ import { useAuth } from '../hooks/useAuth'
 import { NAV_DESTINATIONS, resolveDefaultPage } from '../lib/navOrder'
 import { useSpaceId, useWorkspacePath } from '../hooks/useWorkspace'
 import { workspaceRelativePath } from '../lib/workspace'
+import { ISLAND_CLASS, ISLAND_GAP } from '../lib/island'
+import { cn } from '../lib/cn'
 
 const SIDEBAR_COLLAPSED_KEY = 'mynotes-sidebar-collapsed'
 
@@ -158,23 +160,58 @@ export function AppLayout() {
     profileActive: relativePath === '/profile',
   }
 
-  return (
-    <div className="flex h-full flex-col bg-[var(--color-surface)]">
-      <Header />
+  /**
+   * Whether the page below draws its own islands rather than living inside one.
+   *
+   * Every page is a single island — this `main` — except the folder view, which is two: the notes
+   * and the subfolder panel beside them, separated by the same gap as any other pair. It cannot be
+   * given that from here, because the panel belongs to the page rather than to the shell, so on
+   * that one route `main` steps back to being a plain container and the page does the drawing.
+   */
+  const pageOwnsIslands = Boolean(folderMatch)
 
-      <div className="relative flex min-h-0 flex-1">
-        {/* Sidebar from lg up only; below that the bottom bar is the navigation. */}
-        <Sidebar
-          {...sidebarProps}
-          collapsed={collapsed}
-          onToggleCollapsed={toggleCollapsed}
-          className="hidden lg:flex"
-        />
+  return (
+    <div
+      className={cn(
+        'flex h-full flex-col bg-[var(--color-surface)]',
+        // From lg the shell becomes its islands: a recessed ground, a full-height sidebar down the
+        // left, and the header and the page stacked in the column beside it. The row replaces the
+        // column, so the sidebar now reaches the top of the window instead of starting under a
+        // full-width header — which is also what lets the header drop the wordmark the sidebar is
+        // already showing twelve pixels away (see Header).
+        'lg:flex-row lg:bg-[var(--color-surface-muted)] lg:p-2.5',
+        ISLAND_GAP,
+        // The status-bar inset used to belong to the header, because the header was the only thing
+        // touching the top of the screen. With a sidebar beside it that now also does, it belongs
+        // to the shell — left on the header alone, the sidebar starts underneath the status bar on
+        // a tablet. Added to the gutter rather than replacing it, so the top gap matches the other
+        // three on a device that has no inset at all.
+        'lg:pt-[calc(env(safe-area-inset-top)+0.625rem)]',
+      )}
+    >
+      {/* Sidebar from lg up only; below that the bottom bar is the navigation. */}
+      <Sidebar
+        {...sidebarProps}
+        collapsed={collapsed}
+        onToggleCollapsed={toggleCollapsed}
+        className="hidden lg:flex"
+      />
+
+      <div className={cn('flex min-h-0 min-w-0 flex-1 flex-col', ISLAND_GAP)}>
+        <Header className={ISLAND_CLASS} />
 
         {/* `overscroll-y-contain` is not decoration: without it Chrome on Android answers a pull
           * at the top of the page with its own reload, throwing away the app's state to fetch the
           * same data PullToRefresh is already fetching in place. */}
-        <main className="min-w-0 flex-1 overflow-y-auto overscroll-y-contain">
+        <main
+          className={cn(
+            'min-w-0 flex-1 overflow-y-auto overscroll-y-contain',
+            // Scrolling is the compact behaviour either way; from lg a page that draws its own
+            // islands manages its own scrolling too, and letting this scroll as well would slide
+            // those islands out from under their rounded top corners.
+            pageOwnsIslands ? 'lg:overflow-hidden' : ISLAND_CLASS,
+          )}
+        >
           <PullToRefresh onRefresh={refresh}>
             {/* Keyed by the path: a screen that threw is left behind by navigating away, which is
               * why this one sits inside the shell — the header and the bottom bar stay live, so

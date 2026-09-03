@@ -6,6 +6,7 @@ import { Button } from '../ui/Button'
 import { IconButton } from '../ui/IconButton'
 import { FolderBreadcrumb } from './FolderBreadcrumb'
 import { FolderSidePanel } from './FolderSidePanel'
+import { ISLAND_CLASS, ISLAND_GAP } from '../../lib/island'
 import { FolderBoardView } from './FolderBoardView'
 import { CreateFolderDialog } from './CreateFolderDialog'
 import { TaskCard } from '../task/TaskCard'
@@ -189,8 +190,12 @@ export function FolderView({
   }
 
   return (
-    <div className="relative flex h-full min-h-0">
-      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+    <div className={cn('relative flex h-full min-h-0', ISLAND_GAP)}>
+      {/* This page draws its own islands rather than sitting inside the shell's — see
+        *  `pageOwnsIslands` in AppLayout. The notes are one, the subfolder panel beside them is a
+        *  second, and the gap between them is the shell's own so the four on screen are evenly
+        *  spaced. In board view there is no panel and this is simply the only island. */}
+      <div className={cn('relative flex min-h-0 min-w-0 flex-1 flex-col', ISLAND_CLASS)}>
         <div ref={headerRef} className={FLOATING_HEADER_CLASS}>
           {/* Two bands: what the page *is* (breadcrumb + folder identity), and what you can *do*
             *  here. Only the first rolls up on scroll, so the bar keeps shrinking to its controls
@@ -336,7 +341,10 @@ export function FolderView({
         ) : (
           <div
             ref={contentRef}
-            className="min-h-0 flex-1 overflow-y-auto bg-[var(--color-surface-muted)] px-4 pb-28 sm:px-6 lg:pb-5"
+            // The recessed fill is what lifts the cards off the page at compact widths. From lg
+            // the island is already lifted off the ground around it, and repeating the ground's
+            // own colour inside it would read as a hole rather than as depth.
+            className="min-h-0 flex-1 overflow-y-auto bg-[var(--color-surface-muted)] px-4 pb-28 sm:px-6 lg:bg-transparent lg:pb-5"
           >
             {pinnedTasks.length > 0 ? (
               <section className="mt-2 sm:mt-6">
@@ -377,7 +385,7 @@ export function FolderView({
             locationPathIds={locationPathIds}
             onSelectFolder={openChildFolder}
             onCreateFolder={() => setFolderDialogOpen(true)}
-            className={cn('hidden lg:flex', !foldersPanelOpen && 'lg:hidden')}
+            className={cn('hidden lg:flex', ISLAND_CLASS, !foldersPanelOpen && 'lg:hidden')}
           />
 
           {/* Below lg the subfolders arrive as a sheet that rises out of the bottom bar, not as a
@@ -439,7 +447,10 @@ export function FolderView({
           </div>
 
           {!foldersPanelOpen ? (
-            <div className="hidden h-full shrink-0 flex-col items-center border-l border-[var(--color-border)] bg-[var(--color-surface-muted)] px-1.5 py-3 lg:flex">
+            // With the panel closed its island shrinks to the rail that brings it back, rather
+            // than disappearing into the notes island — so the way back is still a surface you
+            // can see, and reopening it doesn't change how many islands are on screen.
+            <div className={cn('hidden h-full shrink-0 flex-col items-center px-1.5 py-3 lg:flex', ISLAND_CLASS)}>
               <IconButton label="Show folders" onClick={() => setFoldersPanelOpen(true)}>
                 <Folder className="h-4 w-4" />
               </IconButton>
@@ -454,7 +465,7 @@ export function FolderView({
         onCreate={onCreateFolder}
       />
       {openTaskId ? (
-        <TaskEditorDialog taskId={openTaskId} onClose={() => setOpenTaskId(null)} />
+        <TaskEditorDialog taskId={openTaskId} onClose={() => setOpenTaskId(null)} scope="folder" />
       ) : null}
     </div>
   )

@@ -1,4 +1,4 @@
-import { ClipboardList, Folder, Home, ListTree, LogOut, PanelLeftClose, PanelLeftOpen, Star, Users } from 'lucide-react'
+import { ChevronsLeft, ChevronsRight, ClipboardList, Folder, Home, ListTree, LogOut, Star, Users } from 'lucide-react'
 import { ProjectLogo } from '../brand/ProjectLogo'
 import { IconButton } from '../ui/IconButton'
 import { SidebarSection } from './SidebarSection'
@@ -15,7 +15,8 @@ import { SpaceAvatar } from '../space/SpaceAvatar'
 import { useWorkspace } from '../../hooks/useWorkspace'
 import { useSpaces } from '../../hooks/useSpaces'
 import { useNavigate } from 'react-router-dom'
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
+import { ISLAND_CLASS, ISLAND_GAP } from '../../lib/island'
 
 export interface SidebarProps {
   rootFolders: FolderRecord[]
@@ -33,6 +34,23 @@ export interface SidebarProps {
 }
 
 const SPACES_EXPANDED_KEY = 'mynotes-sidebar-spaces-expanded'
+
+/**
+ * One card in the sidebar's stack.
+ *
+ * The sidebar is not an island — it is a column of them: the brand, each navigation group, the
+ * account, sitting straight on the shell's ground with the same gap between them as between the
+ * shell's own islands. The rules that used to divide these groups are gone, because the gap says
+ * what they said, and says it without drawing a line down a column that is already narrow.
+ *
+ * The padding is the point of the wrapper rather than an afterthought: without it an active row's
+ * tinted fill reaches the card's own edges and the two read as one shape, so the row stops looking
+ * like a row *inside* anything. And `shrink-0` because the nav scrolls — flex children would
+ * otherwise give up height to avoid overflowing, instead of letting it scroll.
+ */
+function SidebarIsland({ children, className }: { children: ReactNode; className?: string }) {
+  return <div className={cn('shrink-0 p-1.5', ISLAND_CLASS, className)}>{children}</div>
+}
 
 export function Sidebar({
   rootFolders,
@@ -94,18 +112,22 @@ export function Sidebar({
   return (
     <aside
       className={cn(
-        'flex h-full shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)] transition-[width] duration-150',
+        // Transparent, and with no edge of its own: the pieces below carry the surface now, and a
+        // border here would draw a box around a column of boxes.
+        'flex h-full shrink-0 flex-col transition-[width] duration-150',
+        ISLAND_GAP,
         collapsed ? 'w-[76px]' : 'w-[264px]',
         className,
       )}
     >
-      {/* Brand row, then a rule. Without the rule the wordmark sat directly on top of the first
-          nav item with nothing between them, so the whole column read as one undifferentiated
-          stack — which is most of why it felt cramped. */}
+      {/* The brand row, on a card of its own. It used to be a row with a rule under it, which was
+          there because without something between it and the first nav item the whole column read
+          as one undifferentiated stack. The gap does that job now, in every direction at once. */}
       <div
         className={cn(
-          'flex items-center gap-2.5 px-3 pb-3.5 pt-4',
+          'flex shrink-0 items-center gap-2.5 px-3 py-3',
           collapsed && 'flex-col gap-3',
+          ISLAND_CLASS,
         )}
       >
         <div
@@ -151,18 +173,19 @@ export function Sidebar({
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/25',
             )}
           >
+            {/* Points the direction the sidebar is about to move — right to open, left to
+                close — rather than a static panel glyph that looks the same regardless of which
+                way the click goes. */}
             {collapsed ? (
-              <PanelLeftOpen className="h-4 w-4" aria-hidden />
+              <ChevronsRight className="h-4 w-4" aria-hidden />
             ) : (
-              <PanelLeftClose className="h-4 w-4" aria-hidden />
+              <ChevronsLeft className="h-4 w-4" aria-hidden />
             )}
           </button>
         ) : null}
       </div>
 
-      <div className="mx-3 border-t border-[var(--color-border)]" />
-
-      <nav className="flex-1 overflow-y-auto px-2.5 pb-3 pt-3" aria-label="Main">
+      <nav className={cn('flex flex-1 flex-col overflow-y-auto', ISLAND_GAP)} aria-label="Main">
         {/*
           * Drawn in the account's order, the same list the bottom bar and the page transitions
           * read. It was a third hardcoded order before this — Tree, Notes, Tasks, Starred — which
@@ -171,15 +194,18 @@ export function Sidebar({
           *
           * Notes renders its folders inside itself, which is why these are a map of renderers
           * rather than a list of props: only one of the four has children.
+          *
+          * A card each, and the folders ride inside Notes' own card rather than in one of their
+          * own — they are that row expanded, not a group beside it, and the gap between cards is
+          * for things that sit beside each other.
           */}
-        <div className="space-y-1">
-          {navOrder
-            .filter((id): id is SidebarNavId => id !== 'profile')
-            .map((id) => {
-              if (id === 'mynotes') {
-                return (
+        {navOrder
+          .filter((id): id is SidebarNavId => id !== 'profile')
+          .map((id) => {
+            if (id === 'mynotes') {
+              return (
+                <SidebarIsland key={id}>
                   <SidebarSection
-                    key={id}
                     icon={<Folder className="h-4 w-4" aria-hidden />}
                     label="Notes"
                     active={activeNav === 'mynotes'}
@@ -202,41 +228,44 @@ export function Sidebar({
                       />
                     ))}
                   </SidebarSection>
-                )
-              }
-              const icon =
-                id === 'tree' ? (
-                  <ListTree className="h-4 w-4" aria-hidden />
-                ) : id === 'tasks' ? (
-                  <ClipboardList className="h-4 w-4" aria-hidden />
-                ) : (
-                  <Star className="h-4 w-4" aria-hidden />
-                )
-              return (
+                </SidebarIsland>
+              )
+            }
+            const icon =
+              id === 'tree' ? (
+                <ListTree className="h-4 w-4" aria-hidden />
+              ) : id === 'tasks' ? (
+                <ClipboardList className="h-4 w-4" aria-hidden />
+              ) : (
+                <Star className="h-4 w-4" aria-hidden />
+              )
+            return (
+              <SidebarIsland key={id}>
                 <SidebarSection
-                  key={id}
                   icon={icon}
                   label={id === 'important' ? 'Important' : NAV_DESTINATIONS[id].label}
                   active={activeNav === id}
                   onSelect={() => onSelectNav(id)}
                   collapsed={collapsed}
                 />
-              )
-            })}
+              </SidebarIsland>
+            )
+          })}
 
-          {/*
-            * Spaces, always last and never reorderable.
-            *
-            * It was drawn from the same order as everything above, which put a sixth entry in the
-            * reorder list that moved nothing anybody could see: the bottom bar filtered it out, and
-            * dragging it here only decided where this one row sat. A list of workspaces is not one
-            * of the places you work, so it sits below the pages rather than among them, and the
-            * order is now the five things it actually orders.
-            *
-            * The row goes to the spaces page; the chevron opens the spaces themselves. Two controls,
-            * two jobs, and neither pretends to be the other — the row was briefly a pure toggle,
-            * which left the page it names reachable only through an entry buried in its own list.
-            */}
+        {/*
+          * Spaces, always last and never reorderable.
+          *
+          * It was drawn from the same order as everything above, which put a sixth entry in the
+          * reorder list that moved nothing anybody could see: the bottom bar filtered it out, and
+          * dragging it here only decided where this one row sat. A list of workspaces is not one
+          * of the places you work, so it sits below the pages rather than among them, and the
+          * order is now the five things it actually orders.
+          *
+          * The row goes to the spaces page; the chevron opens the spaces themselves. Two controls,
+          * two jobs, and neither pretends to be the other — the row was briefly a pure toggle,
+          * which left the page it names reachable only through an entry buried in its own list.
+          */}
+        <SidebarIsland>
           <SidebarSection
             icon={<Users className="h-4 w-4" aria-hidden />}
             label="Spaces"
@@ -266,20 +295,24 @@ export function Sidebar({
               ))
             )}
           </SidebarSection>
-        </div>
+        </SidebarIsland>
       </nav>
 
-      {/* A bordered footer rather than a pill floating at the bottom of the nav's scroll area: the
-          account and its sign out are a different kind of thing from the navigation above them,
-          and the rule is what says so. It also gives the sidebar a bottom edge on a tall screen,
-          where the nav list ends far above the fold. */}
-      <div className="border-t border-[var(--color-border)] px-2.5 py-3">
+      {/* The account and its sign out are a different kind of thing from the navigation above
+          them, and a card of their own is what says so. It was a rule and a footer before, which
+          worked because the sidebar had an edge for a footer to sit against; it no longer has
+          one, and a rule floating across a transparent column would separate nothing from
+          nothing. Last in the stack, so it still lands at the bottom of a tall screen. */}
+      <div className={cn('shrink-0 p-1.5', ISLAND_CLASS)}>
         {/* One pill holding two controls, not one button holding another — a button inside a
             button is invalid and the inner one never gets its own clicks. */}
         <div
           className={cn(
             'flex items-center rounded-xl p-1 transition-colors',
-            profileActive ? 'bg-[var(--color-accent-soft)]' : 'bg-[var(--color-surface-muted)]',
+            // Nothing at all when this is not the page you are on: the card underneath is already
+            // a surface, and a second grey panel inset inside it read as a control that had been
+            // disabled rather than as the account row.
+            profileActive ? 'bg-[var(--color-accent-soft)]' : '',
             // Collapsed there's no room beside the avatar, so sign out drops underneath it.
             collapsed ? 'flex-col gap-1' : 'gap-1',
           )}

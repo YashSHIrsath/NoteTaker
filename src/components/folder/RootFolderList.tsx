@@ -83,17 +83,26 @@ function RootFolderRow({
       parentId={null}
       compact
       revealHandleOnHover
+      reserveHandleSpace
       className={cn(
+        // One hover state, and it is a change of fill rather than a lift. This row used to answer
+        // a passing pointer with a stronger border, a bigger shadow, a fill appearing on the button
+        // inside it and the grip pushing all of that 20px to the right — four things moving at once
+        // on a row you are mostly crossing on the way to a different one.
         'border-[var(--color-border)] bg-[var(--color-surface-raised)] px-1.5 shadow-[var(--shadow-sm)]',
-        'hover:border-[var(--color-border-strong)] hover:shadow-[var(--shadow-md)]',
+        'transition-colors hover:bg-[var(--color-hover)]',
       )}
     >
       <button
         type="button"
         onClick={onOpen}
         className={cn(
-          'anim-press flex min-w-0 flex-1 items-center gap-2.5 overflow-hidden rounded-xl px-1.5 py-1.5 text-left',
-          'transition-colors hover:bg-[var(--color-hover)]',
+          // No press-scale, and no fill of its own. `anim-press` shrinks what it is on to 94%,
+          // which is right for a 32px icon button and wrong for a row the width of the page: the
+          // whole card lurched inward and sprang back on every click, including the click that was
+          // navigating away from it. The row above carries the hover fill now, so the whole row
+          // lights up as one shape instead of a smaller card appearing inside a larger one.
+          'flex min-w-0 flex-1 items-center gap-2.5 overflow-hidden rounded-xl px-1.5 py-1.5 text-left',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/20',
         )}
       >
@@ -154,9 +163,12 @@ export function RootFolderList({ folders, onOpenFolder, onCreateFolder }: RootFo
             type="button"
             onClick={onCreateFolder}
             className={cn(
-              'anim-press flex w-full items-center gap-2.5 rounded-2xl border border-dashed border-[var(--color-border-strong)] px-3 py-2.5 text-left',
+              // Calmed to match the rows it sits under: no press-scale on something this wide, and
+              // the hover moves the outline and the label to the accent without also flooding the
+              // whole row with it.
+              'flex w-full items-center gap-2.5 rounded-2xl border border-dashed border-[var(--color-border-strong)] px-3 py-2.5 text-left',
               'text-[var(--color-text-muted)] transition-colors',
-              'hover:border-[var(--color-accent)] hover:bg-[var(--color-accent-soft)] hover:text-[var(--color-accent)]',
+              'hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/20',
             )}
           >

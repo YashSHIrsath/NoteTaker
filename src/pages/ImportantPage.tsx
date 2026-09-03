@@ -455,7 +455,7 @@ export function ImportantPage() {
 
       {dialog}
       {openTaskId ? (
-        <TaskEditorDialog taskId={openTaskId} onClose={() => setOpenTaskId(null)} />
+        <TaskEditorDialog taskId={openTaskId} onClose={() => setOpenTaskId(null)} scope="important" />
       ) : null}
     </div>
   )

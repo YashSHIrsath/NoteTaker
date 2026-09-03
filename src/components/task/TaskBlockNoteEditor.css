@@ -11,11 +11,22 @@
  *
  * Code is deliberately left alone: `.bn-inline-content code` is more specific and keeps its
  * monospace, which is the entire point of a code span and has nothing to do with a reading
- * preference. */
+ * preference.
+ *
+ * The size, letter spacing and word spacing here are the Typography settings' *size* control —
+ * see lib/typeScale. Note text is the one role that gets a real font-size rather than letter and
+ * word spacing alone: everything else in the app sets its type in hardcoded pixels across several
+ * hundred places with no single lever to multiply, where a note's body text runs through this one
+ * rule and can be scaled honestly. `16px` restates BlockNote's own default explicitly — the
+ * multiplication needs a literal number to scale *from*, and `1em` would resolve against this
+ * element's inherited size instead of the constant this rule already exists to override. */
 .task-blocknote .bn-default-styles,
 .task-blocknote .bn-editor,
 .task-blocknote .bn-static-content {
   font-family: var(--font-note, var(--font-body));
+  font-size: calc(16px * var(--font-note-size-scale, 1));
+  letter-spacing: var(--font-note-tracking, normal);
+  word-spacing: var(--font-note-word-spacing, normal);
 }
 
 /* BlockNote draws a vertical guide line down the left edge of nested list items via a
@@ -237,13 +248,17 @@
    card's own type scale (title ~13.5px, meta ~11.5px) and, because heading sizes are relative
    (--level is in em), shrinks them proportionally for free. Headings are then capped further so
    an h1 in a task's notes doesn't blow out the card's fixed preview height on its own. */
+/* Scaled by the same --font-note-size-scale as the editor, from each context's own base — 14.5px
+   here, 13.5px below, rather than the editor's 16px, so a note set 30% larger reads as 30% larger
+   than *this* preview normally is, not as a fixed number of pixels bolted on regardless of where
+   it is showing. */
 .task-blocknote-preview .bn-default-styles {
-  font-size: 14.5px;
+  font-size: calc(14.5px * var(--font-note-size-scale, 1));
 }
 
 @media (max-width: 640px) {
   .task-blocknote-preview .bn-default-styles {
-    font-size: 13.5px;
+    font-size: calc(13.5px * var(--font-note-size-scale, 1));
   }
 }
 
@@ -325,12 +340,34 @@
 /* ------------------------------------------------------- interactive previews
 
    A card's note preview is inert as a whole — its wrapper carries `pointer-events: none` so a
-   click anywhere on the card opens the note. These two are the exceptions, because they do
-   something of their own: ticking a line off and folding a section away are things you want to do
-   while looking at the card, not reasons to open it. See TaskContentPreview, which re-enables the
-   boxes and attaches the handlers (the serialized HTML arrives with neither). */
+   click anywhere on the card opens the note. These three are the exceptions, because they do
+   something of their own: ticking a line off, folding a section away and following a link are
+   things you want to do while looking at the card, not reasons to open it. See TaskContentPreview,
+   which re-enables the boxes, marks the links and attaches the handlers (the serialized HTML
+   arrives with none of it). */
 .task-blocknote-preview .bn-toggle-button {
   pointer-events: auto;
+}
+
+/* A link in a note is a link on the card.
+
+   Reaching one used to mean opening the note first, which is a lot of ceremony for something the
+   card is already showing you.
+
+   Every `a[href]`, deliberately — not only the ones worth following. Whether a link is safe to
+   open is a judgement made in TaskContentPreview's click handler, and hit-testing must not depend
+   on that judgement having already run: gating this rule on an attribute stamped by an effect
+   means any link the effect hadn't reached, or had declined, is not merely unfollowable but
+   invisible to the pointer — so the click lands on the card instead and opens the note, which is
+   indistinguishable from the bug this was meant to fix. Letting the click land and then deciding
+   what to do with it has one behaviour and one place to read it.
+
+   Safety does not live here. The handler calls preventDefault on every anchor before it looks at
+   anything, so a `javascript:` href pasted into a note somebody shares with you cannot run
+   whatever this rule says. */
+.task-blocknote-preview a[href] {
+  pointer-events: auto;
+  cursor: pointer;
 }
 
 /* The target is the box's whole column, not the 13px control inside it. A tick box you have to
@@ -371,15 +408,40 @@
   height: auto;
 }
 
-/* 16px square is the size a tick box is normally drawn at. BlockNote's own 12x24 isn't even
-   square, and shrunk into a preview it read as a speck beside its own label — it now sits in
-   proportion to the body type rather than being dwarfed by it. accent-color makes a ticked box the
-   app's purple instead of the browser's default blue. */
+/*
+ * The tick box itself, repainted rather than merely tinted.
+ *
+ * `accent-color` alone (this rule's previous entire content) only recolours the browser's own
+ * checked fill — the empty box, its corner radius and its border are still whatever Chrome,
+ * Safari or Firefox draw natively, which is a plain square on some platforms and a rounded gem on
+ * others, never this app's own rounded-square-with-a-white-tick language used everywhere else a
+ * checkbox appears. `.app-checkbox` (see index.css) is the shared recipe for that; it can't be
+ * added as a class here since BlockNote renders this input itself, so the identical properties
+ * are repeated against BlockNote's own selector path instead, both pulling their checkmark from
+ * the same --icon-check so the glyph only has one definition.
+ *
+ * 16px square is the size a tick box is normally drawn at. BlockNote's own 12x24 isn't even
+ * square, and shrunk into a preview it read as a speck beside its own label — it now sits in
+ * proportion to the body type rather than being dwarfed by it.
+ */
 .task-blocknote-preview [data-content-type='checkListItem'] > div > input {
+  appearance: none;
+  -webkit-appearance: none;
   width: 16px;
   height: 16px;
   margin: 0 8px 0 0;
-  accent-color: var(--color-accent);
+  border-radius: 5px;
+  border: 1.5px solid var(--color-border-strong);
+  background-color: var(--color-surface);
+}
+
+.task-blocknote-preview [data-content-type='checkListItem'] > div > input:checked {
+  border-color: var(--color-accent);
+  background-color: var(--color-accent);
+  background-image: var(--icon-check);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 68%;
 }
 
 /* The editor's tick box has the same problem as the preview's and for the same reason (BlockNote's
@@ -387,11 +449,24 @@
    left alone deliberately — that's what sets a checklist's line rhythm, and changing it would
    reflow every note. */
 .task-blocknote .bn-editor [data-content-type='checkListItem'] > div > input {
+  appearance: none;
+  -webkit-appearance: none;
   width: 17px;
   height: 17px;
   margin-left: 2px;
   margin-right: 8px;
-  accent-color: var(--color-accent);
+  border-radius: 5px;
+  border: 1.5px solid var(--color-border-strong);
+  background-color: var(--color-surface);
+}
+
+.task-blocknote .bn-editor [data-content-type='checkListItem'] > div > input:checked {
+  border-color: var(--color-accent);
+  background-color: var(--color-accent);
+  background-image: var(--icon-check);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 68%;
 }
 
 /* ------------------------------------------------------------ toggle arrow

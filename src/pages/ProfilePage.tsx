@@ -1,5 +1,6 @@
 import { useRef, useState, type ChangeEvent, type ReactNode } from 'react'
 import {
+  ALargeSmall,
   Briefcase,
   CalendarDays,
   Camera,
@@ -40,6 +41,7 @@ import {
 } from '../hooks/useDisplaySettings'
 import { Notice } from '../components/ui/Notice'
 import { FontSettings } from '../components/settings/FontSettings'
+import { TypeAdjustmentSettings } from '../components/settings/TypeAdjustmentSettings'
 import { ThemeSettings } from '../components/settings/ThemeSettings'
 import { NavigationSettings } from '../components/settings/NavigationSettings'
 import { SpaceAvatar } from '../components/space/SpaceAvatar'
@@ -727,8 +729,23 @@ export function ProfilePage() {
           <FontSettings />
         </Card>
 
-        {/* --------------------------------------------------------- notes style */}
+        {/* ------------------------------------------------------ text spacing
+          *
+          * A separate card from Typography rather than another tab inside its dialog: the face is
+          * a choice you make once and mostly forget, this is something you tune by eye and revisit
+          * — and the two together in one dialog is a wall of controls with two very different
+          * rhythms of use hiding behind one "Change fonts" button. Personal, for the reason the
+          * font is: which spacing reads best is a property of the reader, not the space.
+          */}
         <Card order={cardOrder(5)}>
+          <CardTitle icon={<ALargeSmall className="h-3.5 w-3.5" aria-hidden />} category="rose">
+            Text spacing
+          </CardTitle>
+          <TypeAdjustmentSettings />
+        </Card>
+
+        {/* --------------------------------------------------------- notes style */}
+        <Card order={cardOrder(6)}>
           <CardTitle icon={<ClipboardList className="h-3.5 w-3.5" aria-hidden />} category="indigo">
             Notes style
           </CardTitle>
@@ -798,7 +815,7 @@ export function ProfilePage() {
         </Card>
 
         {/* ------------------------------------------------------- smallest card */}
-        <Card order={cardOrder(6)}>
+        <Card order={cardOrder(7)}>
           <CardTitle icon={<LayoutGrid className="h-3.5 w-3.5" aria-hidden />} category="teal">
             Cards per row
           </CardTitle>
@@ -894,7 +911,7 @@ export function ProfilePage() {
             workspace is not the thing you came to this screen for, and it is one tap further on.
             Outside one it is the sign out, the one destructive thing here, in an outline that
             fills on hover rather than shouting every time the page opens. */}
-        <Card order={cardOrder(7)} className="flex flex-wrap items-center justify-between gap-3">
+        <Card order={cardOrder(8)} className="flex flex-wrap items-center justify-between gap-3">
           {currentSpace ? (
             <>
               <span className="text-[13px] text-[var(--color-text-muted)]">

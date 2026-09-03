@@ -35,7 +35,8 @@ import type {
   TaskGridScope,
   TaskListScope,
 } from '../types'
-import { buildSharingIndex, type SharingIndex } from '../lib/contentPrivacy'
+import { buildSharingIndex, ownVisibility, type SharingIndex } from '../lib/contentPrivacy'
+import { contentForDuplicate } from '../lib/blockNoteContent'
 import { getTaskById, getTasksByFolder, nextTaskSortOrder, reorderSiblingTasks as applyTaskReorder } from '../lib/tasks'
 import { getSubtasksByTask } from '../lib/subtasks'
 import {
@@ -117,6 +118,14 @@ interface FolderContextValue {
   getTask: (id: string) => Task | undefined
   getTasksInFolder: (folderId: string) => Task[]
   createTask: (title: string, folderId: string, visibility?: ContentVisibility) => Promise<Task>
+  /**
+   * A fresh, independent copy of a note in the chosen folder — the same title (marked as a copy),
+   * text, schedule, tags and colour, starting unstarred, unpinned and undone regardless of the
+   * original's state, because those describe *this* note's place in a listing, not the words in
+   * it. Attachments are not carried over — see contentForDuplicate for why duplicating a real file
+   * is a different kind of operation than this one attempts.
+   */
+  duplicateTask: (taskId: string, folderId: string) => Promise<Task>
   reorderSiblingTasks: (
     draggedId: string,
     targetId: string,
@@ -1998,6 +2007,65 @@ export function FolderProvider({ children }: { children: ReactNode }) {
     [attachments],
   )
 
+  const duplicateTask = useCallback(
+    async (taskId: string, folderId: string): Promise<Task> => {
+      const source = getTaskById(tasksRef.current, taskId)
+      if (!source) {
+        throw new RepositoryError('This note no longer exists.')
+      }
+      if (!beginExclusiveAction(actionLocksRef.current, 'create-task')) {
+        throw new RepositoryError('Please wait for the current task to be created.')
+      }
+      // The source's own level, carried over so a private note copied anywhere is still private —
+      // 'space' (the default) is passed through createTask-style spreading below exactly like an
+      // unset choice would be, so this only ever narrows, never widens, what a copy starts as.
+      const visibility = ownVisibility(sharingIndex, 'task', source.id)
+      const task: Task = {
+        id: createId(),
+        title: `${source.title.trim() || 'Untitled'} (copy)`,
+        folderId,
+        content: contentForDuplicate(
+          source.content,
+          getAttachmentsForTask(source.id),
+          getSubtasksForTask(source.id),
+        ),
+        // A copy's place in a listing is not the original's — see the field's own doc comment.
+        isImportant: false,
+        pinnedScopes: [],
+        // The schedule and the note/task switch are copied verbatim: a duplicate is a template of
+        // the original as much as a fresh start, and adjusting a due date that doesn't apply is a
+        // smaller ask than rebuilding it from a plain note. completed/completedAt are not — those
+        // describe *finishing* this specific note, which the copy has not done regardless of
+        // whether the original had.
+        noteKind: source.noteKind,
+        dueAt: source.dueAt,
+        completed: false,
+        completedAt: null,
+        tags: [...source.tags],
+        color: source.color,
+        gridLayouts: null,
+        sortOrder: nextTaskSortOrder(tasksRef.current, folderId),
+        ...(visibility !== 'space' ? { visibility } : {}),
+      }
+      try {
+        applyNotes({
+          folders: foldersRef.current,
+          tasks: [...tasksRef.current, task],
+          subtasks: subtasksRef.current,
+        })
+        enqueue([{ entity: 'task', action: 'create', row: task }], WRITE_INTENT.taskDuplicated)
+        if (visibility !== 'space') {
+          noteLocalSharing('task', task.id, visibility)
+        }
+        await persistNotes()
+        return task
+      } finally {
+        endExclusiveAction(actionLocksRef.current, 'create-task')
+      }
+    },
+    [applyNotes, enqueue, getAttachmentsForTask, getSubtasksForTask, noteLocalSharing, persistNotes, sharingIndex],
+  )
+
   // Goes straight to the repository (a fresh signed URL, or a re-check of the in-memory
   // store) instead of reading React state, so it's correct even the instant after an upload,
   // before that state has had a chance to re-render.
@@ -2151,6 +2219,7 @@ export function FolderProvider({ children }: { children: ReactNode }) {
       getTask,
       getTasksInFolder,
       createTask,
+      duplicateTask,
       reorderSiblingTasks,
       moveTaskToFolder,
       updateTaskContent,
@@ -2222,6 +2291,7 @@ export function FolderProvider({ children }: { children: ReactNode }) {
       getTask,
       getTasksInFolder,
       createTask,
+      duplicateTask,
       reorderSiblingTasks,
       moveTaskToFolder,
       updateTaskContent,

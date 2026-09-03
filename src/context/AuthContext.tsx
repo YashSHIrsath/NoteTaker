@@ -12,7 +12,8 @@ import type { Session, User } from '@supabase/supabase-js'
 import { getAuthEmailRedirectTo } from '../lib/authRedirect'
 import { getSupabaseClient } from '../lib/supabase'
 import { tilesPerRowUpdate, type TileBandId, type TilesPerRow, type ViewStyle } from '../lib/viewStyle'
-import { fontUpdate, type FontRole } from '../lib/fonts'
+import { fontUpdate, SIGNUP_FONT_DEFAULTS, type FontRole } from '../lib/fonts'
+import { typeMetricUpdate, typeResetUpdate, type TypeMetric } from '../lib/typeScale'
 import { defaultPageUpdate, navOrderUpdate, type NavId } from '../lib/navOrder'
 import type { SidebarNavId } from '../types'
 
@@ -33,6 +34,14 @@ export interface ProfileUpdate {
   /** Which page a cold start opens on. */
   /** A font id from lib/fonts, for one of the three roles (interface, notes, headings). */
   font?: { role: FontRole; id: string }
+  /** All three roles at once, in a single request — for the header's preset cycle button (see
+   *  lib/fontPresets), which reskins the whole app in one press rather than one role at a time. */
+  fonts?: Record<FontRole, string>
+  /** One typography metric (size, letter spacing, word spacing) for one role. See lib/typeScale;
+   *  `size` only takes effect for 'note', which is the only role with a real font-size to scale. */
+  typeMetric?: { role: FontRole; metric: TypeMetric; value: number }
+  /** Every metric for one role, back to its shipped value. */
+  resetTypeMetrics?: FontRole
   defaultPage?: SidebarNavId
   /** Which workspace that choice is for. Absent or null means the personal one. */
   defaultPageSpaceId?: string | null
@@ -137,14 +146,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error('Supabase is not configured.')
     }
     const name = fullName?.trim()
+    /*
+     * Seeded once, here, rather than left to lib/fonts's own DEFAULT_BODY_FONT and its siblings.
+     *
+     * Those are read live by every account with no explicit choice on file — including everyone
+     * who signed up before this existed — so changing one refaces every such account the moment
+     * they next open the app. Writing SIGNUP_FONT_DEFAULTS into the metadata at creation instead
+     * means it only ever touches accounts made from here on, and looks, in storage, exactly like
+     * somebody who picked these three by hand in Settings — which is what makes it just as
+     * changeable afterward as any other choice, with nothing special to unwind.
+     */
+    const initialFonts = Object.assign(
+      {},
+      ...(Object.keys(SIGNUP_FONT_DEFAULTS) as FontRole[]).map((role) =>
+        fontUpdate(role, SIGNUP_FONT_DEFAULTS[role]),
+      ),
+    )
     const { data, error } = await client.auth.signUp({
       email,
       password,
       options: {
         emailRedirectTo: getAuthEmailRedirectTo(),
-        // Stored on the account at creation, so the sidebar, profile and bottom-bar avatar have a
-        // name to show from the very first session instead of falling back to the email.
-        data: name ? { full_name: name } : undefined,
+        data: {
+          // Stored on the account at creation, so the sidebar, profile and bottom-bar avatar
+          // have a name to show from the very first session instead of falling back to the
+          // email.
+          ...(name ? { full_name: name } : null),
+          ...initialFonts,
+        },
       },
     })
     if (error) {
@@ -214,6 +243,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     if (update.font !== undefined) {
       Object.assign(data, fontUpdate(update.font.role, update.font.id))
+    }
+    if (update.fonts !== undefined) {
+      const fonts = update.fonts
+      for (const role of Object.keys(fonts) as FontRole[]) {
+        Object.assign(data, fontUpdate(role, fonts[role]))
+      }
+    }
+    if (update.typeMetric !== undefined) {
+      Object.assign(
+        data,
+        typeMetricUpdate(update.typeMetric.role, update.typeMetric.metric, update.typeMetric.value),
+      )
+    }
+    if (update.resetTypeMetrics !== undefined) {
+      Object.assign(data, typeResetUpdate(update.resetTypeMetrics))
     }
     if (update.navOrder !== undefined) {
       Object.assign(data, navOrderUpdate(update.navOrder))

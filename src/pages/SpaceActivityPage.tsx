@@ -67,7 +67,14 @@ export function SpaceActivityPage() {
 
   return (
     <div
-      className={cn('mx-auto w-full max-w-3xl px-4 pb-24 pt-5 sm:px-6 lg:pb-8', enter.className)}
+      // max-w-3xl below lg, where the compact layout has no sidebar and a narrower column reads
+      // better; wider from lg, where the shell's own island already gives this page several
+      // hundred extra pixels it had no way to use — same ceiling ProfilePage settled on for the
+      // same reason (see the masonry note there).
+      className={cn(
+        'mx-auto w-full max-w-3xl px-4 pb-24 pt-5 sm:px-6 lg:max-w-[74rem] lg:pb-8',
+        enter.className,
+      )}
       style={enter.style}
     >
       {/* Back, because this is the one page in a space that is not one of the tabs — nothing in the

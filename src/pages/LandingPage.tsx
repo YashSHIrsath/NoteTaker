@@ -23,6 +23,7 @@ import { useMediaQuery } from '../hooks/useMediaQuery'
 import { ProjectLogo } from '../components/brand/ProjectLogo'
 import { FeatureCarousel } from '../components/landing/FeatureCarousel'
 import { JourneySection } from '../components/landing/JourneySection'
+import { FontPlayground } from '../components/landing/FontPlayground'
 import { LandingNav } from '../components/landing/LandingNav'
 import { Reveal } from '../components/landing/Reveal'
 import { ScrollRootProvider, useScrollOffset } from '../hooks/useLandingScroll'
@@ -423,6 +424,8 @@ function LandingContent() {
         </section>
 
         <JourneySection />
+
+        <FontPlayground />
 
         <section id="everything" className="border-t border-[var(--color-border)] py-14 sm:py-20">
           <Reveal from="blur" className="max-w-2xl">

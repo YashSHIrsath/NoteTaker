@@ -21,6 +21,7 @@ import { serverNowMs } from '../../lib/serverClock'
 import { cn } from '../../lib/cn'
 import { DateTimeField } from '../ui/DateTimeField'
 import { TimeField } from '../ui/TimeField'
+import { Select } from '../ui/Select'
 
 /** One shared look for every control in here, so a row of them reads as one control strip. */
 const FIELD =
@@ -160,11 +161,10 @@ export function ReminderEditor({
               <label className={LABEL} htmlFor={`${ids}-unit`}>
                 Repeat
               </label>
-              <select
+              <Select
                 id={`${ids}-unit`}
                 value={draft.recurUnit ?? 'day'}
-                onChange={(event) => {
-                  const unit = event.target.value === 'week' ? 'week' : 'day'
+                onChange={(unit) => {
                   // A weekly series needs a weekday and a daily one must not carry a stale
                   // leftover, or the saved row would describe two schedules at once.
                   set({
@@ -173,11 +173,12 @@ export function ReminderEditor({
                     anchorDate: draft.anchorDate ?? localDateValue(new Date()),
                   })
                 }}
+                options={[
+                  { value: 'day', label: 'Daily' },
+                  { value: 'week', label: 'Weekly' },
+                ]}
                 className={cn(FIELD, 'mt-1 w-full')}
-              >
-                <option value="day">Daily</option>
-                <option value="week">Weekly</option>
-              </select>
+              />
             </div>
 
             <div className="w-[70px]">
@@ -205,18 +206,13 @@ export function ReminderEditor({
                 <label className={LABEL} htmlFor={`${ids}-weekday`}>
                   On
                 </label>
-                <select
+                <Select
                   id={`${ids}-weekday`}
-                  value={draft.recurWeekday ?? 1}
-                  onChange={(event) => set({ recurWeekday: Number(event.target.value) })}
+                  value={String(draft.recurWeekday ?? 1)}
+                  onChange={(next) => set({ recurWeekday: Number(next) })}
+                  options={WEEKDAYS.map((day, index) => ({ value: String(index), label: day }))}
                   className={cn(FIELD, 'mt-1 w-full')}
-                >
-                  {WEEKDAYS.map((day, index) => (
-                    <option key={day} value={index}>
-                      {day}
-                    </option>
-                  ))}
-                </select>
+                />
               </div>
             ) : null}
 
@@ -262,42 +258,31 @@ export function ReminderEditor({
                 <label className={LABEL} htmlFor={`${ids}-unit`}>
                   &nbsp;
                 </label>
-                <select
+                <Select
                   id={`${ids}-unit`}
                   value={offset.unit}
-                  onChange={(event) =>
-                    set({
-                      offsetMinutes: joinOffset(
-                        offset.amount,
-                        event.target.value as typeof offset.unit,
-                      ),
-                    })
+                  onChange={(unit) =>
+                    set({ offsetMinutes: joinOffset(offset.amount, unit as typeof offset.unit) })
                   }
+                  options={OFFSET_UNITS.map((unit) => ({ value: unit.key, label: unit.label }))}
                   className={cn(FIELD, 'mt-1 w-full')}
-                >
-                  {OFFSET_UNITS.map((unit) => (
-                    <option key={unit.key} value={unit.key}>
-                      {unit.label}
-                    </option>
-                  ))}
-                </select>
+                />
               </div>
 
               <div className="min-w-[116px] flex-1">
                 <label className={LABEL} htmlFor={`${ids}-direction`}>
                   &nbsp;
                 </label>
-                <select
+                <Select
                   id={`${ids}-direction`}
                   value={draft.offsetDirection ?? 'before'}
-                  onChange={(event) =>
-                    set({ offsetDirection: event.target.value === 'after' ? 'after' : 'before' })
-                  }
+                  onChange={(next) => set({ offsetDirection: next === 'after' ? 'after' : 'before' })}
+                  options={[
+                    { value: 'before', label: 'before due' },
+                    { value: 'after', label: 'after due' },
+                  ]}
                   className={cn(FIELD, 'mt-1 w-full')}
-                >
-                  <option value="before">before due</option>
-                  <option value="after">after due</option>
-                </select>
+                />
               </div>
             </div>
 

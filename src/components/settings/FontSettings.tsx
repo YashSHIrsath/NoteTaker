@@ -258,16 +258,6 @@ export function FontSettings() {
   const { user } = useAuth()
   const metadata = user?.user_metadata as Record<string, unknown> | undefined
   const [open, setOpen] = useState(false)
-  /*
-   * One role at a time.
-   *
-   * Both grids stacked was two dozen tiles in one scroll — the dialog solved the *page* being three
-   * screens tall by making itself three screens tall instead. A switch halves it, and the two lists
-   * are a genuine either/or: nobody is comparing a heading serif against a monospace body face in the
-   * same glance.
-   */
-  const [role, setRole] = useState<FontRole>('body')
-  const activeTab = ROLE_TABS.find((tab) => tab.role === role) ?? ROLE_TABS[0]!
 
   return (
     <>
@@ -292,65 +282,100 @@ export function FontSettings() {
         </div>
       </div>
 
-      <PickerDialog
-        open={open}
-        size="lg"
-        title="Typography"
-        onClose={() => setOpen(false)}
-        footer={
-          <>
-            <span className="text-[11.5px] text-[var(--color-text-muted)]">
-              Applied as you tap — close when you like what you see.
-            </span>
-            <Button variant="primary" size="sm" onClick={() => setOpen(false)}>
-              Done
-            </Button>
-          </>
-        }
-      >
-        {/*
-          * Sticky, and it has to be: the switch is how you get to the other list, and a switch that
-          * scrolls away is one you have to scroll back up to find. The negative margins and matching
-          * padding are what let it sit flush against the dialog's own edges while covering the tiles
-          * passing underneath it.
-          */}
-        <div className="sticky -top-3 z-10 -mx-3 -mt-3 mb-3 bg-[var(--color-surface)] px-3 pb-2.5 pt-3">
-          <div
-            role="tablist"
-            aria-label="Which font to change"
-            className="flex rounded-full bg-[var(--color-surface-muted)] p-0.5"
-          >
-            {ROLE_TABS.map((tab) => (
-              <button
-                key={tab.role}
-                type="button"
-                role="tab"
-                aria-selected={role === tab.role}
-                onClick={() => setRole(tab.role)}
-                className={cn(
-                  'anim-press flex-1 rounded-full px-3 py-1.5 text-[12.5px] font-semibold transition-colors',
-                  role === tab.role
-                    ? 'bg-[var(--color-surface)] text-[var(--color-text)] shadow-[var(--shadow-sm)]'
-                    : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]',
-                )}
-              >
-                {tab.label}
-                {/* The face currently in force for that role, named on its own tab — so the switch
-                  * also answers "what have I got" without being flipped. */}
-                <span className="ml-1.5 font-normal opacity-70">
-                  {readFontChoice(tab.role, metadata).label}
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <FontChoices
-          role={role}
-          title={activeTab.title}
-          blurb={activeTab.blurb}
-        />
-      </PickerDialog>
+      <FontPickerDialog open={open} onClose={() => setOpen(false)} />
     </>
+  )
+}
+
+/**
+ * The picker itself: role tabs, the grouped tiles underneath, done.
+ *
+ * Split out from FontSettings so the header's own quick-access button (see Header.tsx) can open
+ * the identical dialog without a second copy of it — same tabs, same tiles, same "applied as you
+ * tap" behaviour, reached from two different buttons. FontSettings still owns the account's own
+ * "here is what you have" summary card, which is a page-settings concern the header has no room
+ * for and no need of.
+ */
+export function FontPickerDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { user } = useAuth()
+  const metadata = user?.user_metadata as Record<string, unknown> | undefined
+  /*
+   * One role at a time.
+   *
+   * Both grids stacked was two dozen tiles in one scroll — the dialog solved the *page* being three
+   * screens tall by making itself three screens tall instead. A switch halves it, and the two lists
+   * are a genuine either/or: nobody is comparing a heading serif against a monospace body face in the
+   * same glance.
+   *
+   * Reset to 'body' on every close rather than remembered: this dialog now opens from two different
+   * places, and reopening it from the header showing whichever tab the settings page was last left
+   * on (or vice versa) would read as a stale state carried in from nowhere the person can see.
+   */
+  const [role, setRole] = useState<FontRole>('body')
+  const activeTab = ROLE_TABS.find((tab) => tab.role === role) ?? ROLE_TABS[0]!
+
+  return (
+    <PickerDialog
+      open={open}
+      size="lg"
+      title="Typography"
+      onClose={() => {
+        onClose()
+        setRole('body')
+      }}
+      footer={
+        <>
+          <span className="text-[11.5px] text-[var(--color-text-muted)]">
+            Applied as you tap — close when you like what you see.
+          </span>
+          <Button variant="primary" size="sm" onClick={onClose}>
+            Done
+          </Button>
+        </>
+      }
+    >
+      {/*
+        * Sticky, and it has to be: the switch is how you get to the other list, and a switch that
+        * scrolls away is one you have to scroll back up to find. The negative margins and matching
+        * padding are what let it sit flush against the dialog's own edges while covering the tiles
+        * passing underneath it.
+        */}
+      <div className="sticky -top-3 z-10 -mx-3 -mt-3 mb-3 bg-[var(--color-surface)] px-3 pb-2.5 pt-3">
+        <div
+          role="tablist"
+          aria-label="Which font to change"
+          className="flex rounded-full bg-[var(--color-surface-muted)] p-0.5"
+        >
+          {ROLE_TABS.map((tab) => (
+            <button
+              key={tab.role}
+              type="button"
+              role="tab"
+              aria-selected={role === tab.role}
+              onClick={() => setRole(tab.role)}
+              className={cn(
+                'anim-press flex-1 rounded-full px-3 py-1.5 text-[12.5px] font-semibold transition-colors',
+                role === tab.role
+                  ? 'bg-[var(--color-surface)] text-[var(--color-text)] shadow-[var(--shadow-sm)]'
+                  : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]',
+              )}
+            >
+              {tab.label}
+              {/* The face currently in force for that role, named on its own tab — so the switch
+                * also answers "what have I got" without being flipped. */}
+              <span className="ml-1.5 font-normal opacity-70">
+                {readFontChoice(tab.role, metadata).label}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <FontChoices
+        role={role}
+        title={activeTab.title}
+        blurb={activeTab.blurb}
+      />
+    </PickerDialog>
   )
 }

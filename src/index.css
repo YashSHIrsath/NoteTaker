@@ -171,6 +171,14 @@
   --shadow-sm: 0 1px 3px 0 rgb(20 22 26 / 0.08);
   --shadow-md: 0 4px 14px -2px rgb(20 22 26 / 0.12), 0 1px 3px rgb(20 22 26 / 0.06);
   --shadow-lg: 0 20px 40px -12px rgb(20 22 26 / 0.2);
+
+  /* Lucide's own Check glyph (the same path <Check /> renders everywhere else in the app),
+     redrawn as a CSS background-image because a real checkbox has no children to put a React
+     icon inside — see .app-checkbox and the two BlockNote checklist rules in
+     TaskBlockNoteEditor.css, which both paint their `:checked` state from this rather than each
+     carrying their own copy of the SVG. White is baked in rather than `currentColor`: every place
+     this is used sits on the accent fill once checked, so it never needs to be another color. */
+  --icon-check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'/%3E%3C/svg%3E");
 }
 
 :root[data-theme="dark"] {
@@ -509,12 +517,37 @@ body {
   margin: 0;
   font-family: var(--font-body);
   letter-spacing: var(--font-body-tracking, normal);
+  word-spacing: var(--font-body-word-spacing, normal);
   font-feature-settings: "cv11", "ss01";
   color: var(--color-text);
   background-color: var(--color-surface);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+/*
+ * Letter and word spacing for the heading face — see lib/typeScale and the Typography settings.
+ *
+ * Headings set their own tracking inline per-component (a Tailwind `tracking-tight` class, in
+ * every place that matters), so there is no single rule to add a word-spacing property to the way
+ * there is for the interface face on `body` above. This targets exactly those elements instead —
+ * `.tracking-tight` *and* the inline `var(--font-display)` together, which is every heading in
+ * the authenticated app and only those.
+ *
+ * Two classes plus an attribute selector outweighs Tailwind's own `.tracking-tight` (one class,
+ * inside its `@layer utilities`, which loses to any unlayered rule regardless of specificity
+ * anyway) — so this needs no `!important`, and the cascade math is exact rather than hopeful.
+ *
+ * Additive on purpose: `-0.025em` is Tailwind's own `tracking-tight` value, restated here so an
+ * untouched account computes the same number it always did (the CSS variable is unset outside the
+ * authenticated shell, and its fallback here is `0em` either way) — the slider then moves *away*
+ * from that baseline rather than replacing it with a blank slate. Word spacing has no such
+ * baseline to preserve, so `0em` there means exactly what it says.
+ */
+.tracking-tight[style*="--font-display"] {
+  letter-spacing: calc(-0.025em + var(--font-display-tracking, 0em));
+  word-spacing: var(--font-display-word-spacing, 0em);
 }
 
 /* The theme reveal animates the new page over the old one; a colour transition on the body would
@@ -651,6 +684,134 @@ body {
   background: var(--color-text-muted);
 }
 
+/*
+ * The app's own tick box, drawn on a real <input type="checkbox"> rather than swapped for a div.
+ *
+ * `appearance: none` clears the browser's own square-and-tick — flat on Chrome, a rounded macOS
+ * gem on Safari, a different rounded square again on Windows — and everything below repaints it
+ * to look like every other rounded, accent-tinted control in the app. The input stays a real
+ * checkbox throughout: it still takes a click, Space, and a screen reader's "checked" state on
+ * its own, which a hand-rolled div standing in for one would have to reimplement by hand and
+ * would be easy to get only mostly right.
+ *
+ * `.app-checkbox` is for a checkbox this app writes the JSX for — see ui/Checkbox.tsx, currently
+ * ThemeSettings' "In header" toggle. BlockNote's own checklist tick box needs the identical look
+ * but the element belongs to the editor library, not to this app's markup, so it is repainted by
+ * selector path instead — see TaskBlockNoteEditor.css, where both rules pull the same checkmark
+ * from --icon-check (defined above) so a change to the glyph only has to happen once.
+ */
+/*
+ * No width/height here on purpose, unlike the two BlockNote rules this shares --icon-check with.
+ * Those style a fixed DOM path with nothing else to size them from, but this class is reached
+ * through ui/Checkbox.tsx, which sets size via ordinary Tailwind classes (`h-4 w-4`, `h-3.5
+ * w-3.5`) — a plain unlayered rule like this one wins the cascade over any `@layer`-wrapped
+ * Tailwind utility regardless of specificity or source order, so a size baked in here could not
+ * be overridden by the component's own size prop at all.
+ */
+.app-checkbox {
+  appearance: none;
+  -webkit-appearance: none;
+  flex-shrink: 0;
+  border-radius: 5px;
+  border: 1.5px solid var(--color-border-strong);
+  background-color: var(--color-surface);
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.app-checkbox:hover:not(:disabled) {
+  border-color: var(--color-accent);
+}
+
+.app-checkbox:checked {
+  border-color: var(--color-accent);
+  background-color: var(--color-accent);
+  background-image: var(--icon-check);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 68%;
+}
+
+.app-checkbox:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-accent) 25%, transparent);
+}
+
+.app-checkbox:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/*
+ * The app's own slider, on a real <input type="range">.
+ *
+ * The same reasoning as .app-checkbox above: `appearance: none` clears the native track and
+ * thumb — which differ by browser and can't be reasoned about together — and the pseudo-elements
+ * below redraw both to match the app's pill-and-dot language instead. Firefox and
+ * Chromium/WebKit expose the thumb and track as different pseudo-elements with different
+ * property names, so each half of this is written twice; there is no shared shorthand that
+ * reaches both engines.
+ */
+.app-range {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--color-border);
+  cursor: pointer;
+}
+
+.app-range::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  border: 2px solid var(--color-surface);
+  box-shadow: 0 0 0 1px var(--color-border-strong);
+  cursor: pointer;
+  transition: transform 120ms ease;
+}
+
+.app-range::-webkit-slider-thumb:hover {
+  transform: scale(1.1);
+}
+
+.app-range::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  border: 2px solid var(--color-surface);
+  box-shadow: 0 0 0 1px var(--color-border-strong);
+  cursor: pointer;
+  transition: transform 120ms ease;
+}
+
+.app-range::-moz-range-thumb:hover {
+  transform: scale(1.1);
+}
+
+/* Firefox draws its own progress fill left of the thumb on the track itself, which Chromium has
+   no equivalent for — cleared so the plain grey track above is what both engines actually show. */
+.app-range::-moz-range-progress {
+  background: transparent;
+}
+
+.app-range:focus-visible {
+  outline: none;
+}
+
+.app-range:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 1px var(--color-border-strong), 0 0 0 4px color-mix(in oklab, var(--color-accent) 25%, transparent);
+}
+
+.app-range:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 1px var(--color-border-strong), 0 0 0 4px color-mix(in oklab, var(--color-accent) 25%, transparent);
+}
+
 *::-webkit-scrollbar-button {
   display: none;
   width: 0;
@@ -684,6 +845,24 @@ body {
   }
   to {
     opacity: 1;
+    transform: none;
+  }
+}
+
+/* A line of text arriving in a face it wasn't in a moment ago — the landing page's font
+   playground, where picking a new face re-keys the element rather than just repainting it. Blur
+   rather than a plain fade: a face resolving into focus is a better metaphor for "here is what
+   this one looks like" than a slide ever was, and it is the one property Reveal's own 'blur'
+   variant already uses for the same reason elsewhere on this page. */
+@keyframes anim-type-in {
+  from {
+    opacity: 0;
+    filter: blur(5px);
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
     transform: none;
   }
 }
@@ -843,6 +1022,10 @@ body {
 
 .anim-rise {
   animation: anim-rise var(--motion-slow) var(--motion-ease) backwards;
+}
+
+.anim-type-in {
+  animation: anim-type-in var(--motion-base) var(--motion-ease);
 }
 
 /* A page arriving from the side you travelled in from. The bar sits in a row — Tree, Notes,
@@ -1278,6 +1461,7 @@ body.dnd-touch-active {
   .anim-item-in,
   .anim-pop,
   .anim-rise,
+  .anim-type-in,
   .anim-page-enter,
   .anim-card-deal,
   .anim-card-land,
@@ -1320,4 +1504,75 @@ body.dnd-touch-active {
   .anim-collapse {
     transition: none;
   }
+}
+
+/*
+ * The sidebar's folder tree: a trunk under the parent's icon, and an elbow into every child.
+ *
+ * A single straight rule down the gutter said "these are indented" but not *what they hang off* —
+ * it began and ended in empty space, and no row was visibly attached to it. The connector is what
+ * carries the meaning: each child gets a line dropping from the row above and curving into its own
+ * leading edge, and the trunk is simply what all those segments add up to.
+ *
+ * Which is also why it is drawn per row rather than as one element spanning the list. Draw it once
+ * and it has to know how tall the list is, where the last row's centre falls, and it has to be
+ * re-measured whenever a folder is added, renamed onto two lines, or dragged. Built out of each
+ * row's own box, all three fall out for free — including the trunk stopping at the last child's
+ * elbow instead of running on past it, which is the detail that makes it read as a tree.
+ *
+ * Two pseudo-elements per row, because one cannot both turn a corner and carry on downwards:
+ *   ::before  reaches up over the gap to meet the row above, comes down, and turns right into this
+ *             row at its vertical centre — the visible elbow.
+ *   ::after   continues straight down from that centre to the next row's ::before. Omitted on the
+ *             last child, which is what ends the trunk.
+ * They overlap by a gap's width where they meet, so the join never shows a hairline seam at a
+ * fractional device pixel ratio.
+ */
+.sidebar-tree {
+  /* The gap lives here rather than in a utility class because the offsets below have to agree with
+     it exactly: every one of them is expressed in terms of this. */
+  --tree-gap: 2px;
+  /* Trunk to row: the stub's length, and so also how far left of the row the trunk sits. */
+  --tree-stub: 14px;
+  --tree-radius: 8px;
+
+  display: flex;
+  flex-direction: column;
+  gap: var(--tree-gap);
+}
+
+.sidebar-tree > * {
+  /* The rows set this themselves, but the connector is drawn against it — so it is stated here
+     rather than assumed of whatever a caller puts in the slot. */
+  position: relative;
+}
+
+.sidebar-tree > *::before,
+.sidebar-tree > *::after {
+  content: '';
+  position: absolute;
+  /* Anchored to the row's own leading edge, so the trunk follows the indent instead of being a
+     second number that has to be kept in step with it. */
+  right: 100%;
+  width: var(--tree-stub);
+  border-left: 1px solid var(--color-border);
+  pointer-events: none;
+}
+
+.sidebar-tree > *::before {
+  top: calc(var(--tree-gap) * -1);
+  bottom: 50%;
+  border-bottom: 1px solid var(--color-border);
+  border-bottom-left-radius: var(--tree-radius);
+}
+
+/* The first child reaches further: up through the container's own top padding and margin to the
+   underside of the row it belongs to, so the trunk starts at its parent rather than 8px below it. */
+.sidebar-tree > *:first-child::before {
+  top: -8px;
+}
+
+.sidebar-tree > *:not(:last-child)::after {
+  top: 50%;
+  bottom: calc(var(--tree-gap) * -1);
 }

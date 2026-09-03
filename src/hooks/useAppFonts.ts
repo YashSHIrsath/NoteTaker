@@ -1,29 +1,7 @@
 import { useEffect } from 'react'
 import { useAuth } from './useAuth'
-import { readFontChoice, type FontOption } from '../lib/fonts'
-
-/**
- * Fetch a face, once per family, and never fetch it twice.
- *
- * The <link> is left in the document rather than removed when the choice changes. Removing it would
- * evict the face while the next paint may still reference it, and the round trip is already paid —
- * so a session that tries four fonts ends with four stylesheets and no flashes, which is the right
- * trade for a settings screen somebody is actively browsing.
- */
-function ensureFont(option: FontOption): void {
-  if (!option.google) {
-    return
-  }
-  const id = `font-${option.id}`
-  if (document.getElementById(id)) {
-    return
-  }
-  const link = document.createElement('link')
-  link.id = id
-  link.rel = 'stylesheet'
-  link.href = `https://fonts.googleapis.com/css2?family=${option.google}&display=swap`
-  document.head.append(link)
-}
+import { ensureFont, readFontChoice, type FontOption } from '../lib/fonts'
+import { readTypeAdjustments } from '../lib/typeScale'
 
 /**
  * Puts the account's chosen faces on the document, and takes them off on the way out.
@@ -45,6 +23,9 @@ export function useAppFonts(): { body: FontOption; heading: FontOption; note: Fo
   const body = readFontChoice('body', metadata)
   const heading = readFontChoice('heading', metadata)
   const note = readFontChoice('note', metadata)
+  const bodyType = readTypeAdjustments('body', metadata)
+  const headingType = readTypeAdjustments('heading', metadata)
+  const noteType = readTypeAdjustments('note', metadata)
 
   useEffect(() => {
     ensureFont(body)
@@ -59,21 +40,39 @@ export function useAppFonts(): { body: FontOption; heading: FontOption; note: Fo
      * catalogue later gets it for free.
      */
     const isMono = body.stack.includes('ui-monospace')
-    root.style.setProperty('--font-body-tracking', isMono ? '-0.012em' : 'normal')
+    /*
+     * The account's own tracking is added on top of the mono correction, not swapped in over it.
+     *
+     * They answer different questions — one is the face compensating for itself, the other is a
+     * preference about that face — and `calc()` is what lets both stay true at once instead of a
+     * choice between "my spacing" and "a monospace that doesn't run together".
+     */
+    root.style.setProperty(
+      '--font-body-tracking',
+      bodyType.letterSpacing === 0 && !isMono
+        ? 'normal'
+        : `calc(${isMono ? '-0.012em' : '0em'} + ${bodyType.letterSpacing}em)`,
+    )
+    root.style.setProperty('--font-body-word-spacing', `${bodyType.wordSpacing}em`)
     return () => {
       root.style.removeProperty('--font-body')
       root.style.removeProperty('--font-body-tracking')
+      root.style.removeProperty('--font-body-word-spacing')
     }
-  }, [body])
+  }, [body, bodyType.letterSpacing, bodyType.wordSpacing])
 
   useEffect(() => {
     ensureFont(heading)
     const root = document.documentElement
     root.style.setProperty('--font-display', heading.stack)
+    root.style.setProperty('--font-display-tracking', `${headingType.letterSpacing}em`)
+    root.style.setProperty('--font-display-word-spacing', `${headingType.wordSpacing}em`)
     return () => {
       root.style.removeProperty('--font-display')
+      root.style.removeProperty('--font-display-tracking')
+      root.style.removeProperty('--font-display-word-spacing')
     }
-  }, [heading])
+  }, [heading, headingType.letterSpacing, headingType.wordSpacing])
 
   /*
    * The note face, which is usually the reading face and does not have to be.
@@ -86,10 +85,18 @@ export function useAppFonts(): { body: FontOption; heading: FontOption; note: Fo
     ensureFont(note)
     const root = document.documentElement
     root.style.setProperty('--font-note', note.stack)
+    // The one role with a real size to scale — see lib/typeScale for why the other two do not
+    // get this property at all.
+    root.style.setProperty('--font-note-size-scale', String(noteType.size))
+    root.style.setProperty('--font-note-tracking', `${noteType.letterSpacing}em`)
+    root.style.setProperty('--font-note-word-spacing', `${noteType.wordSpacing}em`)
     return () => {
       root.style.removeProperty('--font-note')
+      root.style.removeProperty('--font-note-size-scale')
+      root.style.removeProperty('--font-note-tracking')
+      root.style.removeProperty('--font-note-word-spacing')
     }
-  }, [note])
+  }, [note, noteType.size, noteType.letterSpacing, noteType.wordSpacing])
 
   return { body, heading, note }
 }

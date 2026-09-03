@@ -262,7 +262,7 @@ export function AllTasksPage() {
       />
 
       {openTaskId ? (
-        <TaskEditorDialog taskId={openTaskId} onClose={() => setOpenTaskId(null)} />
+        <TaskEditorDialog taskId={openTaskId} onClose={() => setOpenTaskId(null)} scope="tasks" />
       ) : null}
     </div>
   )

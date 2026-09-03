@@ -463,6 +463,38 @@ export const FONT_OPTIONS: FontOption[] = [
 
 const BY_ID = new Map(FONT_OPTIONS.map((option) => [option.id, option]))
 
+/** A face by id, with no role check and no fallback — undefined if the id names nothing in the
+ *  catalogue. For a caller that already knows the id is valid (a curated list drawn from
+ *  FONT_OPTIONS itself) and wants the option, not a role-guarded default. See fontFor for the
+ *  version every stored preference goes through instead. */
+export function fontById(id: string): FontOption | undefined {
+  return BY_ID.get(id)
+}
+
+/**
+ * Fetch a face, once per family, and never fetch it twice.
+ *
+ * The <link> is left in the document rather than removed once nothing on screen still asks for
+ * it. Removing it would evict the face while the next paint may still reference it, and the round
+ * trip is already paid — so a session that tries several fonts (an account browsing Settings, a
+ * visitor trying the landing page's font playground) ends with several stylesheets and no
+ * flashes, which is the right trade for a screen somebody is actively experimenting on.
+ */
+export function ensureFont(option: FontOption): void {
+  if (!option.google) {
+    return
+  }
+  const id = `font-${option.id}`
+  if (document.getElementById(id)) {
+    return
+  }
+  const link = document.createElement('link')
+  link.id = id
+  link.rel = 'stylesheet'
+  link.href = `https://fonts.googleapis.com/css2?family=${option.google}&display=swap`
+  document.head.append(link)
+}
+
 /*
  * What a brand-new account is set in, before anybody chooses anything.
  *
@@ -478,6 +510,37 @@ const BY_ID = new Map(FONT_OPTIONS.map((option) => [option.id, option]))
 export const DEFAULT_BODY_FONT = 'inter'
 export const DEFAULT_HEADING_FONT = 'kalam'
 export const DEFAULT_NOTE_FONT = 'kalam'
+
+/**
+ * What a brand-new account is explicitly written into, at the moment it is created — not this
+ * file's own fallback above, and deliberately a different mechanism.
+ *
+ * DEFAULT_BODY_FONT and its two siblings are read live, by *every* account that has never touched
+ * Settings — including everyone who signed up years before this constant existed. Changing one of
+ * them silently refaces every such account the next time they open the app, which is fine for the
+ * three above (nobody has opted into anything by leaving a setting untouched) but wrong for a
+ * curated "what should a first session look like" pick, which is a decision made once, about
+ * accounts created from now on, that should not keep moving under people who never asked it to.
+ *
+ * Written via fontUpdate at signup (see AuthContext.signUp), so a new account's metadata carries
+ * these ids explicitly from its very first row — indistinguishable in storage from somebody who
+ * chose them by hand in Settings, and exactly as changeable afterward as any other choice.
+ *
+ * `heading` is Manrope rather than the fallback's Kalam: the fallback's own comment picks a hand
+ * because "a note-taking app whose notes are handwritten says what it is", which is a case for the
+ * *note* face, not for every 13px sidebar label and page heading in the app defaulting to a felt-
+ * tip. Manrope is the one heading-eligible face in the catalog explicitly built for that spread —
+ * "reads expensive at a heading size and stays legible small" — which is exactly the range
+ * headings actually cover here, from a sidebar section title to the landing page's hero. `note`
+ * keeps Kalam: of the fifteen-odd hands offered, it is the only one with both a genuine bold cut
+ * and an x-height that holds from a 14px card title to a full page, so it is legible rather than
+ * merely charming. `body` stays Inter, for the same reason the fallback does.
+ */
+export const SIGNUP_FONT_DEFAULTS: Record<FontRole, string> = {
+  body: 'inter',
+  heading: 'manrope',
+  note: 'kalam',
+}
 
 export function fontsFor(role: FontRole): FontOption[] {
   return FONT_OPTIONS.filter((option) => option.roles.includes(role))

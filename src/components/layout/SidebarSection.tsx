@@ -155,9 +155,22 @@ export function SidebarSection({
       </div>
 
       {expandable && expanded && children ? (
-        <div className="mt-1 space-y-0.5 py-1 pl-1">
-          {children}
-        </div>
+        /*
+         * The children, hung off the row above them. See `.sidebar-tree` in index.css for the
+         * connectors themselves — it draws a trunk and an elbow into each row out of the rows'
+         * own boxes, so nothing here has to know how many there are or how tall they got.
+         *
+         * Indented rather than merely listed underneath: level with their parent they read as its
+         * siblings, which is the one thing this section exists not to say.
+         *
+         * The two numbers here are the ones the connectors are aimed at, so they travel together.
+         * `pl-9` puts the rows 36px in, and the trunk lands a stub's width to their left — 22px,
+         * which is the parent row button's 12px of padding plus half of its 20px glyph, so the
+         * trunk falls directly beneath the icon of the folder it belongs to. `mt-1` plus `py-1` is
+         * the 8px the first child's elbow reaches back up through to touch that row's underside.
+         * Move the row's padding, its glyph, or either of these, and the rest have to follow.
+         */
+        <div className="sidebar-tree mt-1 py-1 pl-9">{children}</div>
       ) : null}
     </div>
   )

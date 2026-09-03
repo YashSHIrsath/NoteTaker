@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { DoorOpen, History, LogOut, RefreshCw, Users } from 'lucide-react'
+import { DoorOpen, History, LogOut, RefreshCw, Sparkles, Users } from 'lucide-react'
 import { IconButton } from '../ui/IconButton'
 import { ProjectLogo } from '../brand/ProjectLogo'
 import { LogoLoader } from '../brand/LogoLoader'
@@ -13,6 +13,8 @@ import { useSpaces } from '../../hooks/useSpaces'
 import { useRefreshWorkspace } from '../../hooks/useRefreshWorkspace'
 import { useSpaceId } from '../../hooks/useWorkspace'
 import { roleCanManageMembers } from '../../lib/spaceRoles'
+import { readFontChoice } from '../../lib/fonts'
+import { currentFontPreset, nextFontPreset, presetTriple } from '../../lib/fontPresets'
 import { cn } from '../../lib/cn'
 import { useNavigate } from 'react-router-dom'
 
@@ -20,8 +22,8 @@ export interface HeaderProps {
   className?: string
 }
 
-/** The app's mark. Drawn in two places in this header — as the workspace switcher's face on a
- *  phone, and on its own from `lg` — so it is one definition rather than two that drift. */
+/** The app's mark, as the workspace switcher's face below `lg`. From `lg` the sidebar is on
+ *  screen and carries the brand itself, so this header shows none. */
 function Mark() {
   return <ProjectLogo className="h-4 w-[22px] text-[var(--color-accent)]" label="Mindstack" />
 }
@@ -38,7 +40,7 @@ function PendingDot() {
 }
 
 export function Header({ className }: HeaderProps) {
-  const { signOut } = useAuth()
+  const { user, signOut, updateProfile } = useAuth()
   // Only inside a shared space: personal notes have no activity log, because there is nobody to
   // attribute anything to. And only for an owner or admin — everyone else sees what a space is and
   // who is in it, not a record of what each of them did.
@@ -74,6 +76,42 @@ export function Header({ className }: HeaderProps) {
     void signOut().catch(() => undefined)
   }
 
+  /**
+   * One press, the whole app in a different set of faces.
+   *
+   * Unlike the theme toggle this presses, this cannot be instant: a theme lives in localStorage and
+   * flips synchronously, but a font choice is account metadata behind a real request. `applying` is
+   * what stands in for that half-second — held so a second tap mid-flight cannot fire a request
+   * that lands ahead of the one already in the air and cycle two steps for one press, and shown on
+   * the glyph so the button does not look like it did nothing while it waits.
+   *
+   * The next preset is computed from the account's *actual* current three choices, not from local
+   * state this component would otherwise have to keep in step with Settings and the header both —
+   * so pressing this after hand-picking a mix of faces in Settings starts the circle over at the
+   * first preset rather than pretending the mix was already on it.
+   */
+  const metadata = user?.user_metadata as Record<string, unknown> | undefined
+  // What the account is actually showing right now, resolved the same way the rest of the app
+  // resolves it (fallbacks, the note-inherits-interface rule) — not the raw, possibly-unset
+  // metadata, which would misjudge "custom" for an account that has never touched a font setting.
+  const currentFontIds = {
+    body: readFontChoice('body', metadata).id,
+    heading: readFontChoice('heading', metadata).id,
+    note: readFontChoice('note', metadata).id,
+  }
+  const currentPresetLabel = currentFontPreset(currentFontIds)?.label ?? 'Custom'
+  const nextPreset = nextFontPreset(currentFontIds)
+  const [applyingFonts, setApplyingFonts] = useState(false)
+  const cycleFontPreset = () => {
+    if (applyingFonts) {
+      return
+    }
+    setApplyingFonts(true)
+    void updateProfile({ fonts: presetTriple(nextPreset) })
+      .catch(() => undefined)
+      .finally(() => setApplyingFonts(false))
+  }
+
   return (
     <header
       className={cn(
@@ -83,29 +121,33 @@ export function Header({ className }: HeaderProps) {
         // their content, and any difference shows up as the logo and the cards below starting on
         // two different lines.
         'flex min-h-12 shrink-0 items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4 pb-1.5 sm:min-h-14 sm:gap-4 sm:px-6 sm:pb-0',
-        'pt-[env(safe-area-inset-top)]',
+        // The shell takes the status-bar inset from lg, because the sidebar reaches the top of
+        // the window there too and this is no longer the only thing that has to clear it. Left in
+        // both places it would be counted twice.
+        'pt-[env(safe-area-inset-top)] lg:pt-0',
         className,
       )}
     >
-      <div className="flex shrink-0 items-center gap-2">
+      {/*
+        * The brand, below `lg` only.
+        *
+        * From `lg` the sidebar is a full-height island starting at the same line as this one, with
+        * the mark and the workspace switcher already in its top row — so drawing them again here
+        * put the app's name twice on one screen, a centimetre apart, and spent the room the search
+        * bar wanted. Below `lg` there is no sidebar and this is the only place either can live.
+        */}
+      <div className="flex shrink-0 items-center gap-2 lg:hidden">
         {/*
-          * On a phone the mark is the workspace switcher; on a wide screen it is just the mark.
+          * The mark *is* the workspace switcher here.
           *
-          * Which workspace you are in and how to leave it is the sidebar's job — and below `lg`
+          * Which workspace you are in and how to leave it is the sidebar's job — and at this width
           * there is no sidebar, so it was nobody's. The top-left corner is where that control lives
           * in every app that has one, and the mark is already sitting in it.
           *
           * The same WorkspaceSwitcher as the sidebar's, wearing the mark instead of a name, so the
-          * two cannot drift about what a workspace is or which one you are in. From `lg` the plain
-          * mark comes back, because the sidebar's copy is on screen twelve pixels below it.
+          * two cannot drift about what a workspace is or which one you are in.
           */}
-        <WorkspaceSwitcher
-          className="lg:hidden"
-          trigger={<Mark />}
-        />
-        <span className="hidden lg:inline">
-          <Mark />
-        </span>
+        <WorkspaceSwitcher trigger={<Mark />} />
         {/* The app's own name, in a space as much as in your own notes.
           *
           * This briefly showed the space's name instead, which put a workspace label where the
@@ -200,6 +242,23 @@ export function Header({ className }: HeaderProps) {
         </IconButton>
 
         <ThemeSwitcher />
+
+        {/* The theme's neighbour, deliberately, and pressed the same way: five curated looks in a
+          * ring, one press cycles to the next, applied to all three roles at once — see
+          * lib/fontPresets. Fine control over one role at a time is still Settings' job, reached
+          * from the account page rather than duplicated here; this button is for "surprise me". */}
+        <IconButton
+          label={`Fonts: ${currentPresetLabel}. Switch to ${nextPreset.label}`}
+          tooltip="Fonts"
+          onClick={cycleFontPreset}
+          aria-busy={applyingFonts}
+        >
+          {applyingFonts ? (
+            <LogoLoader size="sm" className="text-[var(--color-accent)]" />
+          ) : (
+            <Sparkles className="h-5 w-5" />
+          )}
+        </IconButton>
 
         {/* A Starred shortcut used to sit here, shown from lg. Which is precisely where the
             sidebar is — with Starred already in it, as a labelled row. The header was offering a

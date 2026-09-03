@@ -2,6 +2,7 @@ import { Check } from 'lucide-react'
 import { useTheme } from '../../hooks/useTheme'
 import { CUSTOM_DEFAULT, THEMES, type ThemeFamily, type ThemeOption } from '../../lib/themes'
 import { originFromElement } from '../../lib/themeReveal'
+import { Checkbox } from '../ui/Checkbox'
 import { cn } from '../../lib/cn'
 
 /**
@@ -259,11 +260,10 @@ export function ThemeSettings() {
                         : `${option.label} is only available here`
                     }
                   >
-                    <input
-                      type="checkbox"
+                    <Checkbox
+                      size="sm"
                       checked={quick}
                       onChange={() => toggleQuick(option.id)}
-                      className="h-3.5 w-3.5 shrink-0 accent-[var(--color-accent)]"
                     />
                     <span>In header</span>
                   </label>

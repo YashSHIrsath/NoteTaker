@@ -16,6 +16,7 @@ const SECTIONS = [
   { id: 'inside', label: 'Inside' },
   { id: 'spaces', label: 'Shared' },
   { id: 'journey', label: 'How it works' },
+  { id: 'type', label: 'Type' },
   { id: 'everything', label: 'Everything' },
 ]
 
@@ -38,7 +39,7 @@ const MONO = '"JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Mono", Menlo,
  * of them was navigation and which was an action.
  *
  * So the bar stops being an object and becomes a rule. A real 1.5px line in the text colour — not
- * a tinted hairline — with the page's sections indexed 01–04 above it in the mono face, the
+ * a tinted hairline — with the page's sections indexed 01–05 above it in the mono face, the
  * secondary actions as cells in a hairline toolbar, and the one action worth taking as the only
  * outlined box on the row. Hierarchy comes from *kind* (a number, a word, a cell, a box) rather
  * than from a lozenge around the important one.

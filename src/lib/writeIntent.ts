@@ -18,6 +18,7 @@ export const WRITE_INTENT = {
   folderUnstarred: 'Unstarred a folder',
 
   taskCreated: 'Created a note',
+  taskDuplicated: 'Duplicated a note',
   tasksReordered: 'Reordered notes',
   taskMoved: 'Moved a note to another folder',
   taskEdited: 'Edited a note',

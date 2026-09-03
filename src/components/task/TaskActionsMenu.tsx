@@ -2,6 +2,7 @@ import { Fragment, useId, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import {
   CalendarClock,
+  Copy,
   FolderInput,
   Globe,
   Lock,
@@ -16,6 +17,7 @@ import {
 import type { Task, TaskListScope } from '../../types'
 import { IconButton } from '../ui/IconButton'
 import { MoveTaskDialog } from './MoveTaskDialog'
+import { DuplicateTaskDialog } from './DuplicateTaskDialog'
 import { TaskScheduleDialog } from './TaskScheduleDialog'
 import { useFolders } from '../../hooks/useFolders'
 import { useDeleteTask } from '../../hooks/useDeleteTask'
@@ -64,8 +66,9 @@ function PencilDisc({ className }: { className?: string }) {
 const MENU_WIDTH = 216
 
 /** What to call each listing in the pin row, so "Pin to top of Starred" is unambiguous about
- *  which of the three it affects. */
-const SCOPE_LABELS: Record<TaskListScope, string> = {
+ *  which of the three it affects. Exported so TaskEditorDialog's own pin control — which reads
+ *  from whichever page opened it, see its `scope` prop — says the same thing this menu does. */
+export const SCOPE_LABELS: Record<TaskListScope, string> = {
   folder: 'this folder',
   tasks: 'Tasks',
   important: 'Starred',
@@ -114,6 +117,7 @@ export function TaskActionsMenu({
   const { requestTaskDelete, dialog: deleteDialog } = useDeleteTask()
   const [scheduleOpen, setScheduleOpen] = useState(false)
   const [moveOpen, setMoveOpen] = useState(false)
+  const [duplicateOpen, setDuplicateOpen] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
   const isSpace = useIsSpace()
   const menu = useAnchoredPanel<HTMLDivElement>(MENU_WIDTH)
@@ -153,6 +157,12 @@ export function TaskActionsMenu({
       label: 'Move to folder',
       icon: <FolderInput className={iconClass} aria-hidden />,
       onSelect: () => setMoveOpen(true),
+    },
+    {
+      key: 'duplicate',
+      label: 'Duplicate to folder',
+      icon: <Copy className={iconClass} aria-hidden />,
+      onSelect: () => setDuplicateOpen(true),
     },
     {
       key: 'pin',
@@ -259,6 +269,7 @@ export function TaskActionsMenu({
 
       <TaskScheduleDialog open={scheduleOpen} task={task} onClose={() => setScheduleOpen(false)} />
       <MoveTaskDialog open={moveOpen} taskId={task.id} onClose={() => setMoveOpen(false)} />
+      <DuplicateTaskDialog open={duplicateOpen} taskId={task.id} onClose={() => setDuplicateOpen(false)} />
       {shareOpen ? (
         <ShareDialog
           open

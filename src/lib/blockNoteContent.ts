@@ -300,3 +300,37 @@ export function referencedAttachmentIds(content: string): Set<string> {
   return ids
 }
 
+/** Every image/file block dropped, at any depth, the rest of the document untouched. */
+function withoutAttachmentBlocks(blocks: StoredBlock[]): StoredBlock[] {
+  return blocks
+    .filter((block) => block.type !== 'image' && block.type !== 'file')
+    .map((block) =>
+      block.children && block.children.length > 0
+        ? { ...block, children: withoutAttachmentBlocks(block.children) }
+        : block,
+    )
+}
+
+/**
+ * A task's content, ready to become a *different* task's.
+ *
+ * Two things a straight copy of the `content` column would get wrong, for opposite reasons.
+ * Attachments are real files scoped to the original task by their storage path — carrying an
+ * `attachment://<id>` block over verbatim would point the duplicate at somebody else's file
+ * (deleting the original's attachment would silently break the copy's), and actually cloning the
+ * file is a real storage operation this does not attempt, so the block is dropped instead of
+ * copied halfway. Subtasks need no equivalent care despite also being their own database rows:
+ * `buildInitialBlocks` already resolves them into plain inline checklist blocks with no reference
+ * back to a Subtask row, which is what running any content through it — legacy plain text with
+ * markers, or a note already saved as BlockNote's own JSON — does regardless of which format it
+ * started in. There is nothing left in the output for a duplicate to dangle a reference from.
+ */
+export function contentForDuplicate(
+  content: string,
+  attachments: Attachment[],
+  subtasks: Subtask[],
+): string {
+  const blocks = withoutAttachmentBlocks(buildInitialBlocks(content, attachments, subtasks))
+  return JSON.stringify(blocks.length > 0 ? blocks : EMPTY_DOCUMENT)
+}
+

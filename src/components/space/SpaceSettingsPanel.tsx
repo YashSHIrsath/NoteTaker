@@ -4,6 +4,7 @@ import { Button } from '../ui/Button'
 import { IconButton } from '../ui/IconButton'
 import { Notice } from '../ui/Notice'
 import { Spinner } from '../ui/Spinner'
+import { Select } from '../ui/Select'
 import { getSpacesRepository, RepositoryError } from '../../repositories'
 import {
   INVITABLE_ROLES,
@@ -212,23 +213,16 @@ export function SpaceSettingsPanel({
         </span>
 
         {editable ? (
-          <select
+          <Select
             value={member.role}
             disabled={busyId === member.userId}
-            onChange={(event) =>
-              void run(member.userId, () =>
-                repository!.setMemberRole(space.id, member.userId, event.target.value as SpaceRole),
-              )
+            onChange={(role) =>
+              void run(member.userId, () => repository!.setMemberRole(space.id, member.userId, role))
             }
+            options={INVITABLE_ROLES.map((option) => ({ value: option, label: ROLE_LABELS[option] }))}
             aria-label={`Role for ${member.email}`}
             className="shrink-0 rounded-full border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-2 py-1 text-[12px] text-[var(--color-text)] outline-none focus:border-[var(--color-accent)]"
-          >
-            {INVITABLE_ROLES.map((option) => (
-              <option key={option} value={option}>
-                {ROLE_LABELS[option]}
-              </option>
-            ))}
-          </select>
+          />
         ) : null}
 
         {editable && !isSelf ? (

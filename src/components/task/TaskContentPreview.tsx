@@ -28,6 +28,52 @@ export interface TaskContentPreviewProps {
  */
 let sharedSerializer: BlockNoteEditor | undefined
 
+/**
+ * The schemes a card is willing to hand a click to.
+ *
+ * An allowlist rather than a `javascript:` denylist. A preview renders content this device did
+ * not necessarily write — in a shared space it is somebody else's note — and letting a link
+ * receive a click is exactly what turns a stored href into something the browser will act on. The
+ * set of schemes worth following from a card is small and known; the set worth refusing is not.
+ */
+const FOLLOWABLE_PROTOCOLS = new Set(['http:', 'https:', 'mailto:'])
+
+/**
+ * The address a card should actually send you to, or null if the link stays inert.
+ *
+ * Parsed with no base URL on purpose. `new URL(href, location.href)` would turn `/settings` into
+ * an https: URL on our own origin and wave it through, and following that navigates around inside
+ * the app rather than opening anything — so a path, query or fragment is refused outright.
+ *
+ * The interesting case is an href with no scheme at all. An editor stores `jio.com` exactly as it
+ * was typed into its link dialog, and that is the one shape where leaving it alone is worse than
+ * normalising it: the browser reads a bare host as a *relative* path, so a card offering it would
+ * navigate to <app origin>/jio.com — a dead route inside the workspace, and a link that looks
+ * broken rather than one that quietly did nothing. Assumed https, and only when it genuinely looks
+ * like a host: a dotted name before any slash. `someone@example.com` does not match, and stays
+ * inert rather than being guessed into a mailto.
+ */
+function followableHref(href: string): string | null {
+  const raw = href.trim()
+  if (!raw || /^[/?#]/.test(raw)) {
+    return null
+  }
+  try {
+    // Returned as written rather than as `url.href`, which would normalise `https://ex.com` to
+    // `https://ex.com/` and make every already-correct link look like one that needed rewriting.
+    return FOLLOWABLE_PROTOCOLS.has(new URL(raw).protocol) ? raw : null
+  } catch {
+    if (!/^[w-]+(.[w-]+)+(?=$|[/?#])/.test(raw)) {
+      return null
+    }
+    try {
+      return new URL(`https://${raw}`).href
+    } catch {
+      return null
+    }
+  }
+}
+
 type SerializableBlocks = Parameters<BlockNoteEditor['blocksToFullHTML']>[0]
 
 function serializeToHtml(blocks: ReturnType<typeof buildInitialBlocks>): string {
@@ -77,9 +123,10 @@ export function TaskContentPreview({ taskId, content }: TaskContentPreviewProps)
   //
   // The preview is a string of HTML, so nothing BlockNote's own renderer wired up survives the
   // trip: the checkbox arrives `disabled` (the serializer's editor isn't editable) and every
-  // listener is gone. Two of those controls are worth having back on the card front — ticking a
-  // line off and folding a section away are things you want to do while looking at the note, not
-  // reasons to open it. Everything else stays inert, so a click anywhere else still opens the task.
+  // listener is gone. Three of those controls are worth having back on the card front — ticking a
+  // line off, folding a section away and following a link are things you want to do while looking
+  // at the note, not reasons to open it. Everything else stays inert, so a click anywhere else
+  // still opens the task.
   useEffect(() => {
     const container = containerRef.current
     if (!container) {
@@ -135,6 +182,31 @@ export function TaskContentPreview({ taskId, content }: TaskContentPreviewProps)
     const onClick = (event: MouseEvent) => {
       const target = event.target as HTMLElement | null
       if (!target) {
+        return
+      }
+
+      /*
+       * Links, which are the one thing in here with somewhere of their own to go.
+       *
+       * The browser is never allowed to navigate on the href's own terms, hence the unconditional
+       * `preventDefault`: that string is note content — in a shared space, content somebody else
+       * wrote — and a `javascript:` href activated by a click is the whole reason this is decided
+       * here rather than left to the anchor. Following it is an explicit `window.open` of an
+       * address that has already been judged and, where it was written without a scheme, resolved.
+       *
+       * A link this cannot make sense of falls through instead of dead-ending: propagation is left
+       * alone, the card's own handler runs, and the note opens the way it always did.
+       */
+      const anchor = target.closest<HTMLAnchorElement>('a[href]')
+      if (anchor) {
+        event.preventDefault()
+        // getAttribute, not `.href` — the property has already resolved a relative URL against
+        // the document, which is precisely the distinction followableHref exists to make.
+        const destination = followableHref(anchor.getAttribute('href') ?? '')
+        if (destination) {
+          event.stopPropagation()
+          window.open(destination, '_blank', 'noopener,noreferrer')
+        }
         return
       }
 
@@ -202,6 +274,7 @@ export function TaskContentPreview({ taskId, content }: TaskContentPreviewProps)
         return
       }
       if (
+        target.closest('a[href]') ||
         target.closest('.bn-toggle-button') ||
         target.closest('[data-content-type="checkListItem"]')
       ) {

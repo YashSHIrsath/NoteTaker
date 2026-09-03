@@ -1,7 +1,8 @@
 import { Fragment, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
-import { Check, ChevronsUpDown, House, Users } from 'lucide-react'
+import { Check, ChevronsUpDown, Users } from 'lucide-react'
+import { ProjectLogo } from '../brand/ProjectLogo'
 import { useAnchoredPanel } from '../../hooks/useAnchoredPanel'
 import { useSpaces } from '../../hooks/useSpaces'
 import { useWorkspace } from '../../hooks/useWorkspace'
@@ -27,7 +28,12 @@ export interface WorkspaceSwitcherProps {
   className?: string
 }
 
-/** A space's dot, or the app's own mark for personal notes. */
+/** A space's dot, or the app's own mark for personal notes.
+ *
+ * The real Mindstack mark, not a placeholder standing in for it — this is what the collapsed
+ * sidebar rail shows in place of the workspace name, so it has to be recognisably *the app*, the
+ * same glyph the brand row and the header wear, rather than a generic house glyph that happened
+ * to mean "home". */
 function WorkspaceDot({ space }: { space?: SpaceSummary }) {
   if (!space) {
     return (
@@ -35,7 +41,7 @@ function WorkspaceDot({ space }: { space?: SpaceSummary }) {
         className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-[var(--color-accent-soft)] text-[var(--color-accent)]"
         aria-hidden
       >
-        <House className="h-3 w-3" />
+        <ProjectLogo className="h-2.5 w-[14px]" />
       </span>
     )
   }
@@ -80,7 +86,7 @@ export function WorkspaceSwitcher({ collapsed = false, trigger, className }: Wor
     return (
       <span
         className={cn(
-          'truncate text-[16px] font-semibold tracking-tight text-[var(--color-text)]',
+          'min-w-0 truncate text-[16px] font-semibold tracking-tight text-[var(--color-text)]',
           className,
         )}
         style={{ fontFamily: 'var(--font-display)' }}
@@ -103,12 +109,27 @@ export function WorkspaceSwitcher({ collapsed = false, trigger, className }: Wor
           aria-haspopup="menu"
           aria-expanded={panel.open}
           aria-label={`Workspace: ${label}. Switch workspace`}
-          title={collapsed ? label : undefined}
+          // Always, not only collapsed: expanded, a long space name is now truncated rather than
+          // allowed to push its way out of the sidebar, so this is where the rest of it lives.
+          title={label}
           onClick={() => panel.setOpen((open) => !open)}
           className={cn(
             'anim-press flex min-w-0 items-center gap-1.5 rounded-lg px-1 py-0.5 transition-colors',
             'hover:bg-[var(--color-hover)]',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/20',
+            /*
+             * A button sizes to its content, not to the column it sits in.
+             *
+             * `min-w-0` is not enough on its own for that reason: the anchor around this is
+             * `flex-1 min-w-0` and narrows correctly, but the button inside it kept growing to fit
+             * the whole workspace name and simply overflowed — a long space name ran under the
+             * collapse toggle and pushed the chevron out through the card's right edge. Filling the
+             * anchor is what gives the label below something finite to truncate against.
+             *
+             * Not when it is wearing a caller's trigger (the header's mark, which is 22px wide and
+             * should stay that way), and not collapsed, where the size is the point.
+             */
+            !collapsed && !trigger && 'w-full',
             // A 32px box collapsed, matching the collapse toggle stacked under it: in a 76px rail
             // those two are the whole header, and one at 24px beside one at 32 reads as a mistake
             // rather than as a hierarchy.
@@ -120,7 +141,7 @@ export function WorkspaceSwitcher({ collapsed = false, trigger, className }: Wor
           ) : (
             <>
               <span
-                className="truncate text-[16px] font-semibold tracking-tight text-[var(--color-text)]"
+                className="min-w-0 flex-1 truncate text-[16px] font-semibold tracking-tight text-[var(--color-text)]"
                 style={{ fontFamily: 'var(--font-display)' }}
               >
                 {label}

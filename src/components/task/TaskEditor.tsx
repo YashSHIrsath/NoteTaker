@@ -25,9 +25,26 @@ export interface TaskEditorProps {
   folderPath: Folder[]
   /** The popup dialog renders pin/star/delete in its own header instead, next to Close. */
   showActions?: boolean
+  /**
+   * Take the full width given, instead of holding a reading column in the middle of it.
+   *
+   * For the dialog, whose width somebody has dragged to the size they wanted — a measure capped
+   * at 48rem inside a window deliberately made 1200px wide is the app overruling that, and it
+   * shows up as two thick empty margins that look like a layout bug rather than a decision.
+   *
+   * Off for the standalone task page, where the width is the browser window's and nobody chose
+   * it: a line of prose running the whole of a wide monitor is genuinely harder to read, and
+   * there is no way to narrow it there short of resizing the browser.
+   */
+  fillWidth?: boolean
 }
 
-export function TaskEditor({ task, folderPath, showActions = true }: TaskEditorProps) {
+export function TaskEditor({
+  task,
+  folderPath,
+  showActions = true,
+  fillWidth = false,
+}: TaskEditorProps) {
   const {
     updateTaskTitle,
     updateTaskContent,
@@ -107,7 +124,15 @@ export function TaskEditor({ task, folderPath, showActions = true }: TaskEditorP
   ]
 
   return (
-    <div className="mx-auto flex h-full min-h-0 max-w-3xl flex-col">
+    <div
+      className={cn(
+        'mx-auto flex h-full min-h-0 flex-col',
+        // Never binding at the dialog's default size — the panel is 48rem itself there, so this
+        // only starts to matter once somebody has made it bigger, which is exactly when it should
+        // stop applying.
+        fillWidth ? 'w-full' : 'max-w-3xl',
+      )}
+    >
       {/* Header block: fixed, never scrolls — the note's own box below owns the overflow. */}
       <div className="shrink-0 px-4 pt-2.5 sm:px-6 sm:pt-3">
       <FolderBreadcrumb path={folderPath} currentLabel={task.title.trim() || 'Untitled'} currentIsTask />
