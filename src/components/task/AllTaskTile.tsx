@@ -8,13 +8,16 @@ import {
 import { ChevronRight } from 'lucide-react'
 import type { Attachment, TaskListScope } from '../../types'
 import type { FolderCategory } from '../../lib/folderColor'
-import { taskColorStyle } from '../../lib/taskColor'
+import { useAuth } from '../../hooks/useAuth'
+import { TASK_TAPE_STYLE, taskColorStyle, taskPinStyle } from '../../lib/taskColor'
 import { formatDueDate } from '../../lib/dueDate'
+import { readTaskDecorations } from '../../lib/viewStyle'
 import { lifecycleStyle, taskLifecycle } from '../../lib/taskLifecycle'
 import { nextReminderAt, scheduledReminders } from '../../lib/reminders'
 import { sendLabel } from '../../lib/countdown'
 import { useServerNow } from '../../hooks/useServerNow'
 import { findBlockAttachmentId, referencedAttachmentIds } from '../../lib/blockNoteContent'
+import { isPinnedIn } from '../../lib/taskGrid'
 import { useFolders } from '../../hooks/useFolders'
 import { useTaskCompletion } from '../../hooks/useTaskCompletion'
 import { AttachmentPreviewDialog } from '../attachment/AttachmentPreviewDialog'
@@ -73,7 +76,10 @@ export function AllTaskTile({ taskId, scope, category, folderLabel, onOpen }: Al
   const bodyRef = useRef<HTMLDivElement>(null)
   const attachmentsRef = useRef<HTMLDivElement>(null)
 
+  const { user } = useAuth()
+  const decorationsEnabled = readTaskDecorations(user?.user_metadata as Record<string, unknown> | undefined)
   const task = getTask(taskId)
+  const pinned = task ? isPinnedIn(task, scope) : false
   // An explicit pick wins; without one the view's own rule (folder color, or the scatter in a
   // flat list) still decides, exactly as before the picker existed.
   const isTracked = task?.noteKind === 'due_task' && task.dueAt !== null
@@ -140,7 +146,30 @@ export function AllTaskTile({ taskId, scope, category, folderLabel, onOpen }: Al
 
   return (
     <Fragment>
-    <div className="h-full rounded-2xl" data-task-id={taskId}>
+    <div className="relative h-full rounded-2xl" data-task-id={taskId}>
+    {/* A pin for a note that is actually pinned, cellotape otherwise — see TaskCard for the
+        fuller reasoning on both (same trick, same reason either has to live outside the tile's
+        own overflow-hidden box to hang over the top edge). This is the tile every colourful
+        listing in the app actually uses, unlike TaskCard, which only the alternate "List" view
+        style renders — so this is the one that has to carry it. */}
+    {decorationsEnabled ? (
+      pinned ? (
+        // A shaded sphere rather than a flat glyph — see taskPinStyle for why: this is meant to
+        // read as an object sitting on the note, not as a picture of one. Coloured to match the
+        // note's own colour, the same `colors.solid` its picker swatch uses.
+        <span
+          aria-hidden
+          className="pointer-events-none absolute -top-2.5 left-1/2 z-10 h-5 w-5 -translate-x-1/2 rounded-full"
+          style={taskPinStyle(colors.solid)}
+        />
+      ) : (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute -top-[11px] left-1/2 z-10 h-6 w-[72px] -translate-x-1/2 -rotate-2 rounded-[1px]"
+          style={TASK_TAPE_STYLE}
+        />
+      )
+    ) : null}
     <div
       role="button"
       tabIndex={0}
@@ -159,7 +188,10 @@ export function AllTaskTile({ taskId, scope, category, folderLabel, onOpen }: Al
       }}
       className={cn(
         // Fills the grid cell rather than setting its own height — the canvas owns the size.
-        'anim-item-in group flex h-full min-h-0 w-full flex-col overflow-hidden rounded-2xl p-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/40 sm:p-3.5',
+        'anim-item-in group relative flex h-full min-h-0 w-full flex-col overflow-hidden rounded-2xl border border-black/5 p-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/40 sm:p-3.5',
+        // The same two-part "resting on a surface" shadow as TaskCard's colourful mode — a tight
+        // dark edge where the sheet actually touches, a soft wide one from it lifting above that.
+        'shadow-[0_1px_2px_rgba(0,0,0,0.16),0_2px_1px_rgba(0,0,0,0.08),0_16px_28px_-10px_rgba(0,0,0,0.4)]',
       )}
       style={{ background: colors.card }}
     >

@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import type { TaskColor, TaskPaletteColor } from '../types'
 import { categoryVar, type FolderCategory } from './folderColor'
 
@@ -206,4 +207,50 @@ export function randomTaskColor(avoid: TaskColor | null = null): string {
     RANDOM_SATURATION.min + Math.random() * RANDOM_SATURATION.span,
     RANDOM_LIGHTNESS.min + Math.random() * RANDOM_LIGHTNESS.span,
   )
+}
+
+/**
+ * The strip of cellotape a colourful card wears at the top edge — see TaskCard and AllTaskTile,
+ * the two places a card is ever actually shown as a coloured sticky note.
+ *
+ * One shared constant rather than the same object written twice, since a card looking like tape
+ * and a card looking like a translucent grey smear is a difference of one number, and the two
+ * places it is used should never drift apart on that number by accident.
+ *
+ * Real tape is closer to a material than a colour: mostly see-through, with a diagonal streak
+ * where the light catches its glossy surface. A flat translucent white (the first version of
+ * this) was legible but read as a plain smear — the gradient's brighter middle band is what turns
+ * that into a sheen, and the thin light border is what keeps the tape's own edges visible even
+ * where it happens to be sitting over something equally pale.
+ */
+export const TASK_TAPE_STYLE: CSSProperties = {
+  background:
+    'linear-gradient(115deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0.4) 38%, rgba(255,255,255,0.16) 52%, rgba(255,255,255,0.24) 100%)',
+  border: '1px solid rgba(255,255,255,0.35)',
+  boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
+}
+
+/**
+ * The round head of a real pushpin — the part you actually see once one is pressed in, which is
+ * why this stops there rather than drawing a needle underneath it too. A flat icon (the first
+ * version of this, Lucide's own Pin glyph filled solid) read as a picture of a pin; a sphere lit
+ * from one corner reads as an object, which is the difference this exists to make.
+ *
+ * Three things do that work. The radial gradient is a bright glint near the top-left fading
+ * through the pin's own colour to a darkened edge — the same trick a favicon or an app-icon dot
+ * uses to look like a bead rather than a flat circle. The inset shadow along the bottom is what
+ * curls that edge under, the way the far side of a real dome falls into its own shade. And the
+ * drop shadow outside it is cast on the note underneath, which is what tells you the pin is
+ * *sitting on* the paper rather than printed on it.
+ *
+ * A function of the note's own colour, not one fixed shade: a card is drawn in `colors.solid` —
+ * the saturated form of whichever colour the note is set to, the same value its picker swatch
+ * uses — so a pin on a green note is a green pin and one on a pink note is a pink one, matching
+ * the card it is stuck to rather than standing out from every single one in the same purple.
+ */
+export function taskPinStyle(solid: string): CSSProperties {
+  return {
+    background: `radial-gradient(circle at 32% 28%, color-mix(in oklab, ${solid} 45%, white) 0%, ${solid} 55%, color-mix(in oklab, ${solid} 65%, black) 100%)`,
+    boxShadow: '0 3px 4px rgba(0, 0, 0, 0.4), inset 0 -2px 3px rgba(0, 0, 0, 0.3)',
+  }
 }

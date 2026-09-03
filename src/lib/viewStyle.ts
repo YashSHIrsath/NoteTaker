@@ -4,6 +4,28 @@ export function readViewStyle(metadata: Record<string, unknown> | undefined): Vi
   return metadata?.view_style === 'clipboard' ? 'clipboard' : 'professional'
 }
 
+/**
+ * Whether a colourful card wears its tape or pin. Only meaningful for cards that show colour at
+ * all — a plain professional-style card never had either — but stored on its own rather than as
+ * part of `ViewStyle` itself, since "does clipboard mean colour" and "does colour mean tape" are
+ * two different questions someone might answer differently.
+ *
+ * Personal rather than shared with a space, unlike `ViewStyle` above: a flourish that changes
+ * nothing about what a note says or how it's arranged doesn't need to be agreed on the way a
+ * layout choice does. Defaults to on, so this reads as a way to turn the look off rather than as
+ * a feature someone has to discover and opt into.
+ */
+export function readTaskDecorations(metadata: Record<string, unknown> | undefined): boolean {
+  // Stored as the string 'false' (account metadata is a flat string map — see
+  // AuthContext.updateProfile), so this checks against that rather than the boolean itself.
+  return metadata?.task_decorations !== 'false'
+}
+
+/** What updateProfile actually writes for the toggle above. */
+export function taskDecorationsUpdate(enabled: boolean): Record<string, string> {
+  return { task_decorations: String(enabled) }
+}
+
 /** How many note tiles sit in a row: a fixed count, or "auto" to let the width decide. */
 export type TilesPerRow = 'auto' | number
 

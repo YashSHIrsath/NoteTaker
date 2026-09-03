@@ -1,8 +1,10 @@
 import { useLayoutEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import { FileText, Pin } from 'lucide-react'
 import type { Attachment, TaskListScope } from '../../types'
+import { useAuth } from '../../hooks/useAuth'
 import { cn } from '../../lib/cn'
 import { formatDueDate } from '../../lib/dueDate'
+import { readTaskDecorations } from '../../lib/viewStyle'
 import { taskLifecycle, lifecycleStyle } from '../../lib/taskLifecycle'
 import { nextReminderAt, scheduledReminders } from '../../lib/reminders'
 import { sendLabel } from '../../lib/countdown'
@@ -10,7 +12,7 @@ import { useServerNow } from '../../hooks/useServerNow'
 import { useFolders } from '../../hooks/useFolders'
 import { useTaskCompletion } from '../../hooks/useTaskCompletion'
 import type { FolderCategory } from '../../lib/folderColor'
-import { taskColorStyle } from '../../lib/taskColor'
+import { TASK_TAPE_STYLE, taskColorStyle, taskPinStyle } from '../../lib/taskColor'
 import { isPinnedIn } from '../../lib/taskGrid'
 import { findBlockAttachmentId, referencedAttachmentIds } from '../../lib/blockNoteContent'
 import { AttachmentPreviewDialog } from '../attachment/AttachmentPreviewDialog'
@@ -79,6 +81,7 @@ export function TaskCard({
    * then. Letting the palette win here would mean an overdue task could be mint green, at which
    * point the colour stops carrying any information at all.
    */
+  const { user } = useAuth()
   const statusColors = lifecycleStyle(lifecycle)
   const colors = statusColors ?? taskColorStyle(task?.color ?? null, category)
   const pinned = task ? isPinnedIn(task, scope) : false
@@ -88,6 +91,10 @@ export function TaskCard({
   // so the button and the pin icon still reflect it, but the card paints its state.
   const pinnedAccent = pinned && statusColors === null
   const showColor = statusColors !== null || (colorful && !pinned)
+  // A personal preference, not a space one — see readTaskDecorations. Combined with showColor at
+  // the one place either is used, so a card that isn't colourful in the first place doesn't need
+  // to ask this question at all.
+  const showDecor = showColor && readTaskDecorations(user?.user_metadata as Record<string, unknown> | undefined)
   // Deleting an attachment's block from the text doesn't delete the underlying attachment
   // record, so this bar only lists ones still actually referenced somewhere in the document.
   const referencedIds = task ? referencedAttachmentIds(task.content) : new Set<string>()
@@ -147,10 +154,33 @@ export function TaskCard({
   return (
     <div
       // A card that arrives — created, or re-mounted into another section/column by pinning —
-      // fades up into place instead of appearing from nowhere.
-      className="anim-item-in h-full rounded-2xl"
+      // fades up into place instead of appearing from nowhere. `relative` is for the tape below:
+      // it has to hang out over the card's own top edge, which means it cannot be a child of the
+      // card's own box — that box clips to its rounded corners (`overflow-hidden`, right below),
+      // and a clipped strip of tape looks cut off rather than stuck on.
+      className="anim-item-in relative h-full rounded-2xl"
       data-task-id={taskId}
     >
+      {showDecor ? (
+        pinned ? (
+          // A real pin instead of tape for a note that is actually pinned — see taskPinStyle for
+          // why this is a shaded sphere rather than the flat Pin glyph used as a small status
+          // mark elsewhere on this same card: a glyph reads as a picture of a pin, and the whole
+          // point here is for it to read as an object sitting on the note. Coloured to match the
+          // note's own colour, the same `colors.solid` its picker swatch uses.
+          <span
+            aria-hidden
+            className="pointer-events-none absolute -top-2.5 left-1/2 z-10 h-5 w-5 -translate-x-1/2 rounded-full"
+            style={taskPinStyle(colors.solid)}
+          />
+        ) : (
+          <span
+            aria-hidden
+            className="pointer-events-none absolute -top-[11px] left-1/2 z-10 h-6 w-[72px] -translate-x-1/2 -rotate-2 rounded-[1px]"
+            style={TASK_TAPE_STYLE}
+          />
+        )
+      ) : null}
       <div
         className={cn(
           // Fills the grid cell rather than setting its own height: the canvas owns the size now,
@@ -159,7 +189,12 @@ export function TaskCard({
           pinnedAccent
             ? 'border-[var(--color-accent)]/70 bg-[var(--color-accent-soft-hover)] shadow-[0_0_0_1px_rgba(139,133,240,0.14),0_16px_30px_rgba(0,0,0,0.14)] hover:shadow-[0_0_0_1px_rgba(139,133,240,0.18),0_20px_34px_rgba(0,0,0,0.18)]'
             : showColor
-              ? 'border-white/10 shadow-[0_12px_28px_rgba(0,0,0,0.18)] hover:shadow-[0_16px_32px_rgba(0,0,0,0.2)]'
+              ? // A paper note lying flat has a shadow with two parts: a tight, dark one where an
+                // edge actually touches the surface, and a soft, wide one cast by the sheet lifting
+                // above it. One blurred shadow (this card's previous entire look) reads as a rounded
+                // rectangle floating in space; this is what makes it read as a sheet resting on
+                // something, tape and all.
+                'border-black/5 shadow-[0_1px_2px_rgba(0,0,0,0.16),0_2px_1px_rgba(0,0,0,0.08),0_20px_36px_-12px_rgba(0,0,0,0.38)] hover:shadow-[0_1px_2px_rgba(0,0,0,0.18),0_2px_1px_rgba(0,0,0,0.1),0_26px_42px_-12px_rgba(0,0,0,0.42)]'
               : 'border-[var(--color-border-strong)]/80 bg-[var(--color-surface-raised)] shadow-[0_0_0_1px_rgba(82,88,100,0.08),0_12px_26px_rgba(0,0,0,0.12)] hover:shadow-[0_0_0_1px_rgba(82,88,100,0.12),0_16px_30px_rgba(0,0,0,0.16)]',
         )}
         style={showColor ? { background: colors.card } : undefined}

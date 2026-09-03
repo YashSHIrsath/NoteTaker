@@ -244,9 +244,9 @@ const COLUMN_DIVISORS = [1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 24, 30, 40, 60, 12
 
 /** Height of one grid row, in px, and the gap between cells. */
 export const GRID_ROW_HEIGHT = 28
-export const GRID_MARGIN: [number, number] = [12, 12]
+export const GRID_MARGIN: [number, number] = [16, 16]
 
-/** Roughly the height the old fixed-size cards had: 7 rows plus their gaps ≈ 268px. */
+/** Roughly the height the old fixed-size cards had: 7 rows plus their gaps ≈ 292px. */
 export const DEFAULT_H = 7
 /** Below this a card shows a title and nothing else, which is not worth a cell. */
 export const MIN_H = 4

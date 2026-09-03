@@ -31,6 +31,7 @@ import { toAuthErrorMessage } from '../lib/authErrors'
 import { cn } from '../lib/cn'
 import {
   MIN_TILES_PER_ROW,
+  readTaskDecorations,
   readTilesPerRow,
   type TilesPerRow,
   type ViewStyle,
@@ -253,6 +254,7 @@ export function ProfilePage() {
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
   const [viewStyleSaving, setViewStyleSaving] = useState(false)
+  const [decorSaving, setDecorSaving] = useState(false)
   const [tilesSaving, setTilesSaving] = useState(false)
   // The space you are in, if you are in one. On a wide screen the sidebar footer carries this; below
   // `lg` there is no sidebar, so without it a phone had no way to reach a space's picture, its note,
@@ -270,6 +272,7 @@ export function ProfilePage() {
   // for everybody. Tiles per row below stays personal — it is a function of the screen in front of
   // you, which is why it is already stored per screen size.
   const { viewStyle } = useDisplaySettings()
+  const decorationsEnabled = readTaskDecorations(user?.user_metadata as Record<string, unknown> | undefined)
   const display = useDisplaySettingsWriter()
   // Everything on this card is about the screen you are reading it on. The band decides both
   // which stored choice is shown and which one a press writes, so opening this page on a phone
@@ -346,6 +349,17 @@ export function ProfilePage() {
       setError(toAuthErrorMessage(cause))
     } finally {
       setViewStyleSaving(false)
+    }
+  }
+
+  const handleDecorationsChange = async (next: boolean) => {
+    setDecorSaving(true)
+    try {
+      await updateProfile({ taskDecorations: next })
+    } catch (cause) {
+      setError(toAuthErrorMessage(cause))
+    } finally {
+      setDecorSaving(false)
     }
   }
 
@@ -811,6 +825,39 @@ export function ProfilePage() {
                 </button>
               )
             })}
+          </div>
+
+          <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl border border-[var(--color-border)] px-3.5 py-3">
+            <span className="min-w-0">
+              <span className="block text-[13.5px] font-medium text-[var(--color-text)]">
+                Tape &amp; pins
+              </span>
+              <span className="mt-0.5 block text-[12px] leading-relaxed text-[var(--color-text-muted)]">
+                The cellotape and pin shown on a colourful card.
+              </span>
+            </span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={decorationsEnabled}
+              aria-label="Tape and pins"
+              disabled={decorSaving}
+              onClick={() => void handleDecorationsChange(!decorationsEnabled)}
+              className={cn(
+                'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors duration-200',
+                'disabled:opacity-60',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]/25',
+                decorationsEnabled ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-border-strong)]',
+              )}
+            >
+              <span
+                aria-hidden
+                className={cn(
+                  'inline-block h-[18px] w-[18px] transform rounded-full bg-white shadow-[var(--shadow-sm)] transition-transform duration-200',
+                  decorationsEnabled ? 'translate-x-[23px]' : 'translate-x-[3px]',
+                )}
+              />
+            </button>
           </div>
         </Card>
 

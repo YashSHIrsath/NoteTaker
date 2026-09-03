@@ -11,7 +11,13 @@ import {
 import type { Session, User } from '@supabase/supabase-js'
 import { getAuthEmailRedirectTo } from '../lib/authRedirect'
 import { getSupabaseClient } from '../lib/supabase'
-import { tilesPerRowUpdate, type TileBandId, type TilesPerRow, type ViewStyle } from '../lib/viewStyle'
+import {
+  taskDecorationsUpdate,
+  tilesPerRowUpdate,
+  type TileBandId,
+  type TilesPerRow,
+  type ViewStyle,
+} from '../lib/viewStyle'
 import { fontUpdate, SIGNUP_FONT_DEFAULTS, type FontRole } from '../lib/fonts'
 import { typeMetricUpdate, typeResetUpdate, type TypeMetric } from '../lib/typeScale'
 import { defaultPageUpdate, navOrderUpdate, type NavId } from '../lib/navOrder'
@@ -24,6 +30,8 @@ export interface ProfileUpdate {
   timezone?: string
   /** Whether the Notes/Important pages render as classic list cards or as colorful tiles. */
   viewStyle?: ViewStyle
+  /** Whether a colourful card wears its tape or pin — see lib/viewStyle.readTaskDecorations. */
+  taskDecorations?: boolean
   /**
    * Tiles per row in the note grids, or 'auto' to let the available width decide — recorded
    * against one screen size, not the account as a whole. `tilesPerRowBand` says which.
@@ -240,6 +248,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     if (update.viewStyle !== undefined) {
       data.view_style = update.viewStyle
+    }
+    if (update.taskDecorations !== undefined) {
+      Object.assign(data, taskDecorationsUpdate(update.taskDecorations))
     }
     if (update.font !== undefined) {
       Object.assign(data, fontUpdate(update.font.role, update.font.id))
