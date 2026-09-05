@@ -19,12 +19,17 @@ export const ACCEPTED_DOCUMENT_ACCEPT = [
   '.xls',
   '.xlsx',
   '.csv',
+  '.md',
+  '.markdown',
+  '.txt',
   'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'application/vnd.ms-excel',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'text/csv',
   'application/csv',
+  'text/markdown',
+  'text/plain',
 ].join(',')
 
 const DOCUMENT_MIME_TO_TYPE: Record<string, AttachmentType> = {
@@ -36,6 +41,9 @@ const DOCUMENT_MIME_TO_TYPE: Record<string, AttachmentType> = {
   'text/csv': 'csv',
   'application/csv': 'csv',
   'text/comma-separated-values': 'csv',
+  'text/markdown': 'md',
+  'text/x-markdown': 'md',
+  'text/plain': 'txt',
 }
 
 export function isAcceptedImageFile(file: File): boolean {
@@ -52,25 +60,32 @@ export function isAcceptedPdfFile(file: File): boolean {
   return /\.pdf$/i.test(file.name)
 }
 
-export function detectDocumentType(file: File): Extract<AttachmentType, 'doc' | 'docx' | 'xls' | 'xlsx' | 'csv'> | null {
+type DetectedDocumentType = Extract<AttachmentType, 'doc' | 'docx' | 'xls' | 'xlsx' | 'csv' | 'md' | 'txt'>
+
+const DETECTED_DOCUMENT_TYPES: readonly DetectedDocumentType[] = ['doc', 'docx', 'xls', 'xlsx', 'csv', 'md', 'txt']
+
+function isDetectedDocumentType(value: string): value is DetectedDocumentType {
+  return (DETECTED_DOCUMENT_TYPES as readonly string[]).includes(value)
+}
+
+export function detectDocumentType(file: File): DetectedDocumentType | null {
   const mime = file.type.toLowerCase()
   if (mime && DOCUMENT_MIME_TO_TYPE[mime]) {
     const detected = DOCUMENT_MIME_TO_TYPE[mime]
-    if (detected === 'doc' || detected === 'docx' || detected === 'xls' || detected === 'xlsx' || detected === 'csv') {
+    if (isDetectedDocumentType(detected)) {
       return detected
     }
   }
 
-  const match = file.name.match(/\.(docx?|xlsx?|csv)$/i)
+  const match = file.name.match(/\.(docx?|xlsx?|csv|md|markdown|txt)$/i)
   if (!match) {
     return null
   }
 
   const extension = match[1].toLowerCase()
-  if (extension === 'doc' || extension === 'docx' || extension === 'xls' || extension === 'xlsx' || extension === 'csv') {
-    return extension
-  }
-  return null
+  // "markdown" is its own extension but not its own AttachmentType — it previews the same as .md.
+  const normalized = extension === 'markdown' ? 'md' : extension
+  return isDetectedDocumentType(normalized) ? normalized : null
 }
 
 export function isAcceptedDocumentFile(file: File): boolean {
@@ -93,6 +108,12 @@ export function defaultMimeForType(type: AttachmentType): string {
       return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     case 'csv':
       return 'text/csv'
+    case 'md':
+      return 'text/markdown'
+    case 'txt':
+      return 'text/plain'
+    case 'file':
+      return 'application/octet-stream'
   }
 }
 

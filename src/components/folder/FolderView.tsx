@@ -378,15 +378,23 @@ export function FolderView({
 
       {effectiveViewMode === 'list' ? (
         <>
-          <FolderSidePanel
-            folders={childFolders}
-            currentFolderId={folder.id}
-            forest={forest}
-            locationPathIds={locationPathIds}
-            onSelectFolder={openChildFolder}
-            onCreateFolder={() => setFolderDialogOpen(true)}
-            className={cn('hidden lg:flex', ISLAND_CLASS, !foldersPanelOpen && 'lg:hidden')}
-          />
+          {/* `anim-collapse-x` (index.css) is `.anim-collapse` turned sideways — a single-column
+              grid interpolating 0fr -> 1fr, the one way to slide open/shut to a width nobody has
+              measured (240px here, but the technique doesn't care). A plain `hidden`/`flex` swap
+              can't transition at all: `display` has no interpolated states, so the panel used to
+              just vanish and reappear. `hidden lg:grid` keeps this out of the layout below `lg`,
+              where the sheet variant is used instead. */}
+          <div className="hidden shrink-0 anim-collapse-x lg:grid" data-open={foldersPanelOpen}>
+            <FolderSidePanel
+              folders={childFolders}
+              currentFolderId={folder.id}
+              forest={forest}
+              locationPathIds={locationPathIds}
+              onSelectFolder={openChildFolder}
+              onCreateFolder={() => setFolderDialogOpen(true)}
+              className={ISLAND_CLASS}
+            />
+          </div>
 
           {/* Below lg the subfolders arrive as a sheet that rises out of the bottom bar, not as a
               panel hanging off the icon that opened it: the icon sits in a header that floats over
@@ -446,16 +454,17 @@ export function FolderView({
             />
           </div>
 
-          {!foldersPanelOpen ? (
-            // With the panel closed its island shrinks to the rail that brings it back, rather
-            // than disappearing into the notes island — so the way back is still a surface you
-            // can see, and reopening it doesn't change how many islands are on screen.
-            <div className={cn('hidden h-full shrink-0 flex-col items-center px-1.5 py-3 lg:flex', ISLAND_CLASS)}>
+          {/* With the panel closed its island shrinks to this rail that brings it back, rather
+              than disappearing into the notes island — so the way back is still a surface you can
+              see, and reopening it doesn't change how many islands are on screen. Always mounted,
+              like the panel above, so sliding in is animated too and not just sliding out. */}
+          <div className="hidden shrink-0 anim-collapse-x lg:grid" data-open={!foldersPanelOpen}>
+            <div className={cn('flex h-full flex-col items-center px-1.5 py-3', ISLAND_CLASS)}>
               <IconButton label="Show folders" onClick={() => setFoldersPanelOpen(true)}>
                 <Folder className="h-4 w-4" />
               </IconButton>
             </div>
-          ) : null}
+          </div>
         </>
       ) : null}
 

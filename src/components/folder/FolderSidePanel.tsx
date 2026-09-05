@@ -108,10 +108,26 @@ export function FolderSidePanel({
         </div>
       </div>
 
+      {/*
+        * Height is an explicit two-row grid track, not a flex `h-[40%]` swap, so this can
+        * transition between "just the button" and "up to 40% of the panel" without ever needing
+        * to know the button's own height as a number: `auto` sizes that row to whatever it needs
+        * in both states, and only the second row's fraction (0fr closed, 1fr open) has to move.
+        * Same reasoning as `.anim-collapse` in index.css, just with a fixed header row that a
+        * single collapsing track doesn't have room for — so it's inlined here instead of forcing
+        * a two-row shape onto a utility built for one-row content.
+        *
+        * The tree stays mounted (rather than conditionally rendered) at every state: it's a plain,
+        * non-interactive display (`interactive={false}`), so there's nothing to clean up by
+        * unmounting it, and it means the collapse is pure CSS with no mount/unmount timing to get
+        * right.
+        */}
       <div
         className={cn(
-          'shrink-0 border-t border-[var(--color-border)]',
-          locationOpen && 'flex h-[40%] max-h-[40%] min-h-0 flex-col',
+          'grid max-h-[40%] shrink-0 grid-rows-[auto_0fr] border-t border-[var(--color-border)]',
+          'transition-[grid-template-rows] duration-[var(--motion-slow)]',
+          '[transition-timing-function:var(--motion-ease)] motion-reduce:transition-none',
+          locationOpen && 'grid-rows-[auto_1fr]',
         )}
       >
         <button
@@ -132,8 +148,8 @@ export function FolderSidePanel({
           />
         </button>
 
-        {locationOpen ? (
-          <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+        <div className="min-h-0 overflow-hidden">
+          <div className="h-full overflow-y-auto px-2 pb-3">
             <FolderTree
               folders={forest}
               selectedId={currentFolderId}
@@ -142,7 +158,7 @@ export function FolderSidePanel({
               interactive={false}
             />
           </div>
-        ) : null}
+        </div>
       </div>
     </aside>
   )

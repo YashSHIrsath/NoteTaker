@@ -337,6 +337,19 @@
   }
 }
 
+/* Code blocks paint a solid dark background over their own box, padding included
+   (`.bn-block-content[data-content-type="codeBlock"]` in BlockNote's bundled CSS) — unlike plain
+   text, where that padding is invisible whitespace. Two stacked code blocks each contribute that
+   painted padding as their "gap", so the combined space between them is dark, not the page
+   background, and they read as one fused block. Headings get real separation from BlockNote itself
+   (`padding-top: 18px`), but nothing plays the equivalent role for code blocks — this is that rule.
+   Margin, not padding, because padding would just make the dark box taller; margin is real
+   (transparent) space. `.bn-block-content` is a flex item of its parent `.bn-block`, so this margin
+   can't collapse away the way a block-level margin might. */
+.task-blocknote .bn-block-content[data-content-type='codeBlock'] {
+  margin-block: 6px;
+}
+
 /* ------------------------------------------------------- interactive previews
 
    A card's note preview is inert as a whole — its wrapper carries `pointer-events: none` so a

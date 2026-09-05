@@ -18,7 +18,7 @@ import { taskLifecycle } from '../../lib/taskLifecycle'
 import { scheduledReminders } from '../../lib/reminders'
 import { useServerNow } from '../../hooks/useServerNow'
 import { useBlockHandles, useCollapseImages } from '../../hooks/useBlockHandles'
-import { isEmptyDocument } from '../../lib/blockNoteContent'
+import { isEmptyDocument, referencedAttachmentIds } from '../../lib/blockNoteContent'
 
 export interface TaskEditorProps {
   task: Task
@@ -82,12 +82,15 @@ export function TaskEditor({
   const now = useServerNow(isTracked && !task.completed)
   const lifecycle = taskLifecycle(task, now)
   const reminderCount = scheduledReminders(getRemindersForTask(task.id)).length
-  // Every file attached to the note. Not filtered by what the text still references: documents
-  // aren't inserted into the text any more (they live here), so that filter would hide the very
-  // files this bar exists for.
-  const attachments = getAttachmentsForTask(task.id).sort(
-    (a, b) => attachmentSortRank(a) - attachmentSortRank(b),
-  )
+  // Deleting an attachment's block from the text doesn't delete the underlying attachment
+  // record, so this bar only lists ones still actually referenced somewhere in the document —
+  // otherwise a removed file kept showing here forever, with no way to tell it had been removed
+  // from the note at all. Matches the same filter TaskCard/AllTaskTile already apply to this task's
+  // attachments; this was the one surface that had drifted from it.
+  const referencedIds = referencedAttachmentIds(task.content)
+  const attachments = getAttachmentsForTask(task.id)
+    .filter((attachment) => referencedIds.has(attachment.id))
+    .sort((a, b) => attachmentSortRank(a) - attachmentSortRank(b))
   const hasImage = attachments.some((attachment) => attachment.isImage)
 
   /**

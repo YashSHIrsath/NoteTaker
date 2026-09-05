@@ -1371,6 +1371,33 @@ body.dnd-touch-active {
   pointer-events: none;
 }
 
+/* The same trick as .anim-collapse, turned sideways — for a panel that slides open/shut rather
+ * than growing/shrinking, e.g. the folder view's subfolder panel collapsing into its rail. The
+ * column, not the row, is what interpolates 0fr -> 1fr; everything else is identical, including
+ * why it has to be a grid track rather than a guessed width. */
+.anim-collapse-x {
+  display: grid;
+  grid-template-columns: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-columns var(--motion-slow) var(--motion-ease),
+    opacity var(--motion-base) var(--motion-ease);
+}
+
+.anim-collapse-x > * {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.anim-collapse-x[data-open='true'] {
+  grid-template-columns: 1fr;
+  opacity: 1;
+}
+
+.anim-collapse-x:not([data-open='true']) {
+  pointer-events: none;
+}
+
 /* A number field without the browser's spinner arrows.
  *
  * The arrows are two 8px hit targets stacked inside a control that already sits in a tight row of
@@ -1501,7 +1528,8 @@ body.dnd-touch-active {
   }
 
   /* Still opens and closes — it just gets there in one frame. */
-  .anim-collapse {
+  .anim-collapse,
+  .anim-collapse-x {
     transition: none;
   }
 }

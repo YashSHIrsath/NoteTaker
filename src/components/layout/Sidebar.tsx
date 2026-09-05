@@ -185,7 +185,7 @@ export function Sidebar({
         ) : null}
       </div>
 
-      <nav className={cn('flex flex-1 flex-col overflow-y-auto', ISLAND_GAP)} aria-label="Main">
+      <nav className={cn('flex flex-1 flex-col overflow-y-auto no-scrollbar', ISLAND_GAP)} aria-label="Main">
         {/*
           * Drawn in the account's order, the same list the bottom bar and the page transitions
           * read. It was a third hardcoded order before this — Tree, Notes, Tasks, Starred — which

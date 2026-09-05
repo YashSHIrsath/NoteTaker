@@ -10,7 +10,7 @@ import { cn } from '../../lib/cn'
 import { useFolders } from '../../hooks/useFolders'
 import { useTheme } from '../../hooks/useTheme'
 import { attachmentIdFromUrl, attachmentUrlFor, buildInitialBlocks } from '../../lib/blockNoteContent'
-import { detectDocumentType, isAcceptedImageFile, isAcceptedPdfFile } from '../../services/attachments'
+import { isAcceptedImageFile, isAcceptedPdfFile } from '../../services/attachments'
 import { AttachmentPreviewDialog } from '../attachment/AttachmentPreviewDialog'
 import { TaskBlockSideMenu } from './TaskBlockSideMenu'
 
@@ -86,10 +86,10 @@ export function TaskBlockNoteEditor({
             attachment = await addImageAttachment(taskId, file)
           } else if (isAcceptedPdfFile(file)) {
             attachment = await addPdfAttachment(taskId, file)
-          } else if (detectDocumentType(file)) {
-            attachment = await addDocumentAttachment(taskId, file)
           } else {
-            throw new Error(`"${file.name}" is not an accepted image, PDF, or document type.`)
+            // Anything else — a recognized office/text format (doc/docx/xls/xlsx/csv/md/txt) or
+            // not — still attaches; see classifyAttachmentFile for the 'file' catch-all.
+            attachment = await addDocumentAttachment(taskId, file)
           }
           if (!attachment) {
             throw new Error(`Upload of "${file.name}" did not return an attachment.`)
@@ -350,12 +350,21 @@ export function TaskBlockNoteEditor({
       <div ref={editorWrapperRef} className="relative" onClick={handleContentClick}>
         {/* sideMenu={false} disables BlockNote's *default* side menu; TaskBlockSideMenu renders the
             same one with the block-move control matched to the input device — and only when the
-            gutter controls are switched on. Everything else (the "/" menu included) is untouched. */}
+            gutter controls are switched on. Everything else (the "/" menu included) is untouched.
+
+            emojiPicker={false} turns off BlockNote's colon-triggered emoji grid. Its trigger is a
+            literal ":" — so typing a time like "10:45" opened it (searching emoji-mart for "45"
+            surfaces a couple of clock-face emoji, which is what looked like a "time suggestion").
+            Worse, its Enter handler captures the keydown on the editor DOM before ProseMirror's own
+            keymap sees it, unconditionally preventing default — with zero matches Enter did nothing
+            at all, which is the "stuck, can't get to the next line" symptom. Nothing in this app
+            relies on typing ":" to insert an emoji, so it's switched off rather than special-cased. */}
         <BlockNoteView
           editor={editor}
           editable={!readOnly}
           theme={isDark ? 'dark' : 'light'}
           sideMenu={false}
+          emojiPicker={false}
         >
           {handlesMounted && !readOnly ? <TaskBlockSideMenu /> : null}
         </BlockNoteView>

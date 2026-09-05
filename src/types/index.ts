@@ -338,7 +338,12 @@ export interface Subtask {
   completed: boolean
 }
 
-export type AttachmentType = 'image' | 'pdf' | 'doc' | 'docx' | 'xls' | 'xlsx' | 'csv'
+/**
+ * `'file'` is the catch-all: anything that isn't an image, PDF, or one of the specifically
+ * previewed document formats still uploads and attaches — just as a name+icon chip with no
+ * content preview, rather than being rejected outright. See classifyAttachmentFile.
+ */
+export type AttachmentType = 'image' | 'pdf' | 'doc' | 'docx' | 'xls' | 'xlsx' | 'csv' | 'md' | 'txt' | 'file'
 
 /**
  * File attached to a Task. Not a folder or subtask.

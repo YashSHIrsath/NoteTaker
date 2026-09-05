@@ -4,6 +4,7 @@ import { Download, X } from 'lucide-react'
 import type { Attachment } from '../../types'
 import { cn } from '../../lib/cn'
 import { useDialogFocus } from '../../hooks/useDialogFocus'
+import { useResizablePanel } from '../../hooks/useResizablePanel'
 import { IconButton } from '../ui/IconButton'
 import { Spinner } from '../ui/Spinner'
 import { useFolders } from '../../hooks/useFolders'
@@ -13,11 +14,22 @@ import { PdfPreview } from './PdfPreview'
 import { DocumentPreview } from './DocumentPreview'
 import { CsvPreview } from './CsvPreview'
 import { ExcelPreview } from './ExcelPreview'
+import { TextPreview } from './TextPreview'
+import { MarkdownPreview } from './MarkdownPreview'
+import { UnsupportedPreview } from './UnsupportedPreview'
 
 export interface AttachmentPreviewDialogProps {
   attachment: Attachment | null
   onClose: () => void
 }
+
+const SIZE_KEY = 'mynotes-attachment-dialog-size'
+
+/** Same floor as TaskEditorDialog's panel — small enough to still show a PDF page or a
+ *  spreadsheet's columns, not so small the header (name + download + close) has nowhere to go. */
+const MIN_WIDTH = 420
+const MIN_HEIGHT = 320
+const VIEWPORT_MARGIN = 32
 
 function AttachmentPreviewBody({ attachment }: { attachment: Attachment }) {
   if (attachment.isImage) {
@@ -32,6 +44,15 @@ function AttachmentPreviewBody({ attachment }: { attachment: Attachment }) {
   if (attachment.type === 'xls' || attachment.type === 'xlsx') {
     return <ExcelPreview attachment={attachment} />
   }
+  if (attachment.type === 'md') {
+    return <MarkdownPreview attachment={attachment} />
+  }
+  if (attachment.type === 'txt') {
+    return <TextPreview attachment={attachment} />
+  }
+  if (attachment.type === 'file') {
+    return <UnsupportedPreview attachment={attachment} />
+  }
   return <DocumentPreview attachment={attachment} />
 }
 
@@ -42,6 +63,16 @@ export function AttachmentPreviewDialog({ attachment, onClose }: AttachmentPrevi
   const open = attachment !== null
 
   useDialogFocus(open, panelRef)
+
+  // Same drag-to-resize the task popup has (see TaskEditorDialog) — a PDF, image or spreadsheet
+  // preview used to be stuck at a fixed size with no way to see more of it at once.
+  const { panelStyle, resizeHandles } = useResizablePanel({
+    panelRef,
+    storageKey: SIZE_KEY,
+    minWidth: MIN_WIDTH,
+    minHeight: MIN_HEIGHT,
+    viewportMargin: VIEWPORT_MARGIN,
+  })
 
   useEffect(() => {
     if (!open) {
@@ -85,6 +116,11 @@ export function AttachmentPreviewDialog({ attachment, onClose }: AttachmentPrevi
         aria-modal="true"
         aria-label={attachment.name}
         tabIndex={-1}
+        /*
+         * A dragged size, when there is one, beats every class below — see TaskEditorDialog and
+         * useResizablePanel for why this has to be inline rather than a class.
+         */
+        style={panelStyle}
         className={cn(
           'relative flex h-full w-full flex-col overflow-hidden border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-lg)] outline-none',
           'pt-[env(safe-area-inset-top)] sm:max-w-3xl sm:rounded-xl sm:pt-0',
@@ -100,12 +136,17 @@ export function AttachmentPreviewDialog({ attachment, onClose }: AttachmentPrevi
           // content: a PDF pushed the panel's own header and toolbar off the top of the screen,
           // and the viewer, measuring a scroll area with no bounded height, could never fit a
           // page to it. Phones never saw it because no `sm:` utility applied there.
+          //
+          // Both are still overridden by `panelStyle`'s inline height once the panel has been
+          // dragged to a size of its own — same rule as `sm:max-w-3xl` above.
           attachment.isImage ? 'sm:h-auto sm:max-h-[90vh]' : 'sm:h-[min(85vh,800px)]',
         )}
       >
         <div className="flex shrink-0 items-center justify-between gap-2 border-b border-[var(--color-border)] px-3 py-1.5">
           <span className="min-w-0 truncate text-sm font-medium text-[var(--color-text)]">{attachment.name}</span>
-          <div className="flex shrink-0 items-center gap-0.5">
+          {/* relative z-30: above the resize handles (z-20 — see useResizablePanel), whose `ne`
+              corner grip would otherwise sit on top of Close and win hit-testing there. */}
+          <div className="relative z-30 flex shrink-0 items-center gap-0.5">
             <IconButton
               label={saving ? `Saving ${attachment.name}` : `Download ${attachment.name}`}
               onClick={() => void save()}
@@ -124,6 +165,10 @@ export function AttachmentPreviewDialog({ attachment, onClose }: AttachmentPrevi
         <div className={cn('relative min-h-0 flex-1', attachment.isPdf ? 'overflow-hidden' : 'overflow-auto')}>
           <AttachmentPreviewBody attachment={attachment} />
         </div>
+
+        {/* The grips, last so they paint over the preview's own edges — see TaskEditorDialog for
+            the fuller reasoning (same aria-hidden, same reason it isn't a tab stop). */}
+        {resizeHandles}
       </div>
     </div>,
     document.body,

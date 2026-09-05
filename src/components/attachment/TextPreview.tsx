@@ -1,18 +1,18 @@
 import { useEffect, useState } from 'react'
-import mammoth from 'mammoth'
 import { useFolders } from '../../hooks/useFolders'
 import type { Attachment } from '../../types'
 import { PreviewStatus } from './SpreadsheetTable'
 import { Spinner } from '../ui/Spinner'
-import { HtmlPreviewFrame } from './HtmlPreviewFrame'
 
-export interface DocumentPreviewProps {
+export interface TextPreviewProps {
   attachment: Attachment
 }
 
-export function DocumentPreview({ attachment }: DocumentPreviewProps) {
+/** Plain-text rendering for .txt attachments — monospace, as-written. Markdown gets its own
+ *  rendered preview instead (see MarkdownPreview); plain text has no syntax to render. */
+export function TextPreview({ attachment }: TextPreviewProps) {
   const { getAttachmentFile } = useFolders()
-  const [html, setHtml] = useState('')
+  const [text, setText] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -22,29 +22,21 @@ export function DocumentPreview({ attachment }: DocumentPreviewProps) {
         return
       }
       if (!file) {
-        setError('This document is no longer available.')
-        return
-      }
-
-      if (attachment.type === 'doc') {
-        setError(
-          'Legacy .doc files cannot be previewed reliably in the browser. Use Open to view or download the file.',
-        )
+        setError('This file is no longer available.')
         return
       }
 
       file
-        .arrayBuffer()
-        .then((buffer: ArrayBuffer) => mammoth.convertToHtml({ arrayBuffer: buffer }))
-        .then((result: { value: string }) => {
+        .text()
+        .then((value: string) => {
           if (!cancelled) {
-            setHtml(result.value)
+            setText(value)
             setError(null)
           }
         })
         .catch(() => {
           if (!cancelled) {
-            setError('This document could not be previewed. Use Open to view or download the file.')
+            setError('This file could not be previewed.')
           }
         })
     })
@@ -52,13 +44,13 @@ export function DocumentPreview({ attachment }: DocumentPreviewProps) {
     return () => {
       cancelled = true
     }
-  }, [attachment.id, attachment.type, getAttachmentFile])
+  }, [attachment.id, getAttachmentFile])
 
   if (error) {
     return <PreviewStatus>{error}</PreviewStatus>
   }
 
-  if (!html) {
+  if (text === null) {
     return (
       <PreviewStatus>
         <span className="inline-flex items-center gap-2">
@@ -69,5 +61,13 @@ export function DocumentPreview({ attachment }: DocumentPreviewProps) {
     )
   }
 
-  return <HtmlPreviewFrame title={attachment.name} html={html} />
+  if (text.trim() === '') {
+    return <PreviewStatus>This file is empty.</PreviewStatus>
+  }
+
+  return (
+    <pre className="h-full min-h-0 overflow-auto whitespace-pre-wrap break-words p-4 font-mono text-[13px] leading-relaxed text-[var(--color-text)]">
+      {text}
+    </pre>
+  )
 }

@@ -1,18 +1,21 @@
 import { useEffect, useState } from 'react'
-import mammoth from 'mammoth'
+import { marked } from 'marked'
 import { useFolders } from '../../hooks/useFolders'
 import type { Attachment } from '../../types'
 import { PreviewStatus } from './SpreadsheetTable'
 import { Spinner } from '../ui/Spinner'
 import { HtmlPreviewFrame } from './HtmlPreviewFrame'
 
-export interface DocumentPreviewProps {
+export interface MarkdownPreviewProps {
   attachment: Attachment
 }
 
-export function DocumentPreview({ attachment }: DocumentPreviewProps) {
+/** Rendered, not raw — headings, lists, links and tables read as themselves instead of as
+ *  literal `#`/`-`/`|` characters. Same iframe-based renderer as DocumentPreview's .docx
+ *  preview, just fed marked's HTML instead of mammoth's. */
+export function MarkdownPreview({ attachment }: MarkdownPreviewProps) {
   const { getAttachmentFile } = useFolders()
-  const [html, setHtml] = useState('')
+  const [html, setHtml] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -22,29 +25,22 @@ export function DocumentPreview({ attachment }: DocumentPreviewProps) {
         return
       }
       if (!file) {
-        setError('This document is no longer available.')
-        return
-      }
-
-      if (attachment.type === 'doc') {
-        setError(
-          'Legacy .doc files cannot be previewed reliably in the browser. Use Open to view or download the file.',
-        )
+        setError('This file is no longer available.')
         return
       }
 
       file
-        .arrayBuffer()
-        .then((buffer: ArrayBuffer) => mammoth.convertToHtml({ arrayBuffer: buffer }))
-        .then((result: { value: string }) => {
-          if (!cancelled) {
-            setHtml(result.value)
-            setError(null)
+        .text()
+        .then((markdown: string) => {
+          if (cancelled) {
+            return
           }
+          setHtml(marked.parse(markdown, { async: false }))
+          setError(null)
         })
         .catch(() => {
           if (!cancelled) {
-            setError('This document could not be previewed. Use Open to view or download the file.')
+            setError('This file could not be previewed.')
           }
         })
     })
@@ -52,13 +48,13 @@ export function DocumentPreview({ attachment }: DocumentPreviewProps) {
     return () => {
       cancelled = true
     }
-  }, [attachment.id, attachment.type, getAttachmentFile])
+  }, [attachment.id, getAttachmentFile])
 
   if (error) {
     return <PreviewStatus>{error}</PreviewStatus>
   }
 
-  if (!html) {
+  if (html === null) {
     return (
       <PreviewStatus>
         <span className="inline-flex items-center gap-2">

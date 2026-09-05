@@ -75,7 +75,7 @@ import {
 import { normalizeDraft } from '../lib/reminders'
 import { serverNowMs, syncServerClock } from '../lib/serverClock'
 import { persistUiState, normalizeUiState } from '../repositories/supabase/uiStateStore'
-import { detectDocumentType, isAcceptedImageFile, isAcceptedPdfFile } from '../services/attachments'
+import { isAcceptedImageFile, isAcceptedPdfFile } from '../services/attachments'
 import { NotesDeletionService } from '../services/deletion/notesDeletionService'
 import { ItemDndProvider } from './ItemDndContext'
 import { SortableProvider } from './SortableContext'
@@ -2140,7 +2140,11 @@ export function FolderProvider({ children }: { children: ReactNode }) {
 
   const addDocumentAttachment = useCallback(
     (taskId: string, file: File) => {
-      if (!detectDocumentType(file)) {
+      // The catch-all for anything that isn't an image or a PDF — a recognized office/text
+      // format gets its specific type and a real preview (see classifyAttachmentFile); anything
+      // else still attaches as a generic file. Only guards against being called with a file the
+      // other two wrappers should have handled instead.
+      if (isAcceptedImageFile(file) || isAcceptedPdfFile(file)) {
         return Promise.resolve(null)
       }
       return addPersistedAttachment(taskId, file)

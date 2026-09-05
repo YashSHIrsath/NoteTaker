@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { useFolders } from '../../hooks/useFolders'
 import { useDialogFocus } from '../../hooks/useDialogFocus'
 import { useDeleteTask } from '../../hooks/useDeleteTask'
-import { useMediaQuery } from '../../hooks/useMediaQuery'
+import { useResizablePanel } from '../../hooks/useResizablePanel'
 import { IconButton } from '../ui/IconButton'
 import { cn } from '../../lib/cn'
 import { PinButton } from '../common/PinButton'
@@ -56,82 +56,6 @@ const MIN_HEIGHT = 320
  */
 const VIEWPORT_MARGIN = 32
 
-interface PanelSize {
-  width: number
-  height: number
-}
-
-/**
- * Never bigger than the window currently allows, never smaller than usable.
- *
- * The upper bound is itself floored at the minimum, so a window narrower than MIN_WIDTH gives an
- * inverted range rather than a negative one — clamping to nonsense beats clamping to a negative
- * width, which is a runtime error in CSS terms.
- */
-function clampSize(size: PanelSize): PanelSize {
-  return {
-    width: Math.min(
-      Math.max(size.width, MIN_WIDTH),
-      Math.max(MIN_WIDTH, window.innerWidth - VIEWPORT_MARGIN),
-    ),
-    height: Math.min(
-      Math.max(size.height, MIN_HEIGHT),
-      Math.max(MIN_HEIGHT, window.innerHeight - VIEWPORT_MARGIN),
-    ),
-  }
-}
-
-/**
- * The size this device last dragged the dialog to, if it is still usable here.
- *
- * Remembered because the alternative is resizing it again for every note you open, which turns a
- * feature into a chore and then into one nobody uses. Per device rather than per account: how big
- * a window should be is a property of the screen in front of you, not of the notes in it.
- *
- * Clamped on the way in as well as on the way out — the size may have been written down on a
- * larger monitor than the one reading it back.
- */
-function readStoredSize(): PanelSize | null {
-  try {
-    const raw = window.localStorage.getItem(SIZE_KEY)
-    if (!raw) {
-      return null
-    }
-    const parsed: unknown = JSON.parse(raw)
-    if (typeof parsed !== 'object' || parsed === null) {
-      return null
-    }
-    const { width, height } = parsed as Partial<PanelSize>
-    if (!Number.isFinite(width) || !Number.isFinite(height)) {
-      return null
-    }
-    return clampSize({ width: width as number, height: height as number })
-  } catch {
-    // Unparseable, or unreadable at all — a browser set to block site data throws on the read.
-    // The CSS default is a perfectly good answer, so there is nothing here worth recovering.
-    return null
-  }
-}
-
-/**
- * The eight grips, and what each one does to the panel.
- *
- * `x` and `y` are the sign a pointer movement is applied with, which is the whole difference
- * between the edges: west and north run backwards, the four corners drive both axes at once, and
- * a zero means that axis is left alone. The edges are inset from the corners so the two never
- * overlap and the corner always wins where they meet.
- */
-const RESIZE_HANDLES = [
-  { edge: 'n', x: 0, y: -1, className: 'inset-x-4 top-0 h-1.5 cursor-ns-resize' },
-  { edge: 's', x: 0, y: 1, className: 'inset-x-4 bottom-0 h-1.5 cursor-ns-resize' },
-  { edge: 'w', x: -1, y: 0, className: 'inset-y-4 left-0 w-1.5 cursor-ew-resize' },
-  { edge: 'e', x: 1, y: 0, className: 'inset-y-4 right-0 w-1.5 cursor-ew-resize' },
-  { edge: 'nw', x: -1, y: -1, className: 'left-0 top-0 h-4 w-4 cursor-nwse-resize' },
-  { edge: 'ne', x: 1, y: -1, className: 'right-0 top-0 h-4 w-4 cursor-nesw-resize' },
-  { edge: 'sw', x: -1, y: 1, className: 'bottom-0 left-0 h-4 w-4 cursor-nesw-resize' },
-  { edge: 'se', x: 1, y: 1, className: 'bottom-0 right-0 h-4 w-4 cursor-nwse-resize' },
-] as const
-
 export function TaskEditorDialog({ taskId, onClose, scope = 'folder' }: TaskEditorDialogProps) {
   const { getTask, getFolder, getPath, toggleTaskImportant, toggleTaskPinned, saveStatus } = useFolders()
   const { requestTaskDelete, dialog: deleteDialog } = useDeleteTask()
@@ -153,44 +77,16 @@ export function TaskEditorDialog({ taskId, onClose, scope = 'folder' }: TaskEdit
    *
    * Below it the dialog is the whole screen — there is nothing to resize it relative to, and a
    * grip on every edge would be eight strips of screen that swallow a thumb aimed at the text.
-   * The handles are not merely hidden there, they are not mounted.
+   * The handles are not merely hidden there, they are not mounted. See useResizablePanel for the
+   * drag/clamp/remember mechanics, shared with AttachmentPreviewDialog.
    */
-  const resizable = useMediaQuery('(min-width: 640px)')
-  const [size, setSize] = useState<PanelSize | null>(readStoredSize)
-  /*
-   * The current size, readable from a handler that closed over an older one.
-   *
-   * `endResize` is registered once per render but runs at the end of a drag that has moved the
-   * size many times since — reading `size` there would write down whatever it was when the drag
-   * *started*, which is the one value nobody wants remembered.
-   */
-  const sizeRef = useRef(size)
-  const dragRef = useRef<
-    { x: number; y: number; startX: number; startY: number; width: number; height: number } | null
-  >(null)
-
-  useEffect(() => {
-    sizeRef.current = size
-  }, [size])
-
-  // A window dragged smaller has to take the panel with it. Without this a dialog sized on an
-  // external monitor comes back on the laptop wider than the screen it is centred in, with its
-  // close button off both edges.
-  useEffect(() => {
-    const onWindowResize = () => {
-      setSize((current) => {
-        if (!current) {
-          return current
-        }
-        const next = clampSize(current)
-        // Same object when nothing changed: this fires continuously while a window is dragged,
-        // and a new object every time would re-render the editor for each pixel.
-        return next.width === current.width && next.height === current.height ? current : next
-      })
-    }
-    window.addEventListener('resize', onWindowResize)
-    return () => window.removeEventListener('resize', onWindowResize)
-  }, [])
+  const { panelStyle, resizeHandles } = useResizablePanel({
+    panelRef,
+    storageKey: SIZE_KEY,
+    minWidth: MIN_WIDTH,
+    minHeight: MIN_HEIGHT,
+    viewportMargin: VIEWPORT_MARGIN,
+  })
 
   useEffect(
     () => () => {
@@ -208,70 +104,6 @@ export function TaskEditorDialog({ taskId, onClose, scope = 'folder' }: TaskEdit
     closingRef.current = true
     setClosing(true)
     closeTimerRef.current = window.setTimeout(onClose, EXIT_MS)
-  }
-
-  const beginResize = (
-    event: ReactPointerEvent<HTMLDivElement>,
-    handle: (typeof RESIZE_HANDLES)[number],
-  ) => {
-    const panel = panelRef.current
-    if (!panel) {
-      return
-    }
-    // Measured, not read from state. The first drag of all starts from whatever the CSS default
-    // worked out to on this screen, and there is no number for that until the panel is on it.
-    const rect = panel.getBoundingClientRect()
-    dragRef.current = {
-      x: handle.x,
-      y: handle.y,
-      startX: event.clientX,
-      startY: event.clientY,
-      width: rect.width,
-      height: rect.height,
-    }
-    // Capture, so a fast drag that outruns the 6px strip keeps resizing instead of stopping dead
-    // the moment the pointer leaves it.
-    event.currentTarget.setPointerCapture(event.pointerId)
-    // Stops the drag turning into a text selection across the note behind the grip.
-    event.preventDefault()
-  }
-
-  const onResizeMove = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const drag = dragRef.current
-    if (!drag) {
-      return
-    }
-    /*
-     * Twice the distance dragged, because the panel is centred.
-     *
-     * Its layout keeps it in the middle of the viewport whatever size it is, so widening it by
-     * 10px moves each edge out by 5 — and a grip travelling at half the speed of the pointer feels
-     * broken long before you work out why. Doubling puts the edge back under the pointer, and has
-     * the happy consequence that opposite edges behave identically instead of one of them being
-     * the "real" one.
-     */
-    setSize(
-      clampSize({
-        width: drag.width + drag.x * (event.clientX - drag.startX) * 2,
-        height: drag.height + drag.y * (event.clientY - drag.startY) * 2,
-      }),
-    )
-  }
-
-  const endResize = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (!dragRef.current) {
-      return
-    }
-    dragRef.current = null
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId)
-    }
-    try {
-      window.localStorage.setItem(SIZE_KEY, JSON.stringify(sizeRef.current))
-    } catch {
-      // Storage full, or blocked outright. The size still applies for as long as this tab is
-      // open, which is the part that was actually asked for; only the memory of it is lost.
-    }
   }
 
   useEffect(() => {
@@ -348,11 +180,7 @@ export function TaskEditorDialog({ taskId, onClose, scope = 'folder' }: TaskEdit
          * through a drag. Withheld entirely below `sm`, where the class layout is a full screen
          * and a pixel width would be actively wrong.
          */
-        style={
-          resizable && size
-            ? { width: `${size.width}px`, height: `${size.height}px`, maxWidth: 'none' }
-            : undefined
-        }
+        style={panelStyle}
         className={cn(
           // Full screen on a phone (dvh, so the software keyboard shrinks it instead of pushing
           // the bottom bar off-screen), a centred panel from sm up. Either way the height is
@@ -365,7 +193,7 @@ export function TaskEditorDialog({ taskId, onClose, scope = 'folder' }: TaskEdit
       >
         <div className="flex shrink-0 items-center justify-between gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5">
           {/*
-            * relative z-30: above the resize handles (z-20 — see RESIZE_HANDLES below), which are
+            * relative z-30: above the resize handles (z-20 — see useResizablePanel), which are
             * absolutely positioned and would otherwise win hit-testing wherever their invisible
             * corners geometrically overlap a real control. This row sits flush against the
             * panel's top edge, so its leftmost icon (Pin) shared pixels with the nw corner grip —
@@ -417,30 +245,7 @@ export function TaskEditorDialog({ taskId, onClose, scope = 'folder' }: TaskEdit
           * between the header and the writing area — would cost every keyboard user something
           * real to give them something they cannot drag anyway.
           */}
-        {resizable
-          ? RESIZE_HANDLES.map((handle) => (
-              <div
-                key={handle.edge}
-                aria-hidden
-                onPointerDown={(event) => beginResize(event, handle)}
-                onPointerMove={onResizeMove}
-                onPointerUp={endResize}
-                onPointerCancel={endResize}
-                className={cn('absolute z-20 touch-none select-none', handle.className)}
-              >
-                {/*
-                  * One visible corner, on the one people look for.
-                  *
-                  * A resize nobody can see is a resize nobody finds — the other seven grips are
-                  * discovered from the cursor once you know the dialog resizes at all, and this is
-                  * what says that. Inset 8px so the panel's own 12px corner radius doesn't clip it.
-                  */}
-                {handle.edge === 'se' ? (
-                  <span className="pointer-events-none absolute bottom-2 right-2 h-2 w-2 rounded-br-[3px] border-b-2 border-r-2 border-[var(--color-border-strong)] opacity-70" />
-                ) : null}
-              </div>
-            ))
-          : null}
+        {resizeHandles}
       </div>
       {deleteDialog}
     </div>,
